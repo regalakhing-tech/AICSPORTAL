@@ -135,6 +135,8 @@ function aics_db_connect(): mysqli
                     AICS_DB_PORT
                 );
                 $connection->set_charset('utf8mb4');
+                // Philippine time on every host (cloud databases default to UTC).
+                $connection->query("SET time_zone = '+08:00'");
                 return $connection;
             } catch (mysqli_sql_exception $exception) {
                 $attemptErrors[] = sprintf('%s/%s: %s', $host, $databaseName, $exception->getMessage());

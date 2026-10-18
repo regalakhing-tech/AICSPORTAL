@@ -16,6 +16,7 @@ It runs locally on **XAMPP** (Apache + PHP + MySQL), with an optional **Python w
 - [AI document review (optional)](#ai-document-review-optional)
 - [Chat assistants](#chat-assistants)
 - [Running tests](#running-tests)
+- [Deploying to Railway](#deploying-to-railway)
 - [Troubleshooting](#troubleshooting)
 - [Scope and limitations](#scope-and-limitations)
 - [Further reading](#further-reading)
@@ -79,6 +80,7 @@ C:\xampp\htdocs\AICS\
     ├── tools\                  Setup, backfill, probe, and validation scripts
     ├── tests\                  PHP, JS, and browser regression tests
     ├── storage\emails\         Simulated outgoing emails (when MAIL_DRIVER=simulate)
+    ├── deploy\                 Railway/Docker config, plus a copy of the landing page in deploy\site\
     └── docs\superpowers\       Design specs and implementation plans
 ```
 
@@ -293,6 +295,37 @@ python -m unittest discover -s ai_processor\tests -p "test_*.py" -q
 The `tests\` folder contains many more regression tests named by area (`applicant-*`, `pswdo-*`, `ai-*`, `chatbot-*`). Files ending in `.html` are browser tests and should be opened through Apache.
 
 > HTTP fixture tests (`http-regression-*`) need `AICS_HTTP_TEST_MODE=1` and a **separate** database named `aics_http_regression`, configured through the `AICS_TEST_DB_*` variables. They refuse to run against `AICSdb`. See [ai_processor/DEPLOYMENT.md](ai_processor/DEPLOYMENT.md).
+
+---
+
+## Deploying to Railway
+
+Railway builds the `Dockerfile` automatically. The container uses the same folder layout as XAMPP: the landing page at `/AICS/` (copied from `deploy/site/`) and the app at `/AICS/AICS/`. If you change `landingpage.html`, `asset\` or `assets\` in the outer folder, copy them into `deploy\site\` too.
+
+1. **New Project → Deploy from GitHub repo →** this repository.
+2. **Add MariaDB** (not MySQL: the schema uses MariaDB-only syntax). Turn on its public networking, then import the schema from your PC:
+
+   ```powershell
+   & "C:\xampp\mysql\bin\mysql.exe" --no-defaults -h <public host> -P <public port> -u root -p<password> -e "SOURCE C:/xampp/htdocs/AICS/AICS/database/AICSdb.sql"
+   ```
+
+3. **Add a volume** to the app service, mounted at `/var/www/html/AICS/AICS/Applicants/uploads`. Uploads, applicant ID photos, AI results, backups and simulated emails are stored there.
+4. **Set variables** on the app service:
+
+   | Variable | Value |
+   |---|---|
+   | `AICS_DB_HOST` | MariaDB's private host (ends in `.railway.internal`) |
+   | `AICS_DB_PORT` / `AICS_DB_USER` / `AICS_DB_PASS` | `3306` / `root` / MariaDB's password |
+   | `AICS_DB_NAME` | `AICSdb` |
+   | `PHILSMS_API_TOKEN` | PhilSMS token |
+   | `MAIL_DRIVER` | `simulate` on the Hobby plan (Railway blocks SMTP there); `smtp` plus `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM_ADDRESS` on Pro |
+   | `AICS_GEMINI_API_KEY` | Gemini key (AICS AI document scanner) |
+   | `AICS_EXTERNAL_AI_ENABLED` / `AICS_EXTERNAL_AI_API_KEY` | `1` / Groq key (advisory review, applicant guide) |
+   | `GROQ_API_KEY` | Groq key (landing-page assistant) |
+
+5. **Settings → Networking → Generate Domain.** The domain opens the landing page. Sign in to `/AICS/AICS/ADMIN/login.php` with the default admin and change its password immediately.
+
+The optional ADCD-Net tamper model is not deployed (its weights are too large for GitHub); leave `AICS_ADCD_ENABLED` unset.
 
 ---
 

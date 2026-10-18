@@ -31,7 +31,7 @@ def connect(settings):
     # absent or malformed.
     if getattr(settings, 'http_test_mode', False) and settings.db_name != 'aics_http_regression':
         raise RuntimeError('Isolated HTTP test database is not configured for the AI worker.')
-    return pymysql.connect(host=settings.db_host, port=settings.db_port, user=settings.db_user, password=settings.db_password, database=settings.db_name, cursorclass=pymysql.cursors.DictCursor, autocommit=False)
+    return pymysql.connect(host=settings.db_host, port=settings.db_port, user=settings.db_user, password=settings.db_password, database=settings.db_name, cursorclass=pymysql.cursors.DictCursor, autocommit=False, init_command="SET time_zone = '+08:00'")
 
 def claim_one(connection, stale_minutes: int):
     with connection.cursor() as cur:

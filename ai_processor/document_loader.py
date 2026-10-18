@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 logger = logging.getLogger(__name__)
@@ -66,8 +67,9 @@ def load_images(path: Path, max_pages: int, poppler_path: str = '', timeout_seco
             import numpy as np
             raw_poppler_path = str(poppler_path or '').strip()
             resolved_poppler_path = Path(raw_poppler_path).expanduser().resolve() if raw_poppler_path else None
-            pdfinfo_executable = resolved_poppler_path / 'pdfinfo.exe' if resolved_poppler_path else None
-            pdftoppm_executable = resolved_poppler_path / 'pdftoppm.exe' if resolved_poppler_path else None
+            exe = '.exe' if os.name == 'nt' else ''
+            pdfinfo_executable = resolved_poppler_path / f'pdfinfo{exe}' if resolved_poppler_path else None
+            pdftoppm_executable = resolved_poppler_path / f'pdftoppm{exe}' if resolved_poppler_path else None
             pdfinfo_exists = bool(pdfinfo_executable and pdfinfo_executable.is_file())
             pdftoppm_exists = bool(pdftoppm_executable and pdftoppm_executable.is_file())
             logger.info(

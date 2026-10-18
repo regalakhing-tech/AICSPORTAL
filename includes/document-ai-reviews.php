@@ -600,7 +600,7 @@ function aics_ai_environment_health(bool $databaseAvailable = true): array
         'python' => $pythonAvailable ? 'available' : 'unavailable',
         'worker' => $workerAvailable ? 'available' : 'unavailable',
         'tesseract' => $tesseract !== '' && is_file($tesseract) ? 'available' : 'unavailable',
-        'poppler' => $poppler !== '' && is_file(rtrim($poppler, '\\/') . DIRECTORY_SEPARATOR . 'pdfinfo.exe') && is_file(rtrim($poppler, '\\/') . DIRECTORY_SEPARATOR . 'pdftoppm.exe') ? 'available' : 'unavailable',
+        'poppler' => $poppler !== '' && is_file(rtrim($poppler, '\\/') . DIRECTORY_SEPARATOR . 'pdfinfo' . (PHP_OS_FAMILY === 'Windows' ? '.exe' : '')) && is_file(rtrim($poppler, '\\/') . DIRECTORY_SEPARATOR . 'pdftoppm' . (PHP_OS_FAMILY === 'Windows' ? '.exe' : '')) ? 'available' : 'unavailable',
         'adcd' => $runtime['adcd_enabled'] === '0' ? 'disabled' : ($adcdAvailable ? 'available' : 'unavailable'),
         'external_ai' => $externalAiState,
     ];
@@ -764,6 +764,19 @@ function aics_launch_document_ai_processor(int $documentId, string $workerArgume
     // dispatch receives an append-only diagnostic file; the processor keeps
     // its own application log independently.
     $launchLogFile = $logDirectory . DIRECTORY_SEPARATOR . 'launch-' . $documentId . '-' . str_replace('.', '', sprintf('%.6F', microtime(true))) . '.log';
+    if (PHP_OS_FAMILY !== 'Windows') {
+        // Linux hosts (Docker/Railway) inherit the server environment, so the
+        // worker starts directly in the background without the .bat wrapper.
+        $command = 'cd ' . escapeshellarg($projectRoot) . ' && nohup ' . escapeshellarg($pythonExecutable)
+            . ' -m ai_processor.processor ' . $workerArgument . ' ' . escapeshellarg((string) $documentId)
+            . ($workerLeaseToken !== '' ? ' --request-lease ' . escapeshellarg($workerLeaseToken) : '')
+            . ' < /dev/null >> ' . escapeshellarg($launchLogFile) . ' 2>&1 &';
+        $output = [];
+        $exitCode = -1;
+        @exec($command, $output, $exitCode);
+        error_log('AICS AI launcher dispatch result: document_id=' . $documentId . ' exit_code=' . $exitCode . ' launch_method=nohup-background');
+        return $exitCode === 0;
+    }
     $workerWrapper = $projectRoot . DIRECTORY_SEPARATOR . 'ai_processor' . DIRECTORY_SEPARATOR . 'run-ai-worker.bat';
     if (!is_file($workerWrapper) || !is_readable($workerWrapper)) {
         error_log('AICS AI launch error: worker wrapper is unavailable.');
