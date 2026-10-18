@@ -11118,3 +11118,83 @@ input.is-id-locked { background: #f1f5f9; color: #334155; cursor: not-allowed; }
 #logout-confirm-modal .logout-modal-actions .logout-confirm-btn:active {
   transform: translateY(0);
 }
+
+/* ==========================================================================
+   Phone layout (<= 640px): app-like density for the applicant portal.
+   Kept last so it overrides the larger single-column mobile sizes above.
+   ========================================================================== */
+@media (max-width: 640px) {
+  /* Header: avatar only, so the bell and profile never crowd the page title. */
+  .top-nav { padding-left: 12px; padding-right: max(12px, env(safe-area-inset-right)); }
+  .profile-chip { max-width: none; padding: 4px; }
+  .profile-chip span { display: none; }
+
+  /* Welcome banner */
+  .overview-hero-executive { padding: 18px 16px; border-radius: 18px; gap: 14px; margin-bottom: 20px; }
+  .overview-hero-badge-row { flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .overview-hero-executive .page-title { font-size: 21px; margin-bottom: 6px; }
+  .overview-hero-executive .page-sub { font-size: 13.5px; line-height: 1.5; }
+  .overview-hero-executive-actions { flex-direction: row; align-items: stretch; gap: 10px; width: 100%; }
+  .overview-hero-executive-actions > * {
+    flex: 1 1 0; width: auto; min-width: 0; min-height: var(--touch-target);
+    padding: 10px 12px; gap: 8px; font-size: 13.5px; white-space: normal; line-height: 1.25; text-align: center;
+  }
+
+  /* Quick look: compact 2 x 2 stat cards */
+  .section-heading-executive { font-size: 16px; gap: 10px; margin-bottom: 12px; }
+  .section-heading-executive .heading-icon-badge { width: 30px; height: 30px; font-size: 13px; }
+  .overview-stats-executive { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .applicant-kpi-card { padding: 12px 12px 14px; border-radius: 14px; }
+  .applicant-kpi-card:hover { transform: none; }
+  .applicant-kpi-card-head { gap: 8px; margin-bottom: 8px; }
+  .applicant-kpi-label { font-size: 10.5px; letter-spacing: 0.04em; }
+  .applicant-kpi-icon-wrap { width: 32px; height: 32px; border-radius: 10px; font-size: 14px; }
+  .applicant-kpi-value { font-size: 24px; margin-bottom: 0; }
+  .applicant-kpi-note { display: none; }
+  .kpi-mini-progress-shell { margin-top: 8px; }
+
+  /* Panels below the stats */
+  .surface-panel-executive { padding: 16px; border-radius: 18px; margin-bottom: 20px; }
+  .panel-head-executive { gap: 12px; margin-bottom: 14px; }
+  .panel-head-executive-info { gap: 12px; }
+  .panel-icon-executive { width: 38px; height: 38px; border-radius: 12px; font-size: 16px; }
+  .panel-head-executive .panel-title { font-size: 17px; }
+
+  /* Shared panels and empty states on the other applicant pages */
+  .surface-panel-senior { padding: 16px; border-radius: 18px; }
+  .panel-head-senior { gap: 10px; margin-bottom: 14px; }
+  .panel-title-wrap { gap: 12px; }
+  .panel-title-icon { width: 38px; height: 38px; border-radius: 12px; font-size: 16px; }
+  .surface-panel-senior .panel-title { font-size: 17px; }
+  .surface-panel-senior .panel-sub { font-size: 13px; }
+  .panel-empty, .panel-empty-senior { min-height: 0; padding: 20px 16px; gap: 8px; }
+  .panel-empty-senior i { width: 48px; height: 48px; border-radius: 14px; font-size: 22px; }
+  .panel-empty strong { font-size: 15px; }
+
+  /* Status, notification and manage-application page headers: small icon beside the title.
+     "body" outranks the copies of these rules in those pages' inline <style>. */
+  body .status-page .status-hero-card,
+  body .notifications-page .notif-hero-card,
+  body .cancel-request-page .cancel-hero-card { padding: 16px; border-radius: 18px; margin-bottom: 18px; }
+  body .status-page .status-hero-main,
+  body .notifications-page .notif-hero-main,
+  body .cancel-request-page .cancel-hero-main { flex-direction: row; align-items: flex-start; gap: 12px; }
+  body .status-page .status-hero-icon-pill,
+  body .notifications-page .notif-hero-icon-pill,
+  body .cancel-request-page .cancel-hero-icon-pill { width: 40px; height: 40px; border-radius: 12px; font-size: 17px; }
+  body .status-page .status-hero-card .page-title,
+  body .notifications-page .notif-hero-card .page-title,
+  body .cancel-request-page .cancel-hero-card .page-title { font-size: 19px; }
+  body .status-page .status-hero-card .page-sub,
+  body .notifications-page .notif-hero-card .page-sub,
+  body .cancel-request-page .cancel-hero-card .page-sub { font-size: 13px; }
+
+  /* Application form: compact header; the phone step summary replaces the desktop
+     step pill and bar, and the step dots show numbers only. */
+  .submit-hero-executive { padding: 16px; border-radius: 18px; }
+  .submit-hero-badge-row { flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .submit-hero-executive .page-title { font-size: 20px; }
+  .submit-hero-executive .page-sub { font-size: 13px; line-height: 1.5; }
+  .intake-progress-senior { display: none; }
+  .stepper-senior.app-scroll-region .step-label { display: none; }
+}

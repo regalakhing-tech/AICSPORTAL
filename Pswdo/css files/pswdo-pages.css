@@ -7385,6 +7385,7 @@ body.is-embedded .request-details-body {
   .main-content {
     margin-left: 0;
     width: 100%;
+    max-width: 100%;
   }
 }
 
@@ -7634,6 +7635,11 @@ body.is-embedded .request-details-body {
   .field-wrap.grow {
     min-width: 0;
     width: 100%;
+  }
+
+  /* In the stacked form a 200px flex-basis would become height. */
+  .filter-form .field-wrap.grow {
+    flex: 0 0 auto;
   }
 
   .btn-solid,
@@ -8079,6 +8085,11 @@ body.is-embedded .request-details-body {
   .prescreening-page .screening-inline-controls {
     width: 100%;
   }
+  /* Stacked: the desktop flex-basis values would become heights. */
+  .prescreening-page .queue-hero-copy,
+  .prescreening-page .screening-search-control {
+    flex: 0 0 auto;
+  }
 }
 
 @media (max-width: 640px) {
@@ -8091,6 +8102,10 @@ body.is-embedded .request-details-body {
   .prescreening-page .screening-inline-controls {
     flex-direction: column;
     align-items: stretch;
+  }
+  .prescreening-page .screening-inline-controls .field-wrap,
+  .prescreening-page .screening-inline-controls .field-wrap:has(select) {
+    flex: 0 0 auto;
   }
   .prescreening-page .screening-inline-controls .field-wrap {
     width: 100%;
@@ -9508,4 +9523,11 @@ body.is-embedded .request-details-body {
 @media (max-width: 900px) {
   .ai-signal-body { grid-template-columns: 1fr; }
   .ai-evidence-list { max-height: none; }
+}
+
+/* Phones: map summary values (e.g. the disbursed total) must fit two cards per row. */
+@media (max-width: 480px) {
+  .map-analytics-page .map-summary-card { gap: 10px; padding: 12px; }
+  .map-analytics-page .map-summary-card .summary-card-icon { width: 32px; height: 32px; border-radius: 10px; }
+  .map-analytics-page .summary-card-body strong { font-size: 16px; }
 }
