@@ -1,0 +1,26 @@
+[
+  {
+    "name": "synthetic-card",
+    "front": "signup-ok-front.jpg",
+    "back": "signup-ok-back.jpg",
+    "expect": "edited"
+  },
+  {
+    "name": "typed-name",
+    "front": "signup-typed-name-front.jpg",
+    "back": "signup-ok-back.jpg",
+    "expect": "edited"
+  },
+  {
+    "name": "same-photo-twice",
+    "front": "signup-ok-front.jpg",
+    "back": "signup-ok-front.jpg",
+    "expect": "retake"
+  },
+  {
+    "name": "back-of-other-card",
+    "front": "signup-ok-front.jpg",
+    "back": "signup-other-card-back.jpg",
+    "expect": "retake"
+  }
+]

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "processor_version": "component-assessments-v2",
+  "cases": [
+    {
+      "path": "synthetic-medical/medical-a.png",
+      "profile": "med_cert",
+      "expected_type": "match",
+      "predicted_type": "match",
+      "expected_reupload": false,
+      "predicted_reupload": false,
+      "expected_doctamper": "clear",
+      "predicted_doctamper": "review"
+    },
+    {
+      "path": "synthetic-medical/not-medical-a.png",
+      "profile": "med_cert",
+      "expected_type": "wrong_slot",
+      "predicted_type": "wrong_slot",
+      "expected_reupload": true,
+      "predicted_reupload": true,
+      "expected_doctamper": "review",
+      "predicted_doctamper": "clear"
+    },
+    {
+      "path": "synthetic-other/id-a.png",
+      "profile": "valid_id",
+      "expected_type": "match",
+      "predicted_type": "match",
+      "expected_reupload": false,
+      "predicted_reupload": false,
+      "expected_doctamper": "clear",
+      "predicted_doctamper": "clear"
+    }
+  ]
+}

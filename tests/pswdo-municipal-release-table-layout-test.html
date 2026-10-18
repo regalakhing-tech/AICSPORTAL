@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PSWDO municipal release table layout test</title>
+  <link rel="stylesheet" href="../Pswdo/css%20files/pswdo-pages.css">
+  <style>
+    body { margin: 0; padding: 20px; }
+    .release-table-fixture { width: 980px; max-width: 100%; }
+  </style>
+</head>
+<body data-test-result="RUNNING">
+  <div class="table-wrap release-table-fixture" id="release-table-wrap">
+    <table class="report-table municipal-release-table" id="release-table">
+      <colgroup>
+        <col class="release-col-select">
+        <col class="release-col-number">
+        <col class="release-col-reference">
+        <col class="release-col-beneficiary">
+        <col class="release-col-applicant">
+        <col class="release-col-barangay">
+        <col class="release-col-assistance">
+        <col class="release-col-amount">
+        <col class="release-col-schedule">
+        <col class="release-col-batch">
+        <col class="release-col-status">
+      </colgroup>
+      <thead>
+        <tr>
+          <th><input type="checkbox" aria-label="Select all rows"></th>
+          <th>#</th>
+          <th>Reference No.</th>
+          <th>Beneficiary Name</th>
+          <th>Applicant / Proxy</th>
+          <th>Barangay</th>
+          <th>Assistance</th>
+          <th>Amount</th>
+          <th>Sched / Release</th>
+          <th>Batch &amp; Venue</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><input type="checkbox" aria-label="Select first row"></td>
+          <td>1</td>
+          <td><span class="release-cell-line" title="AICS-2026-CAE46C">AICS-2026-CAE46C</span></td>
+          <td><span class="release-cell-line" title="Khing Regala, Youth">Khing Regala <span class="release-cell-meta">Youth</span></span></td>
+          <td><span class="release-cell-line" title="Khing Regala">Khing Regala</span></td>
+          <td><span class="release-cell-line" title="Budbudan, Hamtic">Budbudan <span class="release-cell-meta">Hamtic</span></span></td>
+          <td><span class="release-cell-line" title="Medical">Medical</span></td>
+          <td><span class="release-cell-line" title="PHP 0.00">PHP 0.00</span></td>
+          <td><span class="release-cell-line" title="Not yet set">Not yet set</span></td>
+          <td><span class="release-cell-line" title="Batch 1, PSWDO Office">Batch 1 <span class="release-cell-meta">PSWDO Office</span></span></td>
+          <td><span class="badge-approved municipal-status-badge" title="Approved (Awaiting Schedule)">Approved (Awaiting Schedule)</span></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox" aria-label="Select second row"></td>
+          <td>2</td>
+          <td><span class="release-cell-line" title="AICS-2026-EF9E95">AICS-2026-EF9E95</span></td>
+          <td><span class="release-cell-line" title="Nathaniel Yu, Person with Disability">Nathaniel Yu <span class="release-cell-meta">Person with Disability</span></span></td>
+          <td><span class="release-cell-line" title="Nathaniel Yu">Nathaniel Yu</span></td>
+          <td><span class="release-cell-line" title="Poblacion 4, Hamtic">Poblacion 4 <span class="release-cell-meta">Hamtic</span></span></td>
+          <td><span class="release-cell-line" title="Medical">Medical</span></td>
+          <td><span class="release-cell-line" title="PHP 5,000.00">PHP 5,000.00</span></td>
+          <td><span class="release-cell-line" title="September 16, 2026, 09:00 AM">September 16, 2026 <span class="release-cell-meta">09:00 AM</span></span></td>
+          <td><span class="release-cell-line" title="Batch 1, PSWDO Office">Batch 1 <span class="release-cell-meta">PSWDO Office</span></span></td>
+          <td><span class="badge-released municipal-status-badge" title="Completed / Released">Completed / Released</span></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox" aria-label="Select third row"></td>
+          <td>3</td>
+          <td><span class="release-cell-line" title="AICS-2026-SCHED1">AICS-2026-SCHED1</span></td>
+          <td><span class="release-cell-line" title="Scheduled Beneficiary, Senior Citizen">Scheduled Beneficiary <span class="release-cell-meta">Senior Citizen</span></span></td>
+          <td><span class="release-cell-line" title="Scheduled Applicant">Scheduled Applicant</span></td>
+          <td><span class="release-cell-line" title="Poblacion 1, Hamtic">Poblacion 1 <span class="release-cell-meta">Hamtic</span></span></td>
+          <td><span class="release-cell-line" title="Burial">Burial</span></td>
+          <td><span class="release-cell-line" title="PHP 10,000.00">PHP 10,000.00</span></td>
+          <td><span class="release-cell-line" title="September 20, 2026, 10:00 AM">September 20, 2026 <span class="release-cell-meta">10:00 AM</span></span></td>
+          <td><span class="release-cell-line" title="Batch 2, PSWDO Office">Batch 2 <span class="release-cell-meta">PSWDO Office</span></span></td>
+          <td><span class="badge-scheduled municipal-status-badge" title="Scheduled for Release">Scheduled for Release</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <pre id="result">RUNNING</pre>
+  <script>
+    window.setTimeout(function () {
+      var result = document.getElementById('result');
+      try {
+        var wrap = document.getElementById('release-table-wrap');
+        var table = document.getElementById('release-table');
+        var lines = Array.from(document.querySelectorAll('.release-cell-line'));
+        var badges = Array.from(document.querySelectorAll('.municipal-status-badge'));
+
+        if (getComputedStyle(wrap).overflowX !== 'auto') throw new Error('The table wrapper must scroll horizontally.');
+        if (table.scrollWidth <= wrap.clientWidth) throw new Error('The wide table must scroll instead of compressing columns.');
+
+        lines.forEach(function (line) {
+          if (getComputedStyle(line).whiteSpace !== 'nowrap') throw new Error('Every release value must stay on one line.');
+          if (line.getClientRects().length !== 1) throw new Error('A release value wrapped onto another line.');
+          if (!line.title.trim()) throw new Error('Every release value needs its full text on hover.');
+        });
+
+        if (badges.length !== 3) throw new Error('All status variants must be represented.');
+        var first = badges[0].getBoundingClientRect();
+        badges.forEach(function (badge) {
+          var badgeRect = badge.getBoundingClientRect();
+          if (Math.abs(first.width - badgeRect.width) > 1 || Math.abs(first.height - badgeRect.height) > 1) {
+            throw new Error('Status badges must have uniform dimensions.');
+          }
+          if (getComputedStyle(badge).whiteSpace !== 'nowrap') throw new Error('Status labels must stay on one line.');
+          if (!badge.title.trim()) throw new Error('Every status needs its full label on hover.');
+        });
+
+        document.body.dataset.testResult = 'PASS';
+        result.textContent = 'PASS';
+      } catch (error) {
+        document.body.dataset.testResult = 'FAIL';
+        result.textContent = 'FAIL: ' + error.message;
+      }
+    }, 100);
+  </script>
+</body>
+</html>

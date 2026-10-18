@@ -1,0 +1,12 @@
+# Dedicated ADCD-Net environment only; do not install into AICS' main worker env.
+torch==2.3.0
+torchvision==0.18.0
+numpy
+pillow
+opencv-python-headless
+jpeg2dct
+paddlepaddle
+paddleocr
+albumentations==2.0.8
+lmdb
+six

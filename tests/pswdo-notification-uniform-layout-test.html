@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PSWDO notification uniform layout test</title>
+  <link rel="stylesheet" href="../Pswdo/css%20files/pswdo-pages.css">
+  <style>.notification-layout-fixture { width: 980px; max-width: 100%; }</style>
+</head>
+<body class="reports-page" data-result="pending">
+  <div class="notification-layout-fixture">
+  <div class="notification-activity-list">
+    <details class="notification-activity-item">
+      <summary class="notification-activity-summary">
+        <span class="notification-activity-icon"></span>
+        <span class="notification-identity"><span class="notification-reference">AICS-2026-001</span><strong>First Applicant</strong></span>
+        <span class="stage-tag stage-pending">For Screening SMS</span>
+        <span class="notification-message-preview">A short notification message.</span>
+        <span class="notification-activity-meta"><span>September 24, 2026 02:21 PM</span><span>PSWDO Personnel</span></span>
+        <span class="notification-details-label">View details <i class="fas fa-chevron-down"></i></span>
+      </summary>
+    </details>
+    <details class="notification-activity-item">
+      <summary class="notification-activity-summary">
+        <span class="notification-activity-icon"></span>
+        <span class="notification-identity"><span class="notification-reference">AICS-2026-002</span><strong>Second Applicant With Longer Name</strong></span>
+        <span class="stage-tag stage-neutral">Document Re-upload Requested: Billing Statement or Prescription and Valid Identification Card and Social Case Study Report</span>
+        <span class="notification-message-preview">A much longer notification message that should truncate without moving any later columns.</span>
+        <span class="notification-activity-meta"><span>September 24, 2026 02:26 PM</span><span>PSWDO Personnel</span></span>
+        <span class="notification-details-label">View details <i class="fas fa-chevron-down"></i></span>
+      </summary>
+    </details>
+  </div>
+  </div>
+  <p id="result">RUNNING</p>
+  <script>
+    window.setTimeout(function () {
+      const result = document.getElementById('result');
+      try {
+        const rows = Array.from(document.querySelectorAll('.notification-activity-summary'));
+        const selectors = ['.stage-tag', '.notification-message-preview', '.notification-activity-meta', '.notification-details-label'];
+        selectors.forEach(function (selector) {
+          const leftEdges = rows.map((row) => row.querySelector(selector).getBoundingClientRect().left);
+          if (Math.abs(leftEdges[0] - leftEdges[1]) > 1) throw new Error(selector + ' is not aligned between rows.');
+        });
+        rows.forEach(function (row) {
+          const rowRect = row.getBoundingClientRect();
+          Array.from(row.children).forEach(function (cell) {
+            const cellRect = cell.getBoundingClientRect();
+            if (cellRect.left < rowRect.left - 1 || cellRect.right > rowRect.right + 1) throw new Error('A notification column overflows its row.');
+          });
+        });
+        const longStage = rows[1].querySelector('.stage-tag');
+        if (longStage.scrollWidth <= longStage.clientWidth) throw new Error('The long stage fixture must exercise truncation.');
+        if (getComputedStyle(longStage).textOverflow !== 'ellipsis') throw new Error('Long notification types must use ellipsis.');
+        const longMessage = rows[1].querySelector('.notification-message-preview');
+        if (getComputedStyle(longMessage).textOverflow !== 'ellipsis') throw new Error('Long notification messages must use ellipsis.');
+        const actionRightEdges = rows.map((row) => row.querySelector('.notification-details-label').getBoundingClientRect().right);
+        if (Math.abs(actionRightEdges[0] - actionRightEdges[1]) > 1) throw new Error('View details right edges are not aligned.');
+        const detailsWidth = rows[0].querySelector('.notification-details-label').getBoundingClientRect().width;
+        if (window.innerWidth > 700 && detailsWidth < 100) throw new Error('View details needs a stable action column.');
+        if (window.innerWidth <= 700 && (detailsWidth <= 0 || detailsWidth > 50)) throw new Error('The mobile details action must remain compact.');
+        document.body.dataset.result = 'pass';
+        result.textContent = 'PASS notification columns are uniform';
+      } catch (error) {
+        document.body.dataset.result = 'fail';
+        result.textContent = 'FAIL ' + error.message;
+      }
+    }, 100);
+  </script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+# Credentials: environment variables on servers, config/secrets.local.php under XAMPP
+config/secrets.local.php
+.env
+*.env
+
+# Personal data created at runtime
+Applicants/uploads/
+ADMIN/backups/
+storage/emails/
+
+# AI worker output and model weights (too large for GitHub)
+ai_processor/logs/
+ai_processor/tamper_detection/models/*.pth
+ai_processor/tamper_detection/models/*.pkl
+__pycache__/
+*.pyc
+
+# Local browser profiles, screenshots and scratch files
+tmp/
+scratch/
+tests/chrome-*/
+tests/*.png
+/*.png
+*.bak
+.rnd
+
+# Optional ADCD-Net checkout (clone from https://github.com/KahimWong/ADCD-Net)
+ai_processor/tamper_detection/vendor/adcd_net/
+
+# Thesis drafts (kept local)
+*.docx

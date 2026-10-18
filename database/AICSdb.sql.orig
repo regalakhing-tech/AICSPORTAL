@@ -1,0 +1,66 @@
+CREATE DATABASE IF NOT EXISTS `AICSdb` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `AICSdb`;
+
+CREATE TABLE IF NOT EXISTS `aics_requests` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `reference_no` VARCHAR(32) NOT NULL,
+  `date_applied` DATE NOT NULL,
+  `applicant_role` ENUM('self', 'representative') NOT NULL,
+  `beneficiary_first_name` VARCHAR(100) NOT NULL,
+  `beneficiary_middle_name` VARCHAR(100) DEFAULT NULL,
+  `beneficiary_last_name` VARCHAR(100) NOT NULL,
+  `beneficiary_extension` VARCHAR(20) DEFAULT NULL,
+  `beneficiary_birth_date` DATE DEFAULT NULL,
+  `beneficiary_age` TINYINT UNSIGNED NOT NULL,
+  `beneficiary_complete_name` VARCHAR(255) NOT NULL,
+  `contact_number` VARCHAR(15) NOT NULL,
+  `applicant_first_name` VARCHAR(100) NOT NULL,
+  `applicant_middle_name` VARCHAR(100) DEFAULT NULL,
+  `applicant_last_name` VARCHAR(100) NOT NULL,
+  `applicant_extension` VARCHAR(20) DEFAULT NULL,
+  `applicant_birth_date` DATE DEFAULT NULL,
+  `applicant_age` TINYINT UNSIGNED NOT NULL,
+  `barangay` VARCHAR(120) NOT NULL,
+  `sitio_purok` VARCHAR(120) DEFAULT NULL,
+  `municipality` VARCHAR(120) NOT NULL,
+  `province` VARCHAR(120) NOT NULL DEFAULT 'Antique',
+  `gender` ENUM('male', 'female') NOT NULL,
+  `estimated_income` DECIMAL(12,2) DEFAULT NULL,
+  `employment` VARCHAR(150) DEFAULT NULL,
+  `civil_status` VARCHAR(30) DEFAULT NULL,
+  `civil_status_other` VARCHAR(120) DEFAULT NULL,
+  `highest_educational_attainment` VARCHAR(150) DEFAULT NULL,
+  `problem_presented` TEXT DEFAULT NULL,
+  `client_category_other` VARCHAR(150) DEFAULT NULL,
+  `assistance_type_other` VARCHAR(150) DEFAULT NULL,
+  `family_composition_json` JSON DEFAULT NULL,
+  `client_categories_json` JSON DEFAULT NULL,
+  `assistance_types_json` JSON NOT NULL,
+  `amount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  `claim_status` ENUM('claimed', 'unclaimed') NOT NULL,
+  `amount_claimed` DECIMAL(12,2) DEFAULT NULL,
+  `cheque_date` DATE DEFAULT NULL,
+  `request_status` VARCHAR(30) NOT NULL DEFAULT 'pending',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_aics_requests_reference_no` (`reference_no`),
+  KEY `idx_aics_requests_date_applied` (`date_applied`),
+  KEY `idx_aics_requests_municipality` (`municipality`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `aics_request_documents` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `request_id` INT UNSIGNED NOT NULL,
+  `original_name` VARCHAR(255) NOT NULL,
+  `stored_name` VARCHAR(255) NOT NULL,
+  `file_path` VARCHAR(500) NOT NULL,
+  `mime_type` VARCHAR(120) NOT NULL,
+  `file_size` BIGINT UNSIGNED NOT NULL,
+  `uploaded_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_aics_request_documents_request_id` (`request_id`),
+  CONSTRAINT `fk_aics_request_documents_request_id`
+    FOREIGN KEY (`request_id`) REFERENCES `aics_requests`(`id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

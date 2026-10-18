@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Signup ID check uses current details</title>
+  <script>
+    async function run(frame) {
+      const output = document.getElementById('result');
+      try {
+        const app = frame.contentWindow;
+        const page = frame.contentDocument;
+        const scanButton = page.getElementById('btn-scan-id');
+        const continueButton = page.getElementById('btn-id-continue');
+        const birth = page.getElementById('register-birthdate');
+        page.getElementById('register-first-name').value = 'Nathaniel';
+        page.getElementById('register-middle-name').value = 'Sernicula';
+        page.getElementById('register-last-name').value = 'Yu';
+        birth.value = '2005-04-04';
+        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        if (app.signupDetailsPayload(new FormData()).get('date_of_birth') !== '2005-04-04') {
+          throw new Error('The selected birth date was not sent to the ID check.');
+        }
+
+        const files = new DataTransfer();
+        files.items.add(new File(['photo'], 'id.jpg', { type: 'image/jpeg' }));
+        for (const side of ['front', 'back']) {
+          const input = page.getElementById(`id-${side}-input`);
+          input.files = files.files;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (scanButton.disabled) throw new Error('The scan button did not accept the test photos.');
+
+        const scanResult = {
+          ok: true, can_continue: true, decision: 'ok', id_type_label: 'Philippine National ID (PhilSys)',
+          given_names: 'NATHANIEL', middle_name: 'SERNICULA', last_name: 'YU', birth_date: '2005-04-03',
+          name_match: { match: true, reason: '' }, birthdate_match: false
+        };
+        app.renderSignupIdResult(scanResult, false);
+        if (!page.getElementById('signup-id-result').textContent.includes('Birth date you enteredApril 4, 2005')) {
+          throw new Error('The mismatch does not show the date selected in the form.');
+        }
+        let finishScan;
+        let checkCount = 0;
+        app.fetch = (_, options) => {
+          if (options.body.get('action') === 'check') {
+            checkCount++;
+            return Promise.resolve({ ok: true, json: async () => ({
+              ...scanResult,
+              birthdate_match: options.body.get('date_of_birth') === '2005-04-03'
+            }) });
+          }
+          return new Promise(resolve => { finishScan = resolve; });
+        };
+
+        scanButton.click();
+        if (!finishScan) throw new Error('The scan request did not start.');
+        birth.value = '2005-04-03';
+        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        if (app.signupDetailsPayload(new FormData()).get('date_of_birth') !== '2005-04-03') {
+          throw new Error('The edited birth date was not sent to the ID recheck.');
+        }
+        finishScan({ ok: true, json: async () => scanResult });
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (checkCount !== 1) throw new Error(`Expected one recheck, got ${checkCount}.`);
+        if (continueButton.classList.contains('hidden')) throw new Error('Matching current details remain blocked.');
+        if (!page.getElementById('signup-id-result').textContent.includes('ID verified')) {
+          throw new Error('A stale mismatch is still displayed.');
+        }
+
+        scanButton.click();
+        const finishOldScan = finishScan;
+        page.getElementById('id-front-input').dispatchEvent(new Event('change', { bubbles: true }));
+        finishOldScan({ ok: true, json: async () => scanResult });
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (!page.getElementById('signup-id-result').classList.contains('hidden')) {
+          throw new Error('An obsolete scan result appeared after the photo changed.');
+        }
+        if (scanButton.querySelector('.fa-spinner')) {
+          throw new Error('The scan button stayed in its loading state after the photo changed.');
+        }
+        document.body.dataset.result = 'pass';
+        output.textContent = 'PASS signup ID result reflects the current birth date';
+      } catch (error) {
+        document.body.dataset.result = 'fail';
+        output.textContent = 'FAIL ' + error.message;
+      }
+    }
+  </script>
+</head>
+<body data-result="waiting">
+  <iframe src="../Applicants/login.html" title="Applicant signup" onload="run(this)"></iframe>
+  <pre id="result">WAITING</pre>
+</body>
+</html>

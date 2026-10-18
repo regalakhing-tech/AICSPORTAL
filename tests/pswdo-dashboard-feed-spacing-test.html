@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PSWDO dashboard feed spacing test</title>
+  <link rel="stylesheet" href="../Pswdo/css%20files/pswdo-pages.css">
+</head>
+<body data-test-result="RUNNING">
+  <section class="overview-feed-grid">
+    <article class="panel-card workflow-lane-card dashboard-feed-card feed-documents">
+      <header class="panel-head"><h2>Document checks</h2><a class="btn-link">View all</a></header>
+      <div class="workflow-list">
+        <div class="workflow-list-item dashboard-queue-item" id="document-row">
+          <div class="workflow-list-main" id="document-copy">
+            <span class="feed-reference">AICS-2026-TEST</span>
+            <strong>Sample Applicant</strong>
+            <p>Medical · Sample address</p>
+            <span class="feed-progress" id="document-progress">0/3 checked</span>
+          </div>
+          <a class="feed-open-btn">→</a>
+        </div>
+      </div>
+    </article>
+  </section>
+  <pre id="result">RUNNING</pre>
+  <script>
+    (function () {
+      function pixels(value) { return Number.parseFloat(value || '0'); }
+      try {
+        var rowStyle = getComputedStyle(document.getElementById('document-row'));
+        var copyStyle = getComputedStyle(document.getElementById('document-copy'));
+        var progressStyle = getComputedStyle(document.getElementById('document-progress'));
+        if (pixels(rowStyle.minHeight) < 92) throw new Error('Document row is too short.');
+        if (pixels(rowStyle.paddingTop) < 14 || pixels(rowStyle.paddingBottom) < 14) throw new Error('Document row vertical padding is too tight.');
+        if (pixels(copyStyle.rowGap) < 3) throw new Error('Document details are crowded.');
+        if (pixels(progressStyle.marginTop) < 5) throw new Error('Checked badge needs more breathing room.');
+        document.body.dataset.testResult = 'PASS';
+        document.getElementById('result').textContent = 'PASS';
+      } catch (error) {
+        document.body.dataset.testResult = 'FAIL';
+        document.getElementById('result').textContent = 'FAIL: ' + error.message;
+      }
+    }());
+  </script>
+</body>
+</html>

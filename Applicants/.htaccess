@@ -1,0 +1,7 @@
+# Always revalidate the static pages (login / sign-up) so a changed form reaches
+# applicants right away instead of a stale cached copy.
+<IfModule mod_headers.c>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>

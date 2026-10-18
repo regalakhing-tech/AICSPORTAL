@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Applicant notification popup UI test</title>
+  <link rel="stylesheet" href="../Applicants/css%20files/applicant-pages.css">
+</head>
+<body data-result="pending">
+  <a data-notification-trigger href="../Applicants/dashboard.php?page=notifications" aria-expanded="false">
+    Notifications <span class="dot"></span>
+  </a>
+  <p id="result">RUNNING</p>
+  <script>
+    window.notificationTestItems = [
+      { id: 1, title: 'Document update', preview: 'Please review your documents.', sent_at: 'Today', is_unread: true },
+      { id: 2, title: 'Screening update', preview: 'Your request is under review.', sent_at: 'Yesterday', is_unread: false }
+    ];
+    window.fetch = async function (url, options) {
+      if (options && options.method === 'POST') {
+        return { ok: true, json: async () => ({ ok: true, unread_count: 0 }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          unread_count: 1,
+          notifications: window.notificationTestItems
+        })
+      };
+    };
+  </script>
+  <script src="../Applicants/js%20files/applicant-pages.js"></script>
+  <script>
+    window.setTimeout(async function () {
+      const notificationTrigger = document.querySelector('[data-notification-trigger]');
+      const result = document.getElementById('result');
+      try {
+        notificationTrigger.click();
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+        const popup = document.getElementById('applicant-notification-popup');
+        const list = popup.querySelector('.notification-popup-list');
+        const items = Array.from(popup.querySelectorAll('.notification-popup-item'));
+        if (items.length !== 2) throw new Error('Expected two notification items.');
+        if (items.some((item) => item.tagName !== 'A')) throw new Error('Every notification item must be a link.');
+        if (items.some((item) => !item.href.includes('page=notifications'))) throw new Error('Every item must link to the Notifications page.');
+        const listStyle = getComputedStyle(list);
+        const itemStyle = getComputedStyle(items[0]);
+        const popupRect = popup.getBoundingClientRect();
+        if (parseFloat(listStyle.gap) < 8) throw new Error('Notification items need at least 8px separation.');
+        if (parseFloat(itemStyle.paddingTop) < 14 || parseFloat(itemStyle.paddingLeft) < 14) throw new Error('Notification item padding is too tight.');
+        if (document.activeElement !== items[0]) throw new Error('Opening the popup must focus its first notification.');
+        if (popupRect.bottom > window.innerHeight + 1) throw new Error('The popup extends below the viewport.');
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        if (!popup.hidden) throw new Error('Escape must close the notification popup.');
+        if (document.activeElement !== notificationTrigger) throw new Error('Closing with Escape must restore focus to the notification trigger.');
+
+        window.notificationTestItems = [];
+        notificationTrigger.click();
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+        const footer = popup.querySelector('.notification-popup-footer');
+        if (!footer) throw new Error('The empty popup must retain the Notifications page link.');
+        if (document.activeElement !== footer) throw new Error('An empty popup must focus the Notifications page link.');
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        if (document.activeElement !== notificationTrigger) throw new Error('Escape must restore focus after an empty response.');
+
+        document.body.dataset.result = 'pass';
+        result.textContent = 'PASS notification cards are spaced, accessible links';
+      } catch (error) {
+        document.body.dataset.result = 'fail';
+        result.textContent = 'FAIL ' + error.message;
+      }
+    }, 50);
+  </script>
+</body>
+</html>

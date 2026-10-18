@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin logout modal centering test</title>
+<link rel="stylesheet" href="../ADMIN/cssfiles/admin-pages.css?modal-centering-test=1">
+<a class="logout-link" href="../ADMIN/phpfiles/auth-logout.php">Log Out</a>
+<pre id="result">pending</pre>
+<script src="../ADMIN/jsfiles/admin-pages.js"></script>
+<script>
+  document.querySelector('.logout-link').click();
+  window.setTimeout(() => {
+    const card = document.querySelector('.admin-logout-modal-card');
+    const bounds = card.getBoundingClientRect();
+    const offsetX = Math.round((bounds.left + bounds.right) / 2 - window.innerWidth / 2);
+    const offsetY = Math.round((bounds.top + bounds.bottom) / 2 - window.innerHeight / 2);
+    document.getElementById('result').textContent =
+      Math.abs(offsetX) <= 2 && Math.abs(offsetY) <= 2
+        ? `PASS: modal centered (x=${offsetX}, y=${offsetY})`
+        : `FAIL: modal offset from viewport center (x=${offsetX}, y=${offsetY})`;
+  }, 300);
+</script>
+</html>

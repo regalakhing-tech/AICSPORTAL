@@ -1,0 +1,55 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/../Applicants/php_files/auth-common.php';
+require_once __DIR__ . '/../includes/document-ai-reviews.php';
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+function request_ensure_assert(bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); }
+$database = 'aics_request_ensure_' . strtolower(dechex((int) getmypid()) . '_' . bin2hex(random_bytes(3)));
+$server = new mysqli(AICS_DB_HOST, AICS_DB_USER, AICS_DB_PASS, '', AICS_DB_PORT);
+try {
+  $server->query('CREATE DATABASE `' . $database . '`'); $db = new mysqli(AICS_DB_HOST, AICS_DB_USER, AICS_DB_PASS, $database, AICS_DB_PORT);
+  $db->query('CREATE TABLE aics_roles (id TINYINT UNSIGNED NOT NULL AUTO_INCREMENT, PRIMARY KEY(id))');
+  $db->query('CREATE TABLE aics_accounts (id INT UNSIGNED NOT NULL AUTO_INCREMENT, PRIMARY KEY(id))');
+  $db->query('CREATE TABLE aics_request_documents (id INT UNSIGNED NOT NULL AUTO_INCREMENT, request_id INT UNSIGNED NOT NULL, document_type VARCHAR(100) NOT NULL, PRIMARY KEY(id))');
+  aics_ensure_ai_review_schema($db);
+  foreach ([1,2,3,4,5] as $id) $db->query("INSERT INTO aics_request_documents (id, request_id, document_type) VALUES ($id, 90, 'valid_id')");
+  $completed = json_encode(['tamper_detection' => ['status' => 'completed']]); $unavailable = json_encode(['tamper_detection' => ['status' => 'unavailable']]);
+  $db->query("INSERT INTO document_ai_reviews (request_document_id,status,expected_document_type,findings) VALUES (1,'completed','valid_id','" . $db->real_escape_string($completed) . "'),(2,'processing','valid_id',NULL),(3,'completed','valid_id','" . $db->real_escape_string($unavailable) . "'),(4,'completed','valid_id','{}')");
+  $db->query("UPDATE document_ai_reviews SET attempt_count = 1, processing_stage = 'verifying', progress_percent = 80, stage_updated_at = NOW(), worker_heartbeat_at = NOW(), processing_started_at = DATE_SUB(NOW(), INTERVAL 31 MINUTE) WHERE request_document_id = 2");
+  $ensured = aics_ensure_current_ai_reviews_for_request($db, 90);
+  request_ensure_assert(array_column($ensured['newly_created'], 'document_id') === [5], 'Only missing documents should be queued; legacy completed reviews are immutable.');
+  request_ensure_assert($ensured['worker_needed'] === true && is_string($ensured['worker_lease_token']) && $ensured['worker_lease_token'] !== '', 'New request-wide work did not acquire exactly one worker lease.');
+  request_ensure_assert((int) ($db->query("SELECT COUNT(*) AS total FROM document_ai_reviews WHERE status='processing'")->fetch_assoc()['total'] ?? 0) === 1, 'Only missing reviews should remain pending after stale claim recovery.');
+  request_ensure_assert((string) ($db->query("SELECT status FROM document_ai_reviews WHERE request_document_id = 4")->fetch_assoc()['status'] ?? '') === 'completed', 'Legacy completed review was silently reprocessed.');
+  request_ensure_assert((string) ($db->query("SELECT status FROM document_ai_reviews WHERE request_document_id = 2")->fetch_assoc()['status'] ?? '') === 'failed', 'A stale worker-owned review was not recovered to explicit retry state.');
+  $stale = $db->query("SELECT processing_stage, progress_percent, worker_heartbeat_at FROM document_ai_reviews WHERE request_document_id = 2")->fetch_assoc();
+  request_ensure_assert(($stale['processing_stage'] ?? '') === 'failed' && (int) ($stale['progress_percent'] ?? 0) === 100 && ($stale['worker_heartbeat_at'] ?? null) === null, 'Stale recovery left misleading active progress metadata.');
+  $repeat = aics_ensure_current_ai_reviews_for_request($db, 90);
+  request_ensure_assert(array_column($repeat['already_queued'], 'document_id') === [5] && $repeat['worker_needed'] === false, 'Repeated View started a parallel worker while the request lease was active.');
+  $db->query('DELETE FROM document_ai_request_worker_leases WHERE request_id = 90');
+  $queuedOnly = aics_ensure_current_ai_reviews_for_request($db, 90);
+  request_ensure_assert(array_column($queuedOnly['newly_created'], 'document_id') === [] && array_column($queuedOnly['already_queued'], 'document_id') === [5] && $queuedOnly['worker_needed'] === true, 'A pre-existing queued-only request did not request one sequential worker.');
+  foreach ([6, 7, 8] as $id) $db->query("INSERT INTO aics_request_documents (id, request_id, document_type) VALUES ($id, 91, 'valid_id')");
+  $db->query("INSERT INTO document_ai_reviews (request_document_id,status,expected_document_type) VALUES (6,'processing','valid_id'),(7,'processing','valid_id'),(8,'processing','valid_id')");
+  $exactQueuedOnly = aics_ensure_current_ai_reviews_for_request($db, 91);
+  request_ensure_assert(array_column($exactQueuedOnly['newly_created'], 'document_id') === [] && array_column($exactQueuedOnly['already_queued'], 'document_id') === [6, 7, 8] && $exactQueuedOnly['worker_needed'] === true, 'Exact three-document queued-only View regression did not request one worker.');
+  $exactQueuedRepeat = aics_ensure_current_ai_reviews_for_request($db, 91);
+  request_ensure_assert($exactQueuedRepeat['worker_needed'] === false && array_column($exactQueuedRepeat['already_queued'], 'document_id') === [6, 7, 8], 'Repeated View started a parallel worker for the exact queued-only regression.');
+  foreach ([9, 10] as $id) $db->query("INSERT INTO aics_request_documents (id, request_id, document_type) VALUES ($id, 92, 'valid_id')");
+  $db->query("INSERT INTO document_ai_reviews (request_document_id,status,expected_document_type,attempt_count,processing_started_at) VALUES (9,'processing','valid_id',1,NOW()),(10,'processing','valid_id',0,NULL)");
+  $active = aics_ensure_current_ai_reviews_for_request($db, 92);
+  request_ensure_assert(array_column($active['actively_processing'], 'document_id') === [9] && array_column($active['already_queued'], 'document_id') === [10] && $active['worker_needed'] === false, 'An active request worker was not protected from duplicate dispatch.');
+  $db->query("INSERT INTO aics_request_documents (id, request_id, document_type) VALUES (11, 93, 'valid_id'),(12, 94, 'valid_id')");
+  $db->query("INSERT INTO document_ai_reviews (request_document_id,status,expected_document_type,findings) VALUES (11,'completed','valid_id','{}'),(12,'completed','valid_id','" . $db->real_escape_string($unavailable) . "')");
+  $completedOnly = aics_ensure_current_ai_reviews_for_request($db, 93);
+  $unavailableOnly = aics_ensure_current_ai_reviews_for_request($db, 94);
+  request_ensure_assert($completedOnly['worker_needed'] === false && array_column($completedOnly['terminal'], 'document_id') === [11], 'Completed review was not kept immutable.');
+  request_ensure_assert($unavailableOnly['worker_needed'] === false && array_column($unavailableOnly['unavailable'], 'document_id') === [12], 'Unavailable review was silently made eligible for retry.');
+  $endpoint = file_get_contents(__DIR__ . '/../Pswdo/php_files/ai-ensure-request-current.php');
+  $worker = file_get_contents(__DIR__ . '/../ai_processor/processor.py');
+  request_ensure_assert(is_string($endpoint) && str_contains($endpoint, "require_once __DIR__ . '/auth-guard.php'") && str_contains($endpoint, "'POST'") && str_contains($endpoint, 'hash_equals') && str_contains($endpoint, 'aics_ensure_current_ai_reviews_for_request') && str_contains($endpoint, "['worker_needed']") && str_contains($endpoint, 'aics_launch_request_ai_processor'), 'Protected request-wide ensure endpoint contract is incomplete.');
+  request_ensure_assert(is_string($worker) && str_contains($worker, 'def process_request') && str_contains($worker, 'ORDER BY d.id') && str_contains($worker, 'process_one(dry_run, document_id)') && str_contains($worker, 'def _release_request_lease') && str_contains($worker, "--request-lease"), 'Sequential trusted batch worker contract is incomplete.');
+  $statusEndpoint = file_get_contents(__DIR__ . '/../Pswdo/php_files/ai-review-status.php');
+  request_ensure_assert(is_string($statusEndpoint) && str_contains($statusEndpoint, "'Waiting for Review'") && str_contains($statusEndpoint, "'Reviewing Document'") && str_contains($statusEndpoint, "'queue_state'") && str_contains($statusEndpoint, "'attempt_count'") && str_contains($statusEndpoint, 'Queued for AI document verification.') && str_contains($statusEndpoint, 'AI document verification is in progress.'), 'Persisted queued versus active status mapping is incomplete.');
+  $db->close(); echo "AI request-wide ensure test passed.\n";
+} finally { $server->query('DROP DATABASE IF EXISTS `' . $database . '`'); $server->close(); }

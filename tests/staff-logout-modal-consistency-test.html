@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Staff logout modal consistency test</title>
+<pre id="result">pending</pre>
+<script>
+  const portal = new URLSearchParams(location.search).get('portal');
+  const config = portal === 'pswdo'
+    ? { css: '../Pswdo/css files/pswdo-pages.css', js: '../Pswdo/js files/pswdo-pages.js', modal: '.pswdo-logout-modal', card: '.pswdo-logout-card', icon: '.pswdo-logout-icon', actions: '.pswdo-logout-actions', logout: '../Pswdo/php_files/auth-logout.php' }
+    : { css: '../ADMIN/cssfiles/admin-pages.css', js: '../ADMIN/jsfiles/admin-pages.js', modal: '.admin-logout-modal', card: '.admin-logout-modal-card', icon: '.admin-logout-icon', actions: '.admin-logout-actions', logout: '../ADMIN/phpfiles/auth-logout.php' };
+  const result = document.getElementById('result');
+  const stylesheet = document.createElement('link');
+  stylesheet.rel = 'stylesheet';
+  stylesheet.href = config.css + '?modal-consistency-test=1';
+  document.head.appendChild(stylesheet);
+  const logoutLink = document.createElement('a');
+  logoutLink.className = 'logout-link';
+  logoutLink.href = config.logout;
+  logoutLink.textContent = 'Log Out';
+  document.body.appendChild(logoutLink);
+
+  const script = document.createElement('script');
+  script.src = config.js + '?modal-consistency-test=1';
+  script.onload = () => {
+    logoutLink.click();
+    setTimeout(() => {
+      const modal = document.querySelector(config.modal);
+      const card = document.querySelector(config.card);
+      const icon = document.querySelector(config.icon);
+      const actions = document.querySelector(config.actions);
+      if (!modal || !card || !icon || !actions) {
+        result.textContent = 'FAIL: logout dialog did not open';
+        return;
+      }
+      const box = card.getBoundingClientRect();
+      const iconBox = icon.getBoundingClientRect();
+      const actionsBox = actions.getBoundingClientRect();
+      const mid = (rect) => (rect.left + rect.right) / 2;
+      const centerY = (box.top + box.bottom) / 2;
+      const title = card.querySelector('h2, h3');
+      const message = card.querySelector('p');
+      const failures = [];
+      if (Math.abs(mid(box) - innerWidth / 2) > 2 || Math.abs(centerY - innerHeight / 2) > 2) failures.push('card position');
+      if (Math.abs(box.width - 420) > 2 && innerWidth > 500) failures.push('card width');
+      if (Math.abs(mid(iconBox) - mid(box)) > 2) failures.push('icon position');
+      if (getComputedStyle(title).textAlign !== 'center' || getComputedStyle(message).textAlign !== 'center') failures.push('centered copy');
+      if (getComputedStyle(actions).justifyContent !== 'center') failures.push('centered actions');
+      if (!message.textContent.includes('Are you sure you want to end your current session?')) failures.push('confirmation copy');
+      result.textContent = failures.length
+        ? `FAIL (${portal || 'admin'}): ${failures.join(', ')}`
+        : `PASS (${portal || 'admin'}): logout dialog matches the reference layout`;
+    }, 300);
+  };
+  script.onerror = () => { result.textContent = 'FAIL: portal script did not load'; };
+  document.body.appendChild(script);
+</script>
+</html>

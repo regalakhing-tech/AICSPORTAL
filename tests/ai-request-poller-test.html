@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AI request poller behavior test</title>
+  <link rel="stylesheet" href="../Pswdo/css%20files/pswdo-pages.css">
+</head>
+<body data-test-result="RUNNING">
+  <pre id="result">RUNNING</pre>
+  <script src="../Pswdo/js%20files/ai-request-poller.js"></script>
+  <script>
+    (async function () {
+      const output = document.getElementById('result');
+      function assert(condition, message) {
+        if (!condition) throw new Error(message);
+      }
+      try {
+        const api = window.AicsAiRequestPoller;
+        assert(api && typeof api.createAiRequestPoller === 'function', 'Poller API is unavailable.');
+        const startCalls = [];
+        const starter = api.createAiRequestStarter({
+          endpoint: 'http://localhost/ai-ensure-request-current.php',
+          csrfToken: 'browser-csrf',
+          fetchImpl: async function (url, options) {
+            startCalls.push([url, options]);
+            return { ok: true, json: async function () { return { ok: true }; } };
+          }
+        });
+        starter.start('42');
+        starter.start('42');
+        await starter.whenIdle('42');
+        assert(startCalls.length === 1, 'Queued request was started more than once.');
+        assert(startCalls[0][1].method === 'POST' && startCalls[0][1].body.get('request_id') === '42' && startCalls[0][1].body.get('csrf_token') === 'browser-csrf', 'Queued request start payload is incomplete.');
+        const scanning = api.deriveRequestView({ state: 'scanning', label: 'Scanning 1 of 3', progress_percent: 33 });
+        assert(scanning.scanning === true && scanning.terminal === false && scanning.progress === 33, 'Scanning view is incorrect.');
+        const flagged = api.deriveRequestView({
+          state: 'attention',
+          label: '1 needs review',
+          progress_percent: 100,
+          documents: [{ document_id: 7, status: 'flagged_inconsistency' }]
+        });
+        assert(flagged.hasFlaggedInconsistency === true, 'Flagged document was not exposed in the request view.');
+
+        const flaggedTable = document.createElement('table');
+        flaggedTable.className = 'request-table';
+        flaggedTable.innerHTML = '<tbody><tr data-ai-request-row data-request-id="88"><td><span class="request-ai-label"><i></i><span></span></span><span class="request-ai-progress"><span></span></span></td></tr></tbody>';
+        document.body.appendChild(flaggedTable);
+        const flaggedRow = flaggedTable.querySelector('tr');
+        api.renderRequestRow('88', flagged, { queued: 0, active: 0 });
+        assert(flaggedRow.classList.contains('has-ai-flagged-inconsistency'), 'Flagged request row did not receive its red warning state.');
+        assert(getComputedStyle(flaggedRow.cells[0]).backgroundColor === 'rgb(255, 241, 242)', 'Flagged request row did not render with a pale-red background.');
+        assert(api.nextAiPollDelay(0) === 2500, 'Normal delay is incorrect.');
+        assert(api.nextAiPollDelay(1) === 5000, 'Retry delay is incorrect.');
+        assert(api.nextAiPollDelay(9) === 30000, 'Retry cap is incorrect.');
+
+        const terminalProgress = document.createElement('span');
+        terminalProgress.className = 'request-ai-progress';
+        terminalProgress.innerHTML = '<span></span>';
+        document.body.appendChild(terminalProgress);
+        api.setScanningVisibility(terminalProgress, false);
+        assert(terminalProgress.hidden === true, 'Terminal progress did not receive the hidden state.');
+        assert(getComputedStyle(terminalProgress).display === 'none', 'Terminal progress remained visible after polling completed.');
+        api.setScanningVisibility(terminalProgress, true);
+        assert(terminalProgress.hidden === false && getComputedStyle(terminalProgress).display !== 'none', 'Scanning progress did not become visible again.');
+
+        const schedules = [];
+        const updates = [];
+        const poller = api.createAiRequestPoller({
+          endpoint: 'http://localhost/ai-request-status.php',
+          fetchImpl: async function () { return { ok: true, json: async function () { return { ok: true, request_id: 9, state: 'ready', label: 'AI results ready', progress_percent: 100 }; } }; },
+          onUpdate: function (requestId, view) { updates.push([requestId, view]); },
+          schedule: function (callback, delay) { schedules.push([callback, delay]); return 1; },
+          cancel: function () {},
+          isHidden: function () { return false; }
+        });
+        poller.start('9');
+        await poller.whenIdle('9');
+        assert(updates.length === 1 && updates[0][1].terminal === true, 'Terminal update was not rendered.');
+        assert(schedules.length === 0, 'Terminal request continued polling.');
+
+        assert(typeof api.bindRequestRefreshEvents === 'function', 'Document completion cannot reconnect the request-row poller.');
+        const synchronizedUpdates = [];
+        let synchronizedFetchCount = 0;
+        let resolveStaleRequest;
+        const synchronizedPoller = api.createAiRequestPoller({
+          endpoint: 'http://localhost/ai-request-status.php',
+          fetchImpl: async function () {
+            synchronizedFetchCount += 1;
+            if (synchronizedFetchCount === 1) return new Promise(function (resolve) { resolveStaleRequest = resolve; });
+            return { ok: true, json: async function () { return { ok: true, request_id: 187, state: 'attention', label: '3 need review', progress_percent: 100, documents: [] }; } };
+          },
+          onUpdate: function (requestId, view) { synchronizedUpdates.push([requestId, view]); },
+          schedule: function () { return 2; },
+          cancel: function () {},
+          isHidden: function () { return false; }
+        });
+        const unbindRequestRefresh = api.bindRequestRefreshEvents(synchronizedPoller, document);
+        const staleRequest = synchronizedPoller.refresh('187');
+        document.dispatchEvent(new CustomEvent('aics:ai-request-refresh', { detail: { requestId: '187' } }));
+        resolveStaleRequest({ ok: true, json: async function () { return { ok: true, request_id: 187, state: 'scanning', label: 'Scanning 2 of 3', progress_percent: 67, documents: [] }; } });
+        await staleRequest;
+        await synchronizedPoller.whenIdle('187');
+        unbindRequestRefresh();
+        assert(synchronizedFetchCount === 2, 'Completion during an active request did not force one fresh request-row read.');
+        assert(synchronizedUpdates.length === 2 && synchronizedUpdates[1][1].label === '3 need review', 'Document completion left the outer request row on stale scanning progress.');
+
+        document.body.dataset.testResult = 'PASS';
+        output.textContent = 'PASS';
+      } catch (error) {
+        document.body.dataset.testResult = 'FAIL';
+        output.textContent = 'FAIL: ' + (error && error.message ? error.message : String(error));
+      }
+    }());
+  </script>
+</body>
+</html>

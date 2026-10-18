@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Applicant signup terms checkbox</title>
+  <script>
+    function run(frame) {
+      const result = document.getElementById('result');
+      try {
+        const page = frame.contentDocument;
+        const app = frame.contentWindow;
+        const checkbox = page.getElementById('register-terms');
+        const next = page.getElementById('btn-goto-step-2');
+        const form = page.getElementById('register-access-form');
+        const link = page.getElementById('signup-terms-link');
+        const modal = page.getElementById('signup-terms-modal');
+        const close = page.getElementById('signup-terms-close');
+        const modalCheckbox = page.getElementById('register-terms-modal');
+        if (!(checkbox instanceof app.HTMLInputElement) || checkbox.type !== 'checkbox') {
+          throw new Error('Signup terms checkbox is missing.');
+        }
+        if (!(link instanceof app.HTMLAnchorElement) || !modal || !close) {
+          throw new Error('Terms link and dialog are required.');
+        }
+        if (!(modalCheckbox instanceof app.HTMLInputElement) || modalCheckbox.type !== 'checkbox') {
+          throw new Error('Terms dialog acceptance checkbox is missing.');
+        }
+        if (!modal.classList.contains('hidden') || modal.getAttribute('aria-hidden') !== 'true') {
+          throw new Error('Terms dialog must start closed.');
+        }
+        if (!modal.textContent.includes('PSWDO') || !modal.textContent.includes('personal information')) {
+          throw new Error('Terms dialog is missing system-specific terms.');
+        }
+        if (!next.disabled || checkbox.checked) {
+          throw new Error('Next must start disabled while terms are unchecked.');
+        }
+
+        link.click();
+        if (modal.classList.contains('hidden') || modal.getAttribute('aria-hidden') !== 'false') {
+          throw new Error('Terms link did not open the dialog.');
+        }
+        if (checkbox.checked || !next.disabled) {
+          throw new Error('Opening terms accepted them without consent.');
+        }
+        modalCheckbox.click();
+        if (!checkbox.checked || !modalCheckbox.checked || next.disabled) {
+          throw new Error('Accepting in the dialog did not enable Next and check the outside box.');
+        }
+        modalCheckbox.click();
+        if (checkbox.checked || modalCheckbox.checked || !next.disabled) {
+          throw new Error('Unchecking in the dialog did not revoke acceptance.');
+        }
+        close.click();
+        if (!modal.classList.contains('hidden') || page.activeElement !== link) {
+          throw new Error('Closing terms did not restore focus to the link.');
+        }
+
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new app.Event('change', { bubbles: true }));
+        if (next.disabled || !modalCheckbox.checked) throw new Error('Checking outside did not sync the dialog and enable Next.');
+
+        next.disabled = true;
+        app.dispatchEvent(new app.Event('pageshow'));
+        if (next.disabled) throw new Error('Restored checked terms left Next disabled.');
+
+        checkbox.checked = false;
+        checkbox.dispatchEvent(new app.Event('change', { bubbles: true }));
+        if (!next.disabled || modalCheckbox.checked) throw new Error('Unchecking outside did not sync the dialog and disable Next.');
+
+        page.getElementById('register-first-name').value = 'Maria';
+        page.getElementById('register-last-name').value = 'Reyes';
+        const birth = page.getElementById('register-birthdate');
+        birth.value = '1990-01-01';
+        birth.dispatchEvent(new app.Event('change', { bubbles: true }));
+        page.getElementById('register-phone').value = '09171234567';
+        app.setSignupStep('id');
+        if (page.getElementById('signup-step-1').classList.contains('hidden')) {
+          throw new Error('Unchecked terms allowed direct navigation.');
+        }
+
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new app.Event('change', { bubbles: true }));
+        app.setSignupStep('id');
+        if (page.getElementById('signup-step-id').classList.contains('hidden')) {
+          throw new Error('Checked terms did not allow navigation.');
+        }
+
+        form.reset();
+        if (!next.disabled || modalCheckbox.checked) throw new Error('Reset form left terms accepted.');
+
+        document.body.dataset.result = 'pass';
+        result.textContent = 'PASS signup terms checkbox gates Next and step navigation';
+      } catch (error) {
+        document.body.dataset.result = 'fail';
+        result.textContent = 'FAIL ' + error.message;
+      }
+    }
+  </script>
+</head>
+<body data-result="waiting">
+  <iframe src="../Applicants/login.html" title="Applicant signup" onload="run(this)"></iframe>
+  <pre id="result">WAITING</pre>
+</body>
+</html>

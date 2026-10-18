@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Signup native birth date input</title>
+  <script>
+    function run(frame) {
+      const output = document.getElementById('result');
+      try {
+        const page = frame.contentDocument;
+        const app = frame.contentWindow;
+        const birth = page.getElementById('register-birthdate');
+        const iso = page.getElementById('register-birthdate-iso');
+        const selectedDate = page.getElementById('register-birthdate-selected');
+        const fields = Array.from(page.querySelectorAll('#register-birthdate-wrapper input:not([type="hidden"])'));
+        if (fields.length !== 1 || fields[0] !== birth || birth.type !== 'date') {
+          throw new Error('Birthdate must use one visible native date field.');
+        }
+        if (!birth.required || !iso || iso.name !== 'date_of_birth') {
+          throw new Error('Birthdate lost its required ISO form value.');
+        }
+        if (app.getComputedStyle(iso).display !== 'none') {
+          throw new Error('The ISO field is visible.');
+        }
+        if (page.getElementById('register-birth-month') || page.getElementById('register-birth-day') || page.getElementById('register-birth-year')) {
+          throw new Error('Split birthdate fields remain.');
+        }
+
+        birth.value = '2005-04-03';
+        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        if (birth.value !== '2005-04-03' || iso.value !== '2005-04-03') {
+          throw new Error('April 3 was interpreted in the wrong order.');
+        }
+        if (!selectedDate || selectedDate.classList.contains('hidden') || selectedDate.textContent !== 'Selected date: April 3, 2005') {
+          throw new Error('The selected birth date is not shown clearly before the ID check.');
+        }
+        if (app.signupDetailsPayload(new FormData()).get('date_of_birth') !== '2005-04-03') {
+          throw new Error('The ID check receives the wrong ISO birthdate.');
+        }
+        if (new FormData(page.getElementById('register-access-form')).get('date_of_birth') !== '2005-04-03') {
+          throw new Error('Signup receives the wrong ISO birthdate.');
+        }
+        if (!app.validateAndCalculateAge().valid) throw new Error('An adult birthdate was rejected.');
+
+        birth.value = '2005-03-04';
+        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        if (iso.value !== '2005-03-04') throw new Error('March 4 was interpreted in the wrong order.');
+        if (selectedDate.textContent !== 'Selected date: March 4, 2005') {
+          throw new Error('Reversed month and day look the same to the applicant.');
+        }
+
+        app.setSignupBirthdateFromIso('1990-12-05');
+        if (birth.value !== '1990-12-05' || app.signupDetailsPayload(new FormData()).get('date_of_birth') !== '1990-12-05') {
+          throw new Error('Using the date from a verified ID did not update the single field.');
+        }
+
+        birth.value = '2005-02-29';
+        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        if (birth.value !== '' || iso.value !== '' || page.getElementById('register-age').value !== '' || !selectedDate.classList.contains('hidden')) {
+          throw new Error('An impossible calendar date was accepted.');
+        }
+
+        birth.value = '2015-01-01';
+        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        if (app.validateAndCalculateAge().reason !== 'underage') {
+          throw new Error('The existing minimum-age validation changed.');
+        }
+
+        birth.value = '2999-01-01';
+        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        if (app.validateAndCalculateAge().reason !== 'future') {
+          throw new Error('The existing future-date validation changed.');
+        }
+
+        birth.value = '';
+        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        if (iso.value !== '' || app.validateAndCalculateAge().reason !== 'empty') {
+          throw new Error('Required birthdate validation changed.');
+        }
+
+        document.body.dataset.result = 'pass';
+        output.textContent = 'PASS native birthdate and ISO submission';
+      } catch (error) {
+        document.body.dataset.result = 'fail';
+        output.textContent = 'FAIL ' + error.message;
+      }
+    }
+  </script>
+</head>
+<body data-result="waiting">
+  <iframe src="../Applicants/login.html" title="Applicant signup" onload="run(this)"></iframe>
+  <pre id="result">WAITING</pre>
+</body>
+</html>

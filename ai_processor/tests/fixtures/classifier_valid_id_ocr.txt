@@ -1,0 +1,26 @@
+SAMPLE
+FOR SYSTEM TESTING ONLY
+NOT A REAL GOVERNMENT ID
+SAMPLE NATIONAL ID TRAINING FORMAT
+IDENTIFICATION CARD
+
+Issuing Organization:
+Sample Government Testing Office
+
+Full Name:
+JUAN DELA CRUZ
+
+Date of Birth:
+January 2, 1950
+
+Sex:
+Male
+
+Address:
+San Jose de Buenavista, Antique
+
+ID Number:
+TEST-000001
+
+Valid Until:
+December 31, 2030

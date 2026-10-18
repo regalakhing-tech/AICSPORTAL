@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>PSWDO bundle browser syntax harness</title>
+<body data-ai-health-url="http://127.0.0.1:1/ai-health.php">
+<button type="button" id="toggle-btn">Menu</button>
+<button type="button" id="close-btn">Close</button>
+<aside id="sidebar"></aside>
+<div id="overlay"></div>
+<main id="main-content"></main>
+<div id="ai-health-indicator">AI Verification Status Unavailable</div>
+<script>
+window.__pswdoBundleErrors = [];
+window.__aicsRequestRefreshEvents = [];
+document.addEventListener("aics:ai-request-refresh", function (event) {
+  window.__aicsRequestRefreshEvents.push(String(event.detail && event.detail.requestId || ""));
+});
+if (new URLSearchParams(window.location.search).get("dynamic") === "1") {
+  document.body.setAttribute("data-ai-status-url", "ai-review-status.php");
+  document.body.insertAdjacentHTML("beforeend", '<table><tbody><tr data-document-id="7" data-request-id="1"><td class="ai-verification-cell" data-ai-document-id="7" data-ai-request-id="1" data-ai-status="processing"><span class="ai-status-badge"></span><small class="ai-status-summary"></small></td></tr></tbody></table>');
+  window.fetch = function () {
+    return Promise.resolve({ ok: true, json: function () { return Promise.resolve({
+      ok: true, document_id: 7, review_id: 9, status: "needs_staff_review", status_label: "Staff Review Needed", is_processing: false,
+      processed_at: "2026-09-21 17:08:00", expected_document_type: "valid_id", detected_document_type: "valid_id",
+      beneficiary: { full_name: "Cindy M Reyes", date_of_birth: "2000-01-02", age: 26, sex: "female", address: "Hamtic, Antique" },
+      extracted_fields: {}, findings: { assessments: { applicant_match: { state: "pass", label: "Beneficiary matched", explanation: "The readable identity agrees with the beneficiary record." } }, external_ai: { status: "completed", provider: "google_gemini", payload_mode: "image", assessment: { fields: { name: { value: "Cindy M Reyes", state: "support" } }, document_quality: { state: "good", reason: "Readable." }, signature_review: { state: "visible", reason: "Signature visible." }, visual_integrity: { state: "no_obvious_issue", reason: "No obvious visual issue." } } } }
+    }); } });
+  };
+}
+if (new URLSearchParams(window.location.search).get("request") === "1") {
+  var persistenceMode = new URLSearchParams(window.location.search).get("persistence") === "1";
+  var mountedPollingMode = new URLSearchParams(window.location.search).get("mountpoll") === "1";
+  if (persistenceMode || mountedPollingMode) {
+    document.body.setAttribute("data-ai-status-url", "ai-review-status.php");
+    window.fetch = function () {
+      return Promise.resolve({ ok: true, json: function () { return Promise.resolve({
+        ok: true, document_id: 7, review_id: 9, status: "flagged_inconsistency", status_label: "Flagged Inconsistency", is_processing: false,
+        processed_at: "2026-09-21 22:29:42", expected_document_type: "valid_id", detected_document_type: "valid_id",
+        beneficiary: { full_name: "Cindy M Reyes", date_of_birth: "1995-06-19", age: 31, sex: "female", address: "Belison, Antique" },
+        extracted_fields: {}, findings: { reasons: ["Beneficiary name differs from the uploaded ID."], assessments: {} }
+      }); } });
+    };
+  }
+  document.body.insertAdjacentHTML("beforeend", [
+    '<button type="button" class="js-open-request-modal" data-request-id="1">View</button>',
+    '<template id="request-detail-source-1"><section class="request-detail-shell" data-required-total="0" data-checked-total="0" data-staff-reviewed-total="0" data-status-code="pending"></section><table><tbody><tr data-document-id="7" data-request-id="1"><td class="ai-verification-cell" data-ai-document-id="7" data-ai-request-id="1" data-ai-status="processing"><span class="ai-status-badge">Staff Review Needed</span><small class="ai-status-summary">Staff confirmation is required.</small><button type="button" class="ai-details-toggle" aria-controls="ai-details-7" aria-expanded="false">View Review Details</button></td></tr><tr class="ai-details-row" hidden><td><details id="ai-details-7" class="ai-details-panel"><summary>AI details</summary><div class="ai-details-content"></div></details></td></tr></tbody></table></template>',
+    '<section id="request-details-modal"><div id="request-details-content"></div></section>',
+    '<button type="button" id="close-request-details-modal">Close details</button>',
+    '<form id="approve-screening-form"><input id="approve-screening-request-id"></form>',
+    '<button type="button" id="approve-screening-btn"></button>'
+  ].join(""));
+  if (new URLSearchParams(window.location.search).get("reopen") === "1") {
+    document.body.setAttribute("data-reopen-request-id", "1");
+    document.body.setAttribute("data-reopen-ai-document-id", "7");
+  }
+}
+if (new URLSearchParams(window.location.search).get("health") === "operational") {
+  window.fetch = function () {
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: function () { return Promise.resolve({ ok: true, status: "operational" }); }
+    });
+  };
+}
+window.addEventListener("error", function (event) {
+  window.__pswdoBundleErrors.push({
+    message: event.message || "Unknown error",
+    filename: event.filename || "",
+    line: event.lineno || 0,
+    column: event.colno || 0
+  });
+});
+</script>
+<script src="../Pswdo/js%20files/ai-request-poller.js"></script>
+<script src="../Pswdo/js%20files/pswdo-pages.js"></script>
+<script>
+setTimeout(function () {
+  document.getElementById("toggle-btn").click();
+  var requestButton = document.querySelector(".js-open-request-modal");
+  var automaticReopen = new URLSearchParams(window.location.search).get("reopen") === "1";
+  if (requestButton && !automaticReopen) requestButton.click();
+  if (new URLSearchParams(window.location.search).get("persistence") === "1") {
+    document.dispatchEvent(new CustomEvent("aics:ensure-current-review", { detail: { requestId: "1", queued: [{ document_id: 7, review_id: 9 }], skippedUnavailable: [] } }));
+    setTimeout(function () {
+      document.getElementById("close-request-details-modal").click();
+      requestButton.click();
+      var reopenedBadge = document.querySelector('#request-details-modal tr[data-document-id="7"] .ai-status-badge');
+      var sourceBadge = document.getElementById("request-detail-source-1").content.querySelector('tr[data-document-id="7"] .ai-status-badge');
+      document.body.setAttribute("data-pswdo-rescan-status-persisted", String(reopenedBadge && sourceBadge && reopenedBadge.textContent.trim() === "Flagged Inconsistency" && sourceBadge.textContent.trim() === "Flagged Inconsistency"));
+    }, 300);
+  }
+  var reviewButton = document.querySelector("#request-details-modal .ai-details-toggle");
+  if (reviewButton && reviewButton.getAttribute("aria-expanded") !== "true") reviewButton.click();
+  var terminalUrl = window.AicsAiRequestPoller && window.AicsAiRequestPoller.terminalDocumentReviewUrl(
+    "http://localhost/dashboard.php?page=requests&date_filter=week&status=success&message=queued",
+    "42",
+    "77"
+  );
+  document.body.setAttribute("data-pswdo-terminal-review-url", String(terminalUrl === "http://localhost/dashboard.php?page=requests&date_filter=week&reopen_request=42&reopen_ai_document=77"));
+  document.body.setAttribute("data-pswdo-bundle-errors", JSON.stringify(window.__pswdoBundleErrors));
+  document.body.setAttribute("data-pswdo-sidebar-open", String(document.getElementById("sidebar").classList.contains("open")));
+  document.body.setAttribute("data-pswdo-overlay-active", String(document.getElementById("overlay").classList.contains("active")));
+  document.body.setAttribute("data-pswdo-health-unavailable", String(document.getElementById("ai-health-indicator").textContent.indexOf("Status Unavailable") !== -1));
+  document.body.setAttribute("data-pswdo-primary-request-handler", String(window.__aicsRequestModalHandlerAvailable === true));
+  document.body.setAttribute("data-pswdo-request-modal-open", String(document.getElementById("request-details-modal") && document.getElementById("request-details-modal").classList.contains("open")));
+  document.body.setAttribute("data-pswdo-review-details-open", String(document.querySelector("#request-details-modal .ai-details-panel") && document.querySelector("#request-details-modal .ai-details-panel").open));
+  if (new URLSearchParams(window.location.search).get("mountpoll") === "1") {
+    var mountedResult = document.createElement("pre");
+    mountedResult.textContent = "RUNNING";
+    document.body.prepend(mountedResult);
+    setTimeout(function () {
+      var mountedPollingBadge = document.querySelector('#request-details-modal tr[data-document-id="7"] .ai-status-badge');
+      var requestRefreshSent = window.__aicsRequestRefreshEvents.includes("1");
+      var mountedRowPolled = Boolean(mountedPollingBadge && mountedPollingBadge.textContent.trim() === "Flagged Inconsistency" && requestRefreshSent);
+      document.body.setAttribute("data-pswdo-mounted-row-polled", String(mountedRowPolled));
+      mountedResult.textContent = mountedRowPolled ? "PASS" : "FAIL: Completed document did not refresh the outer request row.";
+    }, 300);
+  } else {
+    document.body.setAttribute("data-pswdo-mounted-row-polled", "true");
+  }
+  var dynamicDetails = document.querySelector('tr[data-document-id="7"] + .ai-details-row .ai-details-content');
+  var dynamicText = dynamicDetails ? dynamicDetails.textContent : "";
+  document.body.setAttribute("data-pswdo-gemini-details", String(dynamicText.indexOf("Beneficiary Cross-reference") !== -1 && dynamicText.indexOf("Beneficiary record: Cindy M Reyes") !== -1 && dynamicText.indexOf("Extracted: Cindy M Reyes") !== -1));
+  document.body.setAttribute("data-pswdo-beneficiary-label", String(dynamicText.indexOf("Beneficiary match") !== -1 && dynamicText.indexOf("Applicant match") === -1));
+  document.body.setAttribute("data-pswdo-clean-punctuation", String(dynamicText.indexOf("â") === -1));
+  document.body.setAttribute("data-pswdo-bundle-loaded", "true");
+}, 750);
+</script>
+</body>
+</html>

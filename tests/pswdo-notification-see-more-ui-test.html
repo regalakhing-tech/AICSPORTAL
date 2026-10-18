@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PSWDO notification See More test</title>
+  <link rel="stylesheet" href="../Pswdo/css%20files/pswdo-pages.css">
+</head>
+<body class="reports-page" data-result="pending">
+  <div class="notification-activity-feed" data-notification-feed>
+    <div class="notification-activity-list" id="report-notification-activity-list">
+      <details class="notification-activity-item"><summary>Notification 1</summary></details>
+      <details class="notification-activity-item"><summary>Notification 2</summary></details>
+      <details class="notification-activity-item"><summary>Notification 3</summary></details>
+      <details class="notification-activity-item"><summary>Notification 4</summary></details>
+      <details class="notification-activity-item"><summary>Notification 5</summary></details>
+      <details class="notification-activity-item" data-notification-overflow hidden><summary>Notification 6</summary></details>
+      <details class="notification-activity-item" data-notification-overflow hidden><summary>Notification 7</summary></details>
+    </div>
+    <div class="notification-see-more-wrap">
+      <button type="button" class="notification-see-more-btn" data-notification-show-more aria-controls="report-notification-activity-list" aria-expanded="false">
+        See More Notifications <span>2 more</span>
+      </button>
+    </div>
+  </div>
+  <p id="result">RUNNING</p>
+  <script src="../Pswdo/js%20files/pswdo-pages.js"></script>
+  <script>
+    window.setTimeout(function () {
+      const result = document.getElementById('result');
+      try {
+        const button = document.querySelector('[data-notification-show-more]');
+        const overflowItems = Array.from(document.querySelectorAll('[data-notification-overflow]'));
+        const visibleBefore = Array.from(document.querySelectorAll('.notification-activity-item')).filter((item) => !item.hidden);
+        if (visibleBefore.length !== 5) throw new Error('Exactly five notifications must be visible initially.');
+        if (!button || button.hidden) throw new Error('The See More button must be visible initially.');
+        button.click();
+        if (overflowItems.some((item) => item.hidden)) throw new Error('See More must reveal every remaining notification.');
+        if (!button.hidden) throw new Error('The See More button must be removed after expansion.');
+        if (getComputedStyle(button).display !== 'none' || button.getClientRects().length !== 0) throw new Error('The See More button must not remain visibly rendered.');
+        const buttonWrap = button.closest('.notification-see-more-wrap');
+        if (!buttonWrap.hidden || getComputedStyle(buttonWrap).display !== 'none') throw new Error('The See More spacing wrapper must also be removed.');
+        if (button.getAttribute('aria-expanded') !== 'true') throw new Error('The expansion state must be announced.');
+        if (document.activeElement !== overflowItems[0].querySelector('summary')) throw new Error('Focus must move to the first revealed notification.');
+        document.body.dataset.result = 'pass';
+        result.textContent = 'PASS latest five and See More behavior';
+      } catch (error) {
+        document.body.dataset.result = 'fail';
+        result.textContent = 'FAIL ' + error.message;
+      }
+    }, 100);
+  </script>
+</body>
+</html>

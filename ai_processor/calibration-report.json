@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "processor_version": "component-assessments-v2",
+  "generated_at": "2026-09-18T00:00:00+08:00",
+  "manifest_sha256": "synthetic-fixtures-only",
+  "profiles": {
+    "valid_id": {"case_count": 1, "type_precision": 1.0, "false_reupload_rate": 0.0, "calibrated": false},
+    "med_cert": {"case_count": 2, "type_precision": 1.0, "false_reupload_rate": 0.0, "calibrated": false}
+  }
+}

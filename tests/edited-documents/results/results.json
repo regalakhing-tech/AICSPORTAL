@@ -1,0 +1,424 @@
+[
+  {
+    "file": "clean-01-phone-photo.jpg",
+    "edited": false,
+    "description": "Unedited phone photo of the certificate.",
+    "pass": true,
+    "note": "AI noted the generated test file looks computer-made (allowed for generated fixtures only; no tampering flag)",
+    "status": "needs_staff_review",
+    "headline": "Staff review needed",
+    "reason": "The entire image has a uniform digital texture and font appearance resembling a generated template or digital specimen rather than a natural paper scan.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "review"
+    },
+    "signals": [
+      "sample_or_watermark"
+    ],
+    "seconds": 5.0
+  },
+  {
+    "file": "clean-02-flat-scan.png",
+    "edited": false,
+    "description": "Unedited clean scan (black text on white, no camera effects).",
+    "pass": true,
+    "note": "no alteration/tampering flags",
+    "status": "likely_valid",
+    "headline": "Document looks good",
+    "reason": "This document is a Civil Service Medical Certificate issued by Antique Provincial Hospital for patient Juan S. Dela Cruz, signed by Dr. Maria L. Santos. Staff should verify the details against the beneficiary records.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "pass"
+    },
+    "signals": [],
+    "seconds": 4.3
+  },
+  {
+    "file": "clean-03-cool-light-photo.jpg",
+    "edited": false,
+    "description": "Unedited photo under cool light with stronger noise and blur.",
+    "pass": true,
+    "note": "no alteration/tampering flags",
+    "status": "likely_valid",
+    "headline": "Document looks good",
+    "reason": "This is a Civil Service Medical Certificate issued by Antique Provincial Hospital for patient Juan S. Dela Cruz, dated April 16, 2021. Staff should verify that all details match the beneficiary's records.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "pass"
+    },
+    "signals": [
+      "typography_mismatch"
+    ],
+    "seconds": 6.1
+  },
+  {
+    "file": "edit-01-canva-typed-date.png",
+    "edited": true,
+    "description": "Signature date covered and retyped in Canva (flat black, different font); 2021 events vs 2026 date.",
+    "pass": true,
+    "note": "caught by: date_context_conflict, digital_text_overlay",
+    "status": "flagged_inconsistency",
+    "headline": "Possible edited date",
+    "reason": "The date \"September 24, 2026\" looks typed on digitally and conflicts with the 2021 dates in the document. The file was saved with Canva, an editing app.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "fail",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "fail"
+    },
+    "signals": [
+      "date_context_conflict",
+      "digital_text_overlay",
+      "name_mismatch_or_internal_conflict"
+    ],
+    "seconds": 5.0
+  },
+  {
+    "file": "edit-02-pasted-beneficiary-name.jpg",
+    "edited": true,
+    "description": "Someone else's certificate; the beneficiary's name was typed over the patient name at the top (body still names ROBERTO C. VILLANUEVA).",
+    "pass": true,
+    "note": "caught by: digital_text_overlay, name_mismatch_or_internal_conflict",
+    "status": "flagged_inconsistency",
+    "headline": "Name does not match the application",
+    "reason": "The patient name on the document is ROBERTO C. VILLANUEVA, but the application is for Juan Santos Dela Cruz.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "fail",
+      "readable": "pass",
+      "unaltered": "review",
+      "untampered": "fail"
+    },
+    "signals": [
+      "digital_text_overlay",
+      "name_mismatch_or_internal_conflict",
+      "typography_mismatch"
+    ],
+    "seconds": 4.9
+  },
+  {
+    "file": "edit-03-cloned-signature.jpg",
+    "edited": true,
+    "description": "The doctor's signature pixels were copied onto the patient signature area (copy-move).",
+    "pass": true,
+    "note": "caught by: copy_move_region",
+    "status": "needs_staff_review",
+    "headline": "Staff review needed",
+    "reason": "The document appears to be a digital template or reproduction with uniform computer-generated text and signature styling.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "review"
+    },
+    "signals": [
+      "copy_move_region",
+      "sample_or_watermark"
+    ],
+    "seconds": 4.6
+  },
+  {
+    "file": "edit-04-whiteout-retyped-dates.jpg",
+    "edited": true,
+    "description": "Confinement dates covered with flat white (correction tape) and retyped as 11 - 25 instead of 11 - 15.",
+    "pass": true,
+    "note": "caught by: pasted_region_boundary",
+    "status": "flagged_inconsistency",
+    "headline": "Details do not agree",
+    "reason": "The confinement dates (April 11 - 25, 2021) conflict with the illness leave dates (April 11 - 15, 2021) and occur after the document issue date (April 16, 2021).",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "fail",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "review"
+    },
+    "signals": [
+      "name_mismatch_or_internal_conflict",
+      "pasted_region_boundary"
+    ],
+    "seconds": 4.8
+  },
+  {
+    "file": "edit-05-spliced-diagnosis.jpg",
+    "edited": true,
+    "description": "Diagnosis line replaced by a cleaner, brighter, heavily compressed patch from another image (splice).",
+    "pass": true,
+    "note": "caught by: pasted_region_boundary",
+    "status": "needs_staff_review",
+    "headline": "Staff review needed",
+    "reason": "The nature of disease entry appears digitally pasted with a solid white background box distinct from the rest of the paper texture.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "review"
+    },
+    "signals": [
+      "pasted_region_boundary"
+    ],
+    "seconds": 4.9
+  },
+  {
+    "file": "edit-06-sample-watermark.jpg",
+    "edited": true,
+    "description": "A sample form downloaded from a website (SAMPLE ONLY watermark and website address).",
+    "pass": true,
+    "note": "caught by: sample_or_watermark",
+    "status": "needs_staff_review",
+    "headline": "Staff review needed",
+    "reason": "The document contains a prominent red watermark reading 'SAMPLE ON' and a website footer indicating it is a specimen template from an archive.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "review"
+    },
+    "signals": [
+      "sample_or_watermark",
+      "typography_mismatch"
+    ],
+    "seconds": 4.7
+  },
+  {
+    "file": "edit-07-wrong-document-type.jpg",
+    "edited": true,
+    "description": "A death-certificate-titled form uploaded in the Medical Certificate slot.",
+    "pass": true,
+    "note": "caught by: wrong_document",
+    "status": "flagged_inconsistency",
+    "headline": "Wrong document uploaded",
+    "reason": "This looks like a Death Certificate (\"CERTIFICATE OF DEATH\"), not the required Medical Abstract or Medical Certificate.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "fail",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "pass"
+    },
+    "signals": [
+      "wrong_document"
+    ],
+    "seconds": 4.6
+  },
+  {
+    "file": "edit-08-navy-typed-date-hard.jpg",
+    "edited": true,
+    "description": "HARD CASE: date retyped in dark navy (not flat black), saved as JPEG without editor metadata.",
+    "pass": true,
+    "note": "caught by: date_context_conflict, typography_mismatch",
+    "status": "flagged_inconsistency",
+    "headline": "Details do not agree",
+    "reason": "The issue date of September 24, 2026 occurs more than five years after the stated confinement period of April 11-15, 2021.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "fail",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "pass"
+    },
+    "signals": [
+      "date_context_conflict",
+      "name_mismatch_or_internal_conflict",
+      "typography_mismatch"
+    ],
+    "seconds": 4.9
+  },
+  {
+    "file": "id-clean-01-national-id.jpg",
+    "edited": false,
+    "description": "Unedited national ID of the beneficiary.",
+    "pass": true,
+    "note": "no alteration/tampering flags",
+    "status": "likely_valid",
+    "headline": "Document looks good",
+    "reason": "The uploaded document is a valid Philippine Identification Card belonging to Juan Santos Dela Cruz. All details are clear and consistent.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "pass"
+    },
+    "signals": [],
+    "seconds": 2.5
+  },
+  {
+    "file": "id-clean-02-drivers-license.jpg",
+    "edited": false,
+    "description": "Unedited driver's license of the beneficiary.",
+    "pass": true,
+    "note": "no alteration/tampering flags",
+    "status": "likely_valid",
+    "headline": "Document looks good",
+    "reason": "This document is a driver's license issued for Juan Santos Dela Cruz, showing a validity date of March 12, 2028. Staff should verify that the card details match the applicant's records.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "pass"
+    },
+    "signals": [],
+    "seconds": 2.4
+  },
+  {
+    "file": "id-clean-03-umid.jpg",
+    "edited": false,
+    "description": "Unedited UMID of the beneficiary.",
+    "pass": true,
+    "note": "no alteration/tampering flags",
+    "status": "likely_valid",
+    "headline": "Document looks good",
+    "reason": "This is a Unified Multi-Purpose ID for Juan Santos Dela Cruz. All details are readable and consistent.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "pass"
+    },
+    "signals": [],
+    "seconds": 2.4
+  },
+  {
+    "file": "id-edit-01-national-name-typed.jpg",
+    "edited": true,
+    "description": "Another person's national ID with the beneficiary's name typed over the name fields (birth date still 1990).",
+    "pass": true,
+    "note": "caught by: digital_text_overlay, name_mismatch_or_internal_conflict",
+    "status": "flagged_inconsistency",
+    "headline": "Name does not match the application",
+    "reason": "The birth date on the document differs from the application.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "fail",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "review"
+    },
+    "signals": [
+      "digital_text_overlay",
+      "name_mismatch_or_internal_conflict"
+    ],
+    "seconds": 3.0
+  },
+  {
+    "file": "id-edit-02-drivers-birthdate-typed.jpg",
+    "edited": true,
+    "description": "Driver's license birth date retyped from 1990/07/21 to match the application (1975/03/12).",
+    "pass": true,
+    "note": "caught by: digital_text_overlay",
+    "status": "flagged_inconsistency",
+    "headline": "Possible document changes found",
+    "reason": "Some text is flat digital black and darker than the photographed text around it, so it may have been typed on with an editing app.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "fail"
+    },
+    "signals": [
+      "digital_text_overlay",
+      "ink_or_color_mismatch"
+    ],
+    "seconds": 2.4
+  },
+  {
+    "file": "id-edit-03-postal-expiry-typed.png",
+    "edited": true,
+    "description": "Expired postal ID (2017) with the validity date retyped as 2027 in a phone editor (Picsart).",
+    "pass": true,
+    "note": "caught by: digital_text_overlay",
+    "status": "flagged_inconsistency",
+    "headline": "Possible document changes found",
+    "reason": "Some text is flat digital black and darker than the photographed text around it, so it may have been typed on with an editing app. The file was saved with Picsart, an editing app.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "fail"
+    },
+    "signals": [
+      "digital_text_overlay"
+    ],
+    "seconds": 5.4
+  },
+  {
+    "file": "id-edit-04-umid-photo-swapped.jpg",
+    "edited": true,
+    "description": "UMID portrait replaced with a sharper, brighter, heavily compressed picture pasted from another image.",
+    "pass": true,
+    "note": "flagged for review (different signal than expected: sample_or_watermark)",
+    "status": "needs_staff_review",
+    "headline": "Staff review needed",
+    "reason": "The image appears to be a digital graphic or template rather than a photo of a physical card, showing uniform digital fonts and graphic elements.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "review"
+    },
+    "signals": [
+      "sample_or_watermark"
+    ],
+    "seconds": 2.4
+  },
+  {
+    "file": "id-edit-05-someone-elses-id.jpg",
+    "edited": true,
+    "description": "Unedited national ID of a different person (PEDRO MANALO REYES) uploaded for the beneficiary.",
+    "pass": true,
+    "note": "caught by: name_mismatch_or_internal_conflict",
+    "status": "flagged_inconsistency",
+    "headline": "Name does not match the application",
+    "reason": "The cardholder name on the document is Pedro Manalo Reyes, but the application is for Juan Santos Dela Cruz.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "fail",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "review"
+    },
+    "signals": [
+      "name_mismatch_or_internal_conflict",
+      "typography_mismatch"
+    ],
+    "seconds": 2.4
+  }
+]

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Beneficiary birthdate entry regression</title>
+  <link rel="stylesheet" href="../Applicants/css files/applicant-pages.css">
+  <style>body { margin: 24px; } .intake-shell-senior { max-width: 690px; }</style>
+</head>
+<body data-result="waiting">
+  <div class="intake-shell-senior">
+    <form id="aics-intake-form"><div class="field">
+      <label for="beneficiary-birth-month">Date of Birth *</label>
+      <div class="beneficiary-birthdate-control">
+        <input id="beneficiary-birth-month" type="text" inputmode="numeric" maxlength="2" placeholder="MM" required aria-label="Birth month">
+        <span>/</span>
+        <input id="beneficiary-birth-day" type="text" inputmode="numeric" maxlength="2" placeholder="DD" required aria-label="Birth day">
+        <span>/</span>
+        <input id="beneficiary-birth-year" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" required aria-label="Birth year">
+        <input id="beneficiary-birth-date" type="date" name="beneficiary_birth_date" class="beneficiary-birthdate-picker" required aria-label="Choose birth date from calendar">
+      </div>
+    </div></form>
+  </div>
+  <pre id="result">WAITING</pre>
+  <script src="../Applicants/js files/beneficiary-birthdate.js"></script>
+  <script>
+    function check(condition, message) { if (!condition) throw new Error(message); }
+    function typeInto(input, value) { input.value = value; input.dispatchEvent(new Event('input', { bubbles: true })); }
+    try {
+      const control = window.initBeneficiaryBirthdateInput();
+      const month = document.getElementById('beneficiary-birth-month');
+      const day = document.getElementById('beneficiary-birth-day');
+      const year = document.getElementById('beneficiary-birth-year');
+      const iso = document.getElementById('beneficiary-birth-date');
+      typeInto(month, '1');
+      check(month.value === '1' && year.value === '' && iso.value === '', 'The first month digit jumped to the year.');
+      typeInto(month, '10');
+      check(month.value === '10' && year.value === '', 'The month cannot retain two digits.');
+      typeInto(day, '02');
+      typeInto(year, '1990');
+      check(iso.value === '1990-10-02', 'Typing October 2 did not produce the ISO date.');
+      check(new FormData(document.getElementById('aics-intake-form')).get('beneficiary_birth_date') === '1990-10-02', 'Submission lost the ISO date.');
+      typeInto(day, '32');
+      check(iso.value === '' && !day.checkValidity(), 'An impossible day was accepted.');
+      typeInto(month, '02');
+      typeInto(day, '29');
+      typeInto(year, '2024');
+      check(iso.value === '2024-02-29' && day.checkValidity(), 'A valid leap day was rejected.');
+      iso.value = '1985-12-05';
+      control.syncFromIso();
+      check(month.value === '12' && day.value === '05' && year.value === '1985', 'Draft or autofill ISO date did not restore the visible fields.');
+      iso.value = '2001-04-03';
+      iso.dispatchEvent(new Event('change', { bubbles: true }));
+      check(month.value === '04' && day.value === '03' && year.value === '2001', 'Calendar selection did not restore the visible fields.');
+      document.body.dataset.result = 'pass';
+      document.getElementById('result').textContent = 'PASS beneficiary birthdate entry';
+    } catch (error) {
+      document.body.dataset.result = 'fail';
+      document.getElementById('result').textContent = 'FAIL ' + error.message;
+    }
+  </script>
+</body>
+</html>

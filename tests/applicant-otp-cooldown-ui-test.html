@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Applicant OTP cooldown UI isolation</title>
+  <script>
+    function runOtpCooldownUiTest(frame) {
+      setTimeout(function () {
+        var result = document.getElementById('result');
+        try {
+          var app = frame.contentWindow;
+          var appDocument = frame.contentDocument;
+          var phoneInput = appDocument.getElementById('register-phone');
+          var sendButton = appDocument.getElementById('btn-send-otp');
+          var buttonText = appDocument.getElementById('otp-btn-text');
+          var phoneA = '09171234567';
+          var phoneB = '09181234567';
+          var attemptA = '0f0f96d7-9a4d-4bf1-a4dc-986456c879a1';
+          var attemptB = 'db88a962-2aec-472f-831d-a0062cab36e5';
+
+          if (typeof app.initializeSignupAttempt !== 'function' || typeof app.setOtpCooldownForAttempt !== 'function' || typeof app.syncOtpCooldownForCurrentPhone !== 'function') {
+            throw new Error('Per-attempt OTP cooldown controls are unavailable.');
+          }
+
+          app.localStorage.removeItem('aics_otp_cooldown_expiry');
+          app.initializeSignupAttempt(attemptA);
+          app.setOtpCooldownForAttempt(attemptA, phoneA, Date.now() + 300000);
+
+          phoneInput.value = phoneA;
+          phoneInput.dispatchEvent(new Event('input', { bubbles: true }));
+          if (!sendButton.disabled || !buttonText.textContent.includes('Resend in')) {
+            throw new Error('Attempt A / phone A did not restore its cooldown.');
+          }
+
+          app.initializeSignupAttempt(attemptB);
+          app.syncOtpCooldownForCurrentPhone();
+          if (sendButton.disabled || buttonText.textContent !== 'SEND OTP') {
+            throw new Error('Attempt A cooldown leaked to attempt B using the same phone.');
+          }
+
+          app.setOtpCooldownForAttempt(attemptB, phoneB, Date.now() + 300000);
+          phoneInput.value = phoneB;
+          phoneInput.dispatchEvent(new Event('input', { bubbles: true }));
+          if (!sendButton.disabled || !buttonText.textContent.includes('Resend in')) {
+            throw new Error('Attempt B / phone B did not restore its cooldown.');
+          }
+
+          app.initializeSignupAttempt(attemptA);
+          phoneInput.value = phoneA;
+          phoneInput.dispatchEvent(new Event('input', { bubbles: true }));
+          if (!sendButton.disabled || !buttonText.textContent.includes('Resend in')) {
+            throw new Error('Attempt A cooldown was lost after switching attempts.');
+          }
+
+          document.body.dataset.result = 'pass';
+          result.textContent = 'PASS per-attempt and per-phone OTP cooldown UI isolation';
+        } catch (error) {
+          document.body.dataset.result = 'fail';
+          result.textContent = 'FAIL ' + error.message;
+        }
+      }, 200);
+    }
+  </script>
+</head>
+<body data-result="waiting">
+  <iframe src="../Applicants/login.html" title="Applicant signup under test" onload="runOtpCooldownUiTest(this)"></iframe>
+  <pre id="result">WAITING</pre>
+</body>
+</html>

@@ -1,0 +1,199 @@
+{
+  "beneficiary": {
+    "full_name": "Juan Santos Dela Cruz",
+    "date_of_birth": "1975-03-12",
+    "sex": "Male",
+    "address": "Barangay 3, San Jose, Antique"
+  },
+  "documents": [
+    {
+      "file": "clean-01-phone-photo.jpg",
+      "edited": false,
+      "description": "Unedited phone photo of the certificate.",
+      "expected_document_type": "med_cert",
+      "allow": [
+        "sample_or_watermark"
+      ]
+    },
+    {
+      "file": "clean-02-flat-scan.png",
+      "edited": false,
+      "description": "Unedited clean scan (black text on white, no camera effects).",
+      "expected_document_type": "med_cert",
+      "allow": [
+        "sample_or_watermark"
+      ]
+    },
+    {
+      "file": "clean-03-cool-light-photo.jpg",
+      "edited": false,
+      "description": "Unedited photo under cool light with stronger noise and blur.",
+      "expected_document_type": "med_cert",
+      "allow": [
+        "sample_or_watermark"
+      ]
+    },
+    {
+      "file": "edit-01-canva-typed-date.png",
+      "edited": true,
+      "edit": "Signature date covered and retyped in Canva (flat black, different font); 2021 events vs 2026 date.",
+      "expect_any": [
+        "digital_text_overlay",
+        "date_context_conflict"
+      ],
+      "expected_document_type": "med_cert"
+    },
+    {
+      "file": "edit-02-pasted-beneficiary-name.jpg",
+      "edited": true,
+      "edit": "Someone else's certificate; the beneficiary's name was typed over the patient name at the top (body still names ROBERTO C. VILLANUEVA).",
+      "expect_any": [
+        "digital_text_overlay",
+        "name_mismatch_or_internal_conflict"
+      ],
+      "expected_document_type": "med_cert"
+    },
+    {
+      "file": "edit-03-cloned-signature.jpg",
+      "edited": true,
+      "edit": "The doctor's signature pixels were copied onto the patient signature area (copy-move).",
+      "expect_any": [
+        "copy_move_region",
+        "repeated_visual_region",
+        "signature_or_stamp_anomaly"
+      ],
+      "expected_document_type": "med_cert"
+    },
+    {
+      "file": "edit-04-whiteout-retyped-dates.jpg",
+      "edited": true,
+      "edit": "Confinement dates covered with flat white (correction tape) and retyped as 11 - 25 instead of 11 - 15.",
+      "expect_any": [
+        "erasure_or_cover_region",
+        "pasted_region_boundary",
+        "value_context_conflict",
+        "date_context_conflict"
+      ],
+      "expected_document_type": "med_cert"
+    },
+    {
+      "file": "edit-05-spliced-diagnosis.jpg",
+      "edited": true,
+      "edit": "Diagnosis line replaced by a cleaner, brighter, heavily compressed patch from another image (splice).",
+      "expect_any": [
+        "pasted_region_boundary",
+        "compression_or_resampling_difference",
+        "background_texture_discontinuity",
+        "digital_text_overlay",
+        "typography_mismatch"
+      ],
+      "expected_document_type": "med_cert"
+    },
+    {
+      "file": "edit-06-sample-watermark.jpg",
+      "edited": true,
+      "edit": "A sample form downloaded from a website (SAMPLE ONLY watermark and website address).",
+      "expect_any": [
+        "sample_or_watermark"
+      ],
+      "expected_document_type": "med_cert"
+    },
+    {
+      "file": "edit-07-wrong-document-type.jpg",
+      "edited": true,
+      "edit": "A death-certificate-titled form uploaded in the Medical Certificate slot.",
+      "expect_any": [
+        "wrong_document"
+      ],
+      "expected_document_type": "med_cert"
+    },
+    {
+      "file": "edit-08-navy-typed-date-hard.jpg",
+      "edited": true,
+      "edit": "HARD CASE: date retyped in dark navy (not flat black), saved as JPEG without editor metadata.",
+      "expect_any": [
+        "digital_text_overlay",
+        "date_context_conflict",
+        "typography_mismatch"
+      ],
+      "expected_document_type": "med_cert"
+    },
+    {
+      "file": "id-clean-01-national-id.jpg",
+      "edited": false,
+      "description": "Unedited national ID of the beneficiary.",
+      "expected_document_type": "valid_id",
+      "allow": [
+        "sample_or_watermark"
+      ]
+    },
+    {
+      "file": "id-clean-02-drivers-license.jpg",
+      "edited": false,
+      "description": "Unedited driver's license of the beneficiary.",
+      "expected_document_type": "valid_id",
+      "allow": [
+        "sample_or_watermark"
+      ]
+    },
+    {
+      "file": "id-clean-03-umid.jpg",
+      "edited": false,
+      "description": "Unedited UMID of the beneficiary.",
+      "expected_document_type": "valid_id",
+      "allow": [
+        "sample_or_watermark"
+      ]
+    },
+    {
+      "file": "id-edit-01-national-name-typed.jpg",
+      "edited": true,
+      "edit": "Another person's national ID with the beneficiary's name typed over the name fields (birth date still 1990).",
+      "expect_any": [
+        "digital_text_overlay",
+        "name_mismatch_or_internal_conflict"
+      ],
+      "expected_document_type": "valid_id"
+    },
+    {
+      "file": "id-edit-02-drivers-birthdate-typed.jpg",
+      "edited": true,
+      "edit": "Driver's license birth date retyped from 1990/07/21 to match the application (1975/03/12).",
+      "expect_any": [
+        "digital_text_overlay"
+      ],
+      "expected_document_type": "valid_id"
+    },
+    {
+      "file": "id-edit-03-postal-expiry-typed.png",
+      "edited": true,
+      "edit": "Expired postal ID (2017) with the validity date retyped as 2027 in a phone editor (Picsart).",
+      "expect_any": [
+        "digital_text_overlay"
+      ],
+      "expected_document_type": "valid_id"
+    },
+    {
+      "file": "id-edit-04-umid-photo-swapped.jpg",
+      "edited": true,
+      "edit": "UMID portrait replaced with a sharper, brighter, heavily compressed picture pasted from another image.",
+      "expect_any": [
+        "pasted_region_boundary",
+        "compression_or_resampling_difference",
+        "background_texture_discontinuity",
+        "other_visual_anomaly",
+        "signature_or_stamp_anomaly"
+      ],
+      "expected_document_type": "valid_id"
+    },
+    {
+      "file": "id-edit-05-someone-elses-id.jpg",
+      "edited": true,
+      "edit": "Unedited national ID of a different person (PEDRO MANALO REYES) uploaded for the beneficiary.",
+      "expect_any": [
+        "name_mismatch_or_internal_conflict"
+      ],
+      "expected_document_type": "valid_id"
+    }
+  ]
+}

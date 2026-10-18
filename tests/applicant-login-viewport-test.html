@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Applicant login viewport regression</title>
+  <style>
+    html, body { margin: 0; }
+    #subject { display: block; width: 1536px; height: 730px; border: 0; }
+  </style>
+  <script>
+    function verifyLoginViewport(frame) {
+      setTimeout(function () {
+          var frameWindow = frame.contentWindow;
+          var frameDocument = frame.contentDocument;
+          var stage = frameDocument.querySelector('.login-stage.is-login-view');
+          var documentHeight = Math.max(
+            frameDocument.documentElement.scrollHeight,
+            frameDocument.body.scrollHeight
+          );
+          var viewportHeight = frameWindow.innerHeight;
+          var stageRect = stage.getBoundingClientRect();
+          var fits = documentHeight <= viewportHeight
+            && stageRect.top >= 0
+            && stageRect.bottom <= viewportHeight;
+          var result = document.getElementById('result');
+          document.body.dataset.result = fits ? 'pass' : 'fail';
+          result.textContent = (fits ? 'PASS' : 'FAIL')
+            + ' viewport=' + viewportHeight
+            + ' document=' + documentHeight
+            + ' stageTop=' + Math.round(stageRect.top)
+            + ' stageBottom=' + Math.round(stageRect.bottom);
+      }, 100);
+    }
+  </script>
+</head>
+<body data-result="waiting">
+  <iframe id="subject" src="../Applicants/login.html" title="Applicant login under test" onload="verifyLoginViewport(this)"></iframe>
+  <pre id="result">WAITING</pre>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Applicant profile ID popup test</title><link rel="stylesheet" href="../Applicants/css%20files/applicant-pages.css"></head>
+<body data-result="pending">
+  <p id="result">RUNNING</p>
+  <form id="profile-update-form" data-get-url="profile-get-test"></form>
+  <section id="profile-id-card" data-photo-url="edited-documents/documents/signup/signup-ok-front.jpg" hidden>
+    <button type="button" class="profile-id-photo" data-id-side="front"><img alt="Front"></button>
+    <button type="button" class="profile-id-photo" data-id-side="back"><img alt="Back"></button>
+  </section>
+  <dialog class="profile-id-dialog" id="profile-id-dialog" data-side="front" aria-label="Sign-up ID photo">
+    <div class="profile-id-dialog-panel">
+      <div class="profile-id-dialog-header">
+        <div class="profile-id-dialog-heading"><h2>Sign-up ID</h2><p><span id="profile-id-dialog-type">Valid ID</span></p></div>
+        <button type="button" class="profile-id-dialog-close" data-close-id-dialog>Close</button>
+      </div>
+      <div class="profile-id-dialog-image-wrap">
+        <img id="profile-id-large-image" alt="">
+        <span class="profile-id-dialog-badge" id="profile-id-dialog-caption">Front of ID</span>
+        <button type="button" class="profile-id-dialog-arrow is-prev" data-id-arrow="front">&lt;</button>
+        <button type="button" class="profile-id-dialog-arrow is-next" data-id-arrow="back">&gt;</button>
+      </div>
+      <div class="profile-id-dialog-footer">
+        <div class="profile-id-dialog-sides">
+          <button type="button" data-view-side="front"><img alt="" data-id-thumb="front"><span>Front</span></button>
+          <button type="button" data-view-side="back"><img alt="" data-id-thumb="back"><span>Back</span></button>
+        </div>
+        <div class="profile-id-dialog-tools">
+          <button type="button" class="profile-id-dialog-rotate" data-rotate-id-photo="-90">L</button>
+          <button type="button" class="profile-id-dialog-rotate" data-rotate-id-photo="90">R</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+  <script>
+    window.fetch = async () => ({ok: true, json: async () => ({
+      ok: true, profile: {display_name: 'Test Applicant'}, profile_complete: true,
+      id_photos_available: true, id_type_label: 'Test ID'
+    })});
+  </script>
+  <script src="../Applicants/js%20files/my-profile.js"></script>
+  <script>
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const within = (inner, outer) => inner.left >= outer.left - 1 && inner.right <= outer.right + 1
+      && inner.top >= outer.top - 1 && inner.bottom <= outer.bottom + 1;
+    (async () => {
+      await wait(300);
+      const result = document.getElementById('result');
+      const dialog = document.getElementById('profile-id-dialog');
+      const front = document.querySelector('[data-id-side="front"]');
+      const largeImage = document.getElementById('profile-id-large-image');
+      try {
+        if (front.closest('#profile-id-card').hidden) throw new Error('ID previews did not load.');
+        if (document.getElementById('profile-id-dialog-type').textContent !== 'Test ID') throw new Error('Popup does not name the ID type.');
+        const originalUrl = location.href;
+        front.click();
+        if (!dialog.open) throw new Error('Front ID did not open a popup.');
+        await wait(400);
+        dialog.getAnimations().forEach((animation) => animation.finish());  // background tabs pause animations
+        const box = dialog.getBoundingClientRect();
+        if (parseFloat(getComputedStyle(dialog).borderRadius) < 16 || box.width < Math.min(600, innerWidth - 24)) {
+          throw new Error('Popup is not styled as a readable viewer.');
+        }
+        if (Math.abs(box.left - (innerWidth - box.width) / 2) > 2 || Math.abs(box.top - (innerHeight - box.height) / 2) > 2) {
+          throw new Error('Popup is not centered on the screen.');
+        }
+        if (getComputedStyle(largeImage).objectFit !== 'contain') throw new Error('Large ID image does not fit inside the popup.');
+        if (location.href !== originalUrl) throw new Error('Click navigated away from My Profile.');
+        if (!largeImage.src.includes('side=front')) throw new Error('Popup did not show the front photo.');
+        const stage = largeImage.parentElement;
+        if (stage.scrollHeight > stage.clientHeight + 1) throw new Error('Photo area scrolls instead of fitting.');
+        if (!within(largeImage.getBoundingClientRect(), stage.getBoundingClientRect())) throw new Error('Photo spills outside the viewer.');
+        document.querySelector('[data-rotate-id-photo="90"]').click();
+        await wait(400);
+        largeImage.getAnimations().forEach((animation) => animation.finish());
+        if (!largeImage.style.transform.includes('rotate(90deg)')) throw new Error('Rotate did not turn the photo.');
+        if (!within(largeImage.getBoundingClientRect(), stage.getBoundingClientRect())) throw new Error('Rotated photo spills outside the viewer.');
+        document.querySelector('[data-view-side="back"]').click();
+        if (!largeImage.src.includes('side=back')) throw new Error('Back control did not switch photos.');
+        if (largeImage.style.transform.includes('rotate(90deg)')) throw new Error('Back photo kept the front rotation.');
+        document.querySelector('[data-rotate-id-photo="-90"]').click();
+        if (!largeImage.style.transform.includes('rotate(-90deg)')) throw new Error('Rotate left did not turn the photo.');
+        document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowLeft', bubbles: true}));
+        if (!largeImage.src.includes('side=front')) throw new Error('Left arrow key did not show the front.');
+        document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}));
+        if (dialog.open) throw new Error('Escape did not close the popup.');
+        if (document.activeElement !== front) throw new Error('Focus did not return to the thumbnail.');
+        document.body.dataset.result = 'pass';
+        result.textContent = 'PASS ID photos open centered, fit, rotate and switch in a same-page popup';
+      } catch (error) {
+        document.body.dataset.result = 'fail';
+        result.textContent = 'FAIL ' + error.message;
+      }
+    })();
+  </script>
+</body>
+</html>
