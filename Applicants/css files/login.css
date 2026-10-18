@@ -1594,6 +1594,13 @@ a {
     overflow-x: clip;
   }
 
+  /* Full-bleed sign-up divider and footer wave must cancel exactly this padding. */
+  .login-stage.is-register-view .signup-top-divider,
+  .login-stage.is-register-view .signup-card-footer {
+    margin-left: calc(-1 * max(16px, env(safe-area-inset-left)));
+    margin-right: calc(-1 * max(16px, env(safe-area-inset-right)));
+  }
+
   .auth-card,
   .form-section,
   .form-section form,

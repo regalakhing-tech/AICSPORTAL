@@ -784,8 +784,10 @@
     .nav-link { font-size: 15px; padding: 8px 0; width: 100%; }
     .mobile-toggle { display: block; }
     .hero { padding: 110px 0 60px; }
-    .hero-grid { grid-template-columns: 1fr; text-align: center; gap: 30px; }
-    .hero-badge-wrap, .hero-cta { justify-content: center; }
+    /* minmax(0, 1fr): the phone mockups are 506px wide before scaling and must not widen the column */
+    .hero-grid { grid-template-columns: minmax(0, 1fr); text-align: center; gap: 30px; }
+    .hero-art { overflow: hidden; }
+    .hero-badge-wrap, .hero-cta, .hero-benefits { justify-content: center; }
     .hero-sub { margin-left: auto; margin-right: auto; }
     .hero-stats { text-align: left; }
     .hero-art { height: 420px; margin-top: 10px; }
@@ -820,6 +822,8 @@
     .map-density-legend small { font-size: 10px; }
   }
   @media (max-width: 480px) {
+    .phones-wrap { transform: scale(0.56); }
+    .hero-art { height: 280px; }
     #antique-map { height: 630px; }
     .map-floating-controls .btn-map-control { width: 34px; padding: 0; justify-content: center; font-size: 0; }
     .map-floating-controls .btn-map-control i { font-size: 12px; }
