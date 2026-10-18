@@ -10,7 +10,6 @@ $routes = [
     'reports' => 'reports.php',
     'report_for_release' => 'report-for-release.php',
     'report_released' => 'report-released.php',
-    'all_releases' => 'municipal-releases.php',
 ];
 
 $page = isset($_GET['page']) ? (string) $_GET['page'] : 'overview';

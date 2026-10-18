@@ -53,14 +53,6 @@ function pswdo_request_reopen_id_after_action(int $requestId, string $actionType
     return $requestId;
 }
 
-function pswdo_mswdo_nav_link(string $dashboardUrl, bool $active = false): string
-{
-    $className = $active ? 'nav-link active' : 'nav-link';
-    $href = pswdo_h($dashboardUrl) . '?page=all_releases';
-
-    return '<a class="' . $className . '" href="' . $href . '"><i class="fas fa-envelope"></i> MSWDO</a>';
-}
-
 /** @return array{label:string,class:string,icon:string} */
 function pswdo_duplicate_badge_meta(string $status): array
 {

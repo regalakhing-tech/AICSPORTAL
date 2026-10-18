@@ -28,7 +28,7 @@ It runs locally on **XAMPP** (Apache + PHP + MySQL), with an optional **Python w
 | Portal | Login page | Who uses it | What they can do |
 |---|---|---|---|
 | **Applicant** | `Applicants/login.html` | Members of the public | Sign up with phone OTP (email optional), complete a profile, file an AICS request, upload requirements, track status, read notifications, cancel or edit pending requests, chat with the AICS Guide |
-| **PSWDO** | `Pswdo/login.php` | PSWDO personnel | Pre-screening queue, request management, AI document verdicts, duplicate/repeat-claim checks, smart prioritization (PWD / senior citizen), status decisions, release scheduling, municipal (MSWDO) release lists, printable reports and GIS forms, map analytics, SMS notices |
+| **PSWDO** | `Pswdo/login.php` | PSWDO personnel | Pre-screening queue, request management, AI document verdicts, duplicate/repeat-claim checks, smart prioritization (PWD / senior citizen), status decisions, release scheduling, printable reports and GIS forms, map analytics, SMS notices |
 | **Admin** | `ADMIN/login.php` | System administrators | Create and manage staff accounts, account status (active / disabled / locked / banned), security and audit logs, overview dashboard, database backups and maintenance |
 
 Assistance types supported: **Medical**, **Burial**, **Victim of Disaster**, **Special Cases**, and **Persons Affected by High Inflation Rate**. The required documents for each type are seeded by the database schema.

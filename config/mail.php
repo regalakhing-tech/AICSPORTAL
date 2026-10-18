@@ -4,8 +4,7 @@ declare(strict_types=1);
 /**
  * AICS Automated Portal - Central Mail & SMTP Configuration
  *
- * This file configures PHPMailer for dispatching official municipal release masterlists,
- * beneficiary notifications, and administrative alerts.
+ * This file configures PHPMailer for beneficiary notifications and administrative alerts.
  *
  * To send real emails via Gmail:
  * 1. Set SMTP_USER to your Gmail address (e.g. pswdo.antique@gmail.com).
