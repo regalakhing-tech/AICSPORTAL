@@ -8,4 +8,8 @@ mkdir -p "$DATA/backups" "$DATA/emails" "$APP/storage"
 ln -sfn "$DATA/backups" "$APP/ADMIN/backups"
 ln -sfn "$DATA/emails" "$APP/storage/emails"
 chown www-data:www-data "$APP/Applicants/uploads" "$DATA" "$DATA/backups" "$DATA/emails"
+
+# mod_php needs the prefork MPM only; remove any other MPM before Apache starts.
+echo "MPMs found: $(ls /etc/apache2/mods-enabled | grep '^mpm_' | tr '\n' ' ')"
+rm -f /etc/apache2/mods-enabled/mpm_event.* /etc/apache2/mods-enabled/mpm_worker.*
 exec apache2-foreground
