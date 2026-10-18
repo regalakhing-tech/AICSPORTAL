@@ -220,6 +220,8 @@ $isPdfExport = !empty($_GET['format']) && $_GET['format'] === 'pdf';
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GIS — <?= $h($refNo !== '' ? $refNo : 'Request #' . $requestId) ?></title>
+  <link rel="icon" type="image/png" href="/AICS/AICS/asset/favicon.png">
+  <link rel="apple-touch-icon" href="/AICS/AICS/asset/apple-touch-icon.png">
   <style>
     @page {
       size: legal portrait;

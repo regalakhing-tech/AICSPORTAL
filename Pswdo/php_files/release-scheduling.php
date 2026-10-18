@@ -212,6 +212,8 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PSWDO Portal | Release Scheduling</title>
+  <link rel="icon" type="image/png" href="/AICS/AICS/asset/favicon.png">
+  <link rel="apple-touch-icon" href="/AICS/AICS/asset/apple-touch-icon.png">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="<?= pswdo_h($paths['css_url']) ?>">

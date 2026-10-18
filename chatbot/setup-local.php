@@ -82,6 +82,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Local AICS Groq Setup</title>
+    <link rel="icon" type="image/png" href="/AICS/AICS/asset/favicon.png">
+    <link rel="apple-touch-icon" href="/AICS/AICS/asset/apple-touch-icon.png">
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; color: #0f172a; background: #f0f9ff; font: 15px/1.55 Arial, sans-serif; }

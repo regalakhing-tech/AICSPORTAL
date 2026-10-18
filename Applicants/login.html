@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AICS Portal | Sign In</title>
+    <link rel="icon" type="image/png" href="/AICS/AICS/asset/favicon.png">
+    <link rel="apple-touch-icon" href="/AICS/AICS/asset/apple-touch-icon.png">
     <!-- Google Fonts: Inter & Caveat for Antique signature script -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,7 +17,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     />
-    <link rel="stylesheet" href="css files/login.css?v=mobile-fit-v1" />
+    <link rel="stylesheet" href="css files/login.css?v=accepted-ids-v1" />
   </head>
   <body>
     <div class="login-page-container">
@@ -386,6 +388,41 @@
                       <h3>Verify your valid ID</h3>
                       <p>Add clear photos of the <strong>front</strong> and <strong>back</strong> of one valid ID. For a one-sided voter's certification, NBI clearance, or police clearance, add a second photo of the same document. The name on your ID must match the name you entered.</p>
                     </div>
+                  </div>
+                  <!-- Keep in sync with SUPPORTED_IDS in ai_processor/id_check.py -->
+                  <div class="signup-id-accepted">
+                    <p class="signup-id-accepted-title"><i class="fas fa-circle-info" aria-hidden="true"></i> Accepted government IDs</p>
+                    <ul class="signup-id-accepted-list">
+                      <li>PhilSys National ID</li>
+                      <li>Driver's License</li>
+                      <li>Passport</li>
+                      <li>UMID</li>
+                      <li>SSS ID</li>
+                      <li>Voter's ID</li>
+                      <li>Postal ID</li>
+                      <li>PRC ID</li>
+                      <li>PhilHealth ID</li>
+                      <li>Senior Citizen ID</li>
+                      <li>PWD ID</li>
+                    </ul>
+                    <details class="signup-id-accepted-more">
+                      <summary>See all accepted IDs</summary>
+                      <ul class="signup-id-accepted-list">
+                        <li>GSIS ID</li>
+                        <li>Pag-IBIG ID</li>
+                        <li>OWWA ID</li>
+                        <li>DOLE ID</li>
+                        <li>4Ps ID</li>
+                        <li>Solo Parent ID</li>
+                        <li>Barangay ID</li>
+                        <li>City or Municipal Government ID</li>
+                        <li>Voter's Certification</li>
+                        <li>NBI Clearance</li>
+                        <li>Police Clearance</li>
+                        <li>Other government ID showing the issuing agency</li>
+                      </ul>
+                    </details>
+                    <p class="signup-id-not-accepted"><i class="fas fa-ban" aria-hidden="true"></i> Not accepted: school or student IDs, company or employee IDs, membership cards, and barangay certificates.</p>
                   </div>
                   <div class="signup-id-tiles">
                     <label class="signup-id-tile" for="id-front-input" id="id-front-tile">
