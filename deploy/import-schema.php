@@ -1,7 +1,7 @@
 <?php
-// One-time database setup on Railway: imports database/AICSdb.sql into MariaDB over the
-// private network, so the database never needs a public address. Safe to re-run.
-// Usage: railway ssh --service AICSPORTAL -- php /var/www/html/AICS/AICS/deploy/import-schema.php
+// Database setup on Railway: imports database/AICSdb.sql into MariaDB over the private
+// network, so the database never needs a public address. deploy/start.sh runs it with
+// --if-empty on every start, which only imports into a database without AICS tables.
 declare(strict_types=1);
 
 if (PHP_SAPI !== 'cli') {
@@ -10,14 +10,32 @@ if (PHP_SAPI !== 'cli') {
 }
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-$db = new mysqli(
-    getenv('AICS_DB_HOST') ?: 'localhost',
-    getenv('AICS_DB_USER') ?: 'root',
-    (string) getenv('AICS_DB_PASS'),
-    '',
-    (int) (getenv('AICS_DB_PORT') ?: 3306)
-);
+// The database may still be starting when the app container boots.
+for ($attempt = 1; ; $attempt++) {
+    try {
+        $db = new mysqli(
+            getenv('AICS_DB_HOST') ?: 'localhost',
+            getenv('AICS_DB_USER') ?: 'root',
+            (string) getenv('AICS_DB_PASS'),
+            '',
+            (int) (getenv('AICS_DB_PORT') ?: 3306)
+        );
+        break;
+    } catch (mysqli_sql_exception $exception) {
+        if ($attempt >= 15) {
+            throw $exception;
+        }
+        sleep(2);
+    }
+}
 $db->set_charset('utf8mb4');
+
+$hasAccounts = (int) $db->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'AICSdb' AND table_name = 'aics_accounts'")->fetch_row()[0] > 0;
+if ($hasAccounts && in_array('--if-empty', $argv, true)) {
+    echo "Database already set up; schema import skipped.\n";
+    exit(0);
+}
+
 $db->multi_query((string) file_get_contents(__DIR__ . '/../database/AICSdb.sql'));
 $statements = 0;
 do {
