@@ -11,18 +11,25 @@ ln -sfn "$DATA/emails" "$APP/storage/emails"
 # First start only: create the AICS tables in an empty database.
 php "$APP/deploy/import-schema.php" --if-empty || echo "Database setup failed (see error above); starting the website anyway."
 
-# One-time migration from a local XAMPP install, bundled into a single deploy upload
-# (never committed): copy files without overwriting, then import the database once.
+# Migration from a local XAMPP install, sent as one or more deploy uploads (never
+# committed): copy each part's files without overwriting, import the database once.
 MIGRATE=$APP/deploy/migrate
+if [ -d "$MIGRATE/uploads" ]; then
+    cp -rn "$MIGRATE/uploads/." "$APP/Applicants/uploads/" || echo "Migration: copying uploads failed."
+fi
+if [ -d "$MIGRATE/private" ]; then
+    cp -rn "$MIGRATE/private/." "$DATA/" || echo "Migration: copying private files failed."
+fi
 if [ -f "$MIGRATE/aicsdb.sql" ]; then
     SUM=$(sha256sum "$MIGRATE/aicsdb.sql" | cut -d' ' -f1)
     if grep -qx "$SUM" "$DATA/migrations.done" 2>/dev/null; then
         echo "Migration $SUM already imported; skipped."
     else
-        cp -rn "$MIGRATE/uploads/." "$APP/Applicants/uploads/" || echo "Migration: copying uploads failed."
-        cp -rn "$MIGRATE/private/." "$DATA/" || echo "Migration: copying private files failed."
         php "$APP/deploy/import-schema.php" "$MIGRATE/aicsdb.sql" && echo "$SUM" >> "$DATA/migrations.done"
     fi
+fi
+if [ -d "$MIGRATE" ]; then
+    echo "Migration part copied: $(find "$MIGRATE" -type f | wc -l) files."
 fi
 chown -R www-data:www-data "$APP/Applicants/uploads"
 
