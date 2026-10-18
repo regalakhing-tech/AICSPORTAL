@@ -29,3 +29,6 @@ ai_processor/tamper_detection/vendor/adcd_net/
 
 # Thesis drafts (kept local)
 *.docx
+
+# One-time local-to-Railway data bundle (personal data, never commit)
+deploy/migrate/

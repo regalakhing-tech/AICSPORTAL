@@ -36,7 +36,14 @@ if ($hasAccounts && in_array('--if-empty', $argv, true)) {
     exit(0);
 }
 
-$db->multi_query((string) file_get_contents(__DIR__ . '/../database/AICSdb.sql'));
+// Optional file argument: a one-time data import dropped on the volume by deploy/start.sh.
+$sqlFile = __DIR__ . '/../database/AICSdb.sql';
+foreach (array_slice($argv, 1) as $argument) {
+    if ($argument !== '--if-empty') {
+        $sqlFile = $argument;
+    }
+}
+$db->multi_query((string) file_get_contents($sqlFile));
 $statements = 0;
 do {
     if ($result = $db->store_result()) {
@@ -46,4 +53,4 @@ do {
 } while ($db->more_results() && $db->next_result());
 
 $tables = (int) $db->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'AICSdb'")->fetch_row()[0];
-echo "Imported database/AICSdb.sql: {$statements} statements, {$tables} tables in AICSdb.\n";
+echo 'Imported ' . basename($sqlFile) . ": {$statements} statements, {$tables} tables in AICSdb.\n";
