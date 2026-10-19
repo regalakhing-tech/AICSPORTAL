@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/auth-common.php';
 require_once __DIR__ . '/../../includes/document-requirements.php';
+require_once __DIR__ . '/../../includes/ai-submission-gate.php';
 
 /**
  * @return array<string, mixed>
@@ -14,6 +15,11 @@ function aics_fetch_applicant_dashboard_data(int $accountId, ?string $sessionDis
     try {
         aics_ensure_auth_schema($connection);
         aics_ensure_dashboard_schema($connection);
+        try {
+            aics_ai_gate_sync_for_account($connection, $accountId);
+        } catch (Throwable $exception) {
+            error_log('AICS AI gate sync for applicant failed: category=' . $exception::class);
+        }
 
         $profile = aics_dashboard_fetch_profile($connection, $accountId, $sessionDisplayName);
         $requests = aics_dashboard_fetch_requests($connection, $accountId);

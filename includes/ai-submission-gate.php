@@ -428,12 +428,12 @@ function aics_ai_gate_apply(mysqli $connection, array $request, array $decision,
 }
 
 /** Drive one pending request: start or retry its AI checks, then apply the decision. */
-function aics_ai_gate_process_request(mysqli $connection, array $request, int &$slots, array &$totals): void
+function aics_ai_gate_process_request(mysqli $connection, array $request, int &$slots, array &$totals, bool $drive = true): void
 {
     $requestId = (int) $request['id'];
-    $totals['dispatched'] += aics_ai_gate_dispatch($connection, $requestId, $slots);
+    if ($drive) $totals['dispatched'] += aics_ai_gate_dispatch($connection, $requestId, $slots);
     $decision = aics_ai_gate_decide(aics_ai_gate_request_documents($connection, $requestId));
-    if ($decision['reason'] === 'ai_failed') {
+    if ($drive && $decision['reason'] === 'ai_failed') {
         $requeued = 0;
         foreach ($decision['retry'] as $doc) {
             $since = $doc['minutes_since_result'];
@@ -455,10 +455,11 @@ function aics_ai_gate_process_request(mysqli $connection, array $request, int &$
 /**
  * Drive pending requests (oldest first) and apply AICS AI decisions. Safe to
  * call from many places at once: every transition is a conditional UPDATE.
+ * With $drive = false it only decides (no AI worker is started or retried).
  *
  * @return array{released:int, held:int, admin_review:int, dispatched:int, retried:int}
  */
-function aics_ai_gate_sync(mysqli $connection, ?int $requestId = null): array
+function aics_ai_gate_sync(mysqli $connection, ?int $requestId = null, bool $drive = true): array
 {
     $totals = ['released' => 0, 'held' => 0, 'admin_review' => 0, 'dispatched' => 0, 'retried' => 0];
     aics_ai_gate_ensure_schema($connection);
@@ -469,10 +470,10 @@ function aics_ai_gate_sync(mysqli $connection, ?int $requestId = null): array
     $result = $connection->query($sql);
     $requests = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
     if ($requests === []) return $totals;
-    $slots = max(0, aics_ai_gate_max_workers() - aics_ai_gate_busy_workers($connection));
+    $slots = $drive ? max(0, aics_ai_gate_max_workers() - aics_ai_gate_busy_workers($connection)) : 0;
     foreach ($requests as $request) {
         try {
-            aics_ai_gate_process_request($connection, $request, $slots, $totals);
+            aics_ai_gate_process_request($connection, $request, $slots, $totals, $drive);
         } catch (Throwable $exception) {
             error_log('AICS AI gate sync failed for request_id=' . (int) $request['id'] . ': ' . $exception->getMessage());
         }
@@ -493,11 +494,11 @@ function aics_ai_gate_is_released(mysqli $connection, int $requestId): bool
 }
 
 /** Log an applicant change; a held or admin-review request is checked again. */
-function aics_ai_gate_note_documents_changed(mysqli $connection, int $requestId, ?int $actorAccountId, string $eventType): void
+function aics_ai_gate_note_documents_changed(mysqli $connection, int $requestId, ?int $actorAccountId, string $eventType, ?string $detail = null): void
 {
     if (!in_array($eventType, ['applicant_reupload', 'applicant_edit'], true)) throw new InvalidArgumentException('Unknown applicant change.');
     aics_ai_gate_ensure_schema($connection);
-    $detail = $eventType === 'applicant_edit' ? 'Applicant edited the application.' : 'Applicant uploaded documents.';
+    $detail ??= $eventType === 'applicant_edit' ? 'Applicant edited the application.' : 'Applicant uploaded documents.';
     aics_ai_gate_log_event($connection, $requestId, $eventType, null, null, $detail, $actorAccountId);
     $stmt = $connection->prepare("UPDATE aics_requests SET ai_gate_status = 'pending', ai_gate_reason = 'checking', ai_gate_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND ai_gate_status IN ('held', 'admin_review')");
     if (!$stmt) throw new RuntimeException('Unable to update the AICS AI gate.');
@@ -587,4 +588,57 @@ function aics_ai_gate_ai_key_configured(): bool
         if (in_array($name, $names, true) && $value !== '') return true;
     }
     return false;
+}
+
+/**
+ * After an applicant saves a request or uploads files (database only, no AI
+ * worker is started here): log the change for the admin, send a held or
+ * admin-review request back to checking, and decide what can be decided now.
+ */
+function aics_ai_gate_after_applicant_save(mysqli $connection, int $requestId, ?int $actorAccountId): void
+{
+    aics_ai_gate_ensure_schema($connection);
+    $stmt = $connection->prepare('SELECT document_type FROM aics_request_documents WHERE request_id = ? AND uploaded_at >= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 10 MINUTE) ORDER BY id');
+    if (!$stmt) throw new RuntimeException('Unable to read uploaded documents.');
+    $stmt->bind_param('i', $requestId);
+    $stmt->execute();
+    $types = array_column($stmt->get_result()?->fetch_all(MYSQLI_ASSOC) ?: [], 'document_type');
+    $stmt->close();
+    if ($types === []) {
+        aics_ai_gate_note_documents_changed($connection, $requestId, $actorAccountId, 'applicant_edit');
+    } else {
+        $labels = array_unique(array_map(static fn ($type): string => aics_document_requirement_label((string) $type), $types));
+        aics_ai_gate_note_documents_changed($connection, $requestId, $actorAccountId, 'applicant_reupload', 'Applicant uploaded: ' . implode(', ', $labels) . '.');
+    }
+    aics_ai_gate_sync($connection, $requestId, false);
+}
+
+/** Drive this applicant's own pending requests before their status is shown. */
+function aics_ai_gate_sync_for_account(mysqli $connection, int $accountId): void
+{
+    if ($accountId <= 0) return;
+    aics_ai_gate_ensure_schema($connection);
+    $stmt = $connection->prepare("SELECT r.id FROM aics_requests r INNER JOIN aics_account_requests ar ON ar.request_id = r.id WHERE ar.account_id = ? AND r.ai_gate_status = 'pending' ORDER BY r.id DESC LIMIT 5");
+    if (!$stmt) return;
+    $stmt->bind_param('i', $accountId);
+    $stmt->execute();
+    $ids = array_map('intval', array_column($stmt->get_result()?->fetch_all(MYSQLI_ASSOC) ?: [], 'id'));
+    $stmt->close();
+    foreach ($ids as $id) aics_ai_gate_sync($connection, $id);
+}
+
+/**
+ * Documents the applicant must replace, for the status page.
+ *
+ * @return list<array{label:string, reason:string}>
+ */
+function aics_ai_gate_applicant_items(mysqli $connection, int $requestId): array
+{
+    $decision = aics_ai_gate_decide(aics_ai_gate_request_documents($connection, $requestId));
+    $items = [];
+    foreach (array_merge($decision['blocking'], $decision['uncertain'], $decision['retry']) as $doc) {
+        $status = !empty($doc['local_only']) ? 'needs_staff_review' : (string) ($doc['status'] ?? '');
+        $items[] = ['label' => aics_document_requirement_label((string) ($doc['document_type'] ?? '')), 'reason' => aics_ai_gate_document_reason($status)];
+    }
+    return $items;
 }

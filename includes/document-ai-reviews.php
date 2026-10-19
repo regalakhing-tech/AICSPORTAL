@@ -276,11 +276,21 @@ function aics_queue_ai_reviews_for_request(mysqli $connection, int $requestId): 
 function aics_queue_ai_reviews_after_commit(mysqli $connection, int $requestId): array
 {
     try {
-        return ['queued' => aics_queue_ai_reviews_for_request($connection, $requestId), 'failed' => 0];
+        $queued = aics_queue_ai_reviews_for_request($connection, $requestId);
     } catch (Throwable $exception) {
         error_log('AICS post-upload AI queue failed: category=' . $exception::class);
         return ['queued' => 0, 'failed' => 1];
     }
+    // The AICS AI gate records the change and decides what it can without
+    // starting Python; the scheduler or the next page load starts the check.
+    try {
+        require_once __DIR__ . '/ai-submission-gate.php';
+        $actor = (int) ($_SESSION['aics_account_id'] ?? 0);
+        aics_ai_gate_after_applicant_save($connection, $requestId, $actor > 0 ? $actor : null);
+    } catch (Throwable $exception) {
+        error_log('AICS AI gate update after upload failed: category=' . $exception::class);
+    }
+    return ['queued' => $queued, 'failed' => 0];
 }
 
 /**

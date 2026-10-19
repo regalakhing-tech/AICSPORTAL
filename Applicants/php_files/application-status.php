@@ -5,6 +5,7 @@ require_once __DIR__ . '/auth-guard.php';
 require_once __DIR__ . '/auth-common.php';
 require_once __DIR__ . '/application-rules.php';
 require_once __DIR__ . '/../../includes/document-requirements.php';
+require_once __DIR__ . '/../../includes/ai-submission-gate.php';
 
 aics_start_session();
 
@@ -64,6 +65,11 @@ try {
     if ($accountId > 0) {
         $connection = aics_db_connect();
         aics_ensure_auth_schema($connection);
+        try {
+            aics_ai_gate_sync_for_account($connection, $accountId);
+        } catch (Throwable $exception) {
+            error_log('AICS AI gate sync for applicant failed: category=' . $exception::class);
+        }
         $hasDocReviewTable = ($connection->query("SHOW TABLES LIKE 'aics_request_document_reviews'")?->num_rows ?? 0) > 0;
 
         $requestsSql = <<<SQL
@@ -76,6 +82,8 @@ try {
                 r.created_at,
                 r.updated_at,
                 r.beneficiary_complete_name,
+                r.ai_gate_status,
+                r.ai_gate_eta_days,
                 rs.scheduled_date,
                 rs.scheduled_time,
                 rs.venue,
@@ -130,9 +138,17 @@ try {
                 'release_batch'   => (string) ($row['release_batch'] ?? ''),
                 'release_status'  => (string) ($row['release_status'] ?? ''),
                 'amount_given'    => $row['amount_given'] !== null ? (float) $row['amount_given'] : null,
+                'gate_status'     => (string) ($row['ai_gate_status'] ?? 'released'),
+                'gate_eta_days'   => (int) ($row['ai_gate_eta_days'] ?? 0),
+                'gate_items'      => [],
             ];
         }
         $requestsStmt->close();
+        foreach ($requests as $gateRequestId => $gateRequest) {
+            if ($gateRequest['gate_status'] === 'held') {
+                $requests[$gateRequestId]['gate_items'] = aics_ai_gate_applicant_items($connection, (int) $gateRequestId);
+            }
+        }
 
         if (count($requestIds) > 0) {
             $placeholders = implode(',', array_fill(0, count($requestIds), '?'));
@@ -1535,6 +1551,37 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                   <span><?= status_h($statusLabel) ?></span>
                 </div>
               </header>
+
+              <?php $gateStatus = (string) ($req['gate_status'] ?? 'released'); ?>
+              <?php if ($gateStatus === 'held'): ?>
+                <div class="ai-gate-notice ai-gate-hold-banner" role="alert">
+                  <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+                  <div>
+                    <strong>AICS AI found a problem with your documents</strong>
+                    <ul>
+                      <?php foreach ((array) ($req['gate_items'] ?? []) as $gateItem): ?>
+                        <li><?= status_h((string) ($gateItem['label'] ?? 'Document')) ?> &mdash; <?= status_h((string) ($gateItem['reason'] ?? 'needs a clearer copy')) ?></li>
+                      <?php endforeach; ?>
+                    </ul>
+                    <a href="<?= status_h($dashboardUrl) ?>?page=cancel-request">Upload a clear replacement in Manage Applications</a>. It will be checked again automatically.
+                  </div>
+                </div>
+              <?php elseif ($gateStatus === 'pending'): ?>
+                <div class="ai-gate-notice is-checking" role="status">
+                  <i class="fas fa-robot" aria-hidden="true"></i>
+                  <span>AICS AI is checking your documents.</span>
+                </div>
+              <?php elseif ($gateStatus === 'admin_review'): ?>
+                <div class="ai-gate-notice is-review" role="status">
+                  <i class="fas fa-user-shield" aria-hidden="true"></i>
+                  <span>Your documents are being reviewed before they go to PSWDO.</span>
+                </div>
+              <?php elseif ((int) ($req['gate_eta_days'] ?? 0) > 0 && !in_array($statusBadge, ['ok', 'danger'], true)): ?>
+                <div class="ai-gate-notice is-eta" role="status">
+                  <i class="fas fa-calendar-check" aria-hidden="true"></i>
+                  <span>Expected processing time: about <?= (int) $req['gate_eta_days'] ?> day(s)</span>
+                </div>
+              <?php endif; ?>
 
               <div class="status-block status-stages-block">
                 <div class="section-title-wrap">

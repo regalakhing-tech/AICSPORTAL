@@ -11119,6 +11119,35 @@ input.is-id-locked { background: #f1f5f9; color: #334155; cursor: not-allowed; }
   transform: translateY(0);
 }
 
+/* AICS AI submission gate notices (Application Status). */
+body .status-page .ai-gate-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid #cfe0f5;
+  border-left: 5px solid #2563a8;
+  background: #f2f7fd;
+  color: #1e3a5f;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+body .status-page .ai-gate-notice > i { flex: 0 0 auto; margin-top: 3px; font-size: 17px; color: #2563a8; }
+body .status-page .ai-gate-notice > div,
+body .status-page .ai-gate-notice > span { min-width: 0; overflow-wrap: anywhere; }
+body .status-page .ai-gate-notice strong { display: block; margin-bottom: 4px; }
+body .status-page .ai-gate-notice ul { margin: 4px 0 8px; padding-left: 18px; }
+body .status-page .ai-gate-notice li { margin: 2px 0; }
+body .status-page .ai-gate-notice a { color: inherit; font-weight: 700; text-decoration: underline; }
+body .status-page .ai-gate-hold-banner { background: #fff1f2; border-color: #fecdd3; border-left-color: #e11d48; color: #881337; }
+body .status-page .ai-gate-hold-banner > i { color: #e11d48; }
+body .status-page .ai-gate-notice.is-review { background: #fffbeb; border-color: #fde68a; border-left-color: #d97706; color: #78350f; }
+body .status-page .ai-gate-notice.is-review > i { color: #d97706; }
+body .status-page .ai-gate-notice.is-eta { background: #ecfdf5; border-color: #a7f3d0; border-left-color: #059669; color: #064e3b; }
+body .status-page .ai-gate-notice.is-eta > i { color: #059669; }
+
 /* ==========================================================================
    Phone layout (<= 640px): app-like density for the applicant portal.
    Kept last so it overrides the larger single-column mobile sizes above.
@@ -11208,4 +11237,8 @@ input.is-id-locked { background: #f1f5f9; color: #334155; cursor: not-allowed; }
   body .status-page .cooldown-title { font-size: 14px; margin-bottom: 2px; }
   body .status-page .cooldown-detail { font-size: 12.5px; line-height: 1.45; }
   body .status-page .cooldown-tag { margin-left: 44px; padding: 4px 10px; font-size: 11.5px; }
+
+  body .status-page .ai-gate-notice { gap: 10px; margin-bottom: 14px; padding: 11px 13px; border-radius: 12px; border-left-width: 4px; font-size: 13px; }
+  body .status-page .ai-gate-notice > i { font-size: 15px; }
+  body .status-page .ai-gate-notice ul { padding-left: 16px; }
 }
