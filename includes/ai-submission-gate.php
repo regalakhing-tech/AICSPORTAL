@@ -750,3 +750,45 @@ function aics_ai_gate_page_sync(mysqli $connection): void
     if (getenv('AICS_AI_GATE_SCHEDULER') === '1') return;
     aics_ai_gate_sync($connection);
 }
+
+/**
+ * Live progress of the AICS AI check for the applicant, in plain words and
+ * without internal statuses: how many documents are checked and what is
+ * happening to each one.
+ *
+ * @return array{state:string, eta_days:int, total:int, checked:int, documents:list<array{label:string, state:string, status_text:string, percent:int}>}
+ */
+function aics_ai_gate_applicant_progress(mysqli $connection, int $requestId): array
+{
+    aics_ai_gate_ensure_schema($connection);
+    $stmt = $connection->prepare('SELECT ai_gate_status, ai_gate_eta_days FROM aics_requests WHERE id = ?');
+    $stmt->bind_param('i', $requestId);
+    $stmt->execute();
+    $request = $stmt->get_result()?->fetch_assoc() ?: [];
+    $stmt->close();
+    $progress = aics_ai_gate_request_documents($connection, $requestId);
+    $decision = aics_ai_gate_decide($progress);
+    $retrying = array_flip(array_map(static fn (array $doc): int => (int) ($doc['review_id'] ?? 0), $decision['retry']));
+    $steps = ['preprocessing' => 'Preparing the photo', 'ocr' => 'Reading the text', 'verifying' => 'Comparing with your application', 'tamper_scan' => 'Checking for edits'];
+    $documents = [];
+    foreach ($progress['documents'] as $doc) {
+        $label = aics_document_requirement_label((string) ($doc['document_type'] ?? ''));
+        if (isset($retrying[(int) ($doc['review_id'] ?? 0)])) {
+            $documents[] = ['label' => $label, 'state' => 'checking', 'status_text' => 'Checking again', 'percent' => 5];
+        } elseif (($doc['status'] ?? '') === 'processing' || ($doc['status'] ?? '') === '') {
+            $stage = (string) ($doc['stage'] ?? 'queued');
+            $documents[] = $stage === 'queued' || !isset($steps[$stage])
+                ? ['label' => $label, 'state' => 'waiting', 'status_text' => 'Waiting', 'percent' => 0]
+                : ['label' => $label, 'state' => 'checking', 'status_text' => $steps[$stage], 'percent' => max(1, min(99, (int) ($doc['progress_percent'] ?? 0)))];
+        } else {
+            $documents[] = ['label' => $label, 'state' => 'done', 'status_text' => 'Checked', 'percent' => 100];
+        }
+    }
+    return [
+        'state' => (string) ($request['ai_gate_status'] ?? 'pending'),
+        'eta_days' => (int) ($request['ai_gate_eta_days'] ?? 0),
+        'total' => count($documents),
+        'checked' => count(array_filter($documents, static fn (array $doc): bool => $doc['state'] === 'done')),
+        'documents' => $documents,
+    ];
+}

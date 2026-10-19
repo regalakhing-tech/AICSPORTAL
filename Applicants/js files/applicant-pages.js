@@ -2530,30 +2530,40 @@ function initApplicantIntakeForm() {
     return true;
   }
 
+  // Set by the submit button so the upload can show its progress.
+  let submitUploadProgress = null;
+
   async function submitFormData() {
     const endpoint = form.getAttribute("action") || "save-request.php";
     const formData = new FormData(form);
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      body: formData,
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", endpoint);
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && typeof submitUploadProgress === "function") {
+          submitUploadProgress(event.loaded / event.total);
+        }
+      };
+      xhr.upload.onload = () => {
+        if (typeof submitUploadProgress === "function") submitUploadProgress(1);
+      };
+      xhr.onload = () => {
+        let payload = null;
+        try {
+          payload = JSON.parse(xhr.responseText);
+        } catch (error) {
+          payload = null;
+        }
+        if (xhr.status < 200 || xhr.status >= 300 || !payload || payload.ok !== true) {
+          reject(new Error(payload && payload.message ? payload.message : "Unable to submit request. Please try again."));
+          return;
+        }
+        resolve(payload);
+      };
+      xhr.onerror = () => reject(new Error("The connection was interrupted. Check your internet connection and try again."));
+      xhr.send(formData);
     });
-    let payload = null;
-    try {
-      payload = await response.json();
-    } catch (error) {
-      payload = null;
-    }
-
-    if (!response.ok || !payload || payload.ok !== true) {
-      const message =
-        payload && payload.message
-          ? payload.message
-          : "Unable to submit request. Please try again.";
-      throw new Error(message);
-    }
-
-    return payload;
   }
 
   if (prevBtn) {
@@ -3034,8 +3044,23 @@ function initApplicantIntakeForm() {
     finalSubmitBtn.addEventListener("click", async () => {
       finalSubmitBtn.disabled = true;
       finalSubmitBtn.innerHTML =
-        '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        '<i class="fas fa-cloud-arrow-up" aria-hidden="true"></i> <span data-submit-progress-text>Uploading your documents…</span>';
       if (cancelSubmitBtn) cancelSubmitBtn.style.display = "none"; // Hide cancel so they don't click it while loading
+      const uploadBar = document.createElement("div");
+      uploadBar.className = "submit-upload-progress";
+      uploadBar.setAttribute("role", "progressbar");
+      uploadBar.setAttribute("aria-label", "Upload progress");
+      uploadBar.setAttribute("aria-valuemin", "0");
+      uploadBar.setAttribute("aria-valuemax", "100");
+      uploadBar.innerHTML = "<span></span>";
+      finalSubmitBtn.closest(".confirm-modal-actions")?.before(uploadBar);
+      submitUploadProgress = (fraction) => {
+        const percent = Math.max(0, Math.min(100, Math.round(fraction * 100)));
+        uploadBar.style.setProperty("--upload", `${percent}%`);
+        uploadBar.setAttribute("aria-valuenow", String(percent));
+        const text = finalSubmitBtn.querySelector("[data-submit-progress-text]");
+        if (text) text.textContent = percent >= 100 ? "Saving your application…" : `Uploading your documents… ${percent}%`;
+      };
 
       try {
         // Send data to save-request.php
@@ -3069,7 +3094,7 @@ function initApplicantIntakeForm() {
             <h3 style="color: #0f172a; font-size: 1.5rem; margin-bottom: 8px; font-weight: 700;">${isEditMode ? "Request Updated!" : "Application Submitted!"}</h3>
             <p style="color: #475569; font-size: 1.05rem; margin-bottom: 24px;">Reference No: <strong style="color: #0f172a;">${payload.reference_no}</strong></p>
             <div style="background: #f1f5f9; padding: 12px; border-radius: 6px; color: #64748b; font-size: 0.9rem; font-weight: 500;">
-              <i class="fas fa-spinner fa-spin" style="margin-right: 5px;"></i> Redirecting to your status tracking page...
+              <i class="fas fa-spinner fa-spin" style="margin-right: 5px;"></i> Opening your application status, where you can watch AICS AI check your documents...
             </div>
           </div>
         `;
@@ -3082,6 +3107,8 @@ function initApplicantIntakeForm() {
         const message =
           error instanceof Error ? error.message : "Unknown error.";
         setFeedback(`Submission failed: ${message}`, "error");
+        submitUploadProgress = null;
+        document.querySelector("#submit-confirm-modal .submit-upload-progress")?.remove();
 
         // Reset the submit button so the user can retry
         finalSubmitBtn.disabled = false;
@@ -3943,3 +3970,75 @@ then this panel will show the exact files needed for your case.</p>
 }
 
 initApplicantDashboard();
+
+// Application Status: while AICS AI checks a request, refresh its progress
+// every few seconds; when the check finishes, reload to show the result.
+(function initAiCheckProgress() {
+  const cards = Array.from(document.querySelectorAll(".ai-check-live[data-progress-url]"));
+  if (cards.length === 0) return;
+  const icons = { done: "fas fa-circle-check", checking: "fas fa-circle-half-stroke", waiting: "far fa-circle" };
+  const startedAt = Date.now();
+
+  cards.forEach((card) => {
+    const url = card.dataset.progressUrl;
+    let timer = null;
+    let delay = 4000;
+
+    const render = (data) => {
+      const checked = card.querySelector("[data-ai-checked]");
+      const total = card.querySelector("[data-ai-total]");
+      if (checked) checked.textContent = String(data.checked);
+      if (total) total.textContent = String(data.total);
+      const documents = Array.isArray(data.documents) ? data.documents : [];
+      card.querySelector(".ai-check-track")?.replaceChildren(...documents.map((doc) => {
+        const segment = document.createElement("span");
+        segment.className = `ai-check-segment is-${doc.state}`;
+        segment.style.setProperty("--fill", `${Number(doc.percent) || 0}%`);
+        return segment;
+      }));
+      card.querySelector(".ai-check-list")?.replaceChildren(...documents.map((doc) => {
+        const item = document.createElement("li");
+        item.className = `ai-check-item is-${doc.state}`;
+        const icon = document.createElement("i");
+        icon.className = `ai-check-icon ${icons[doc.state] || icons.waiting}`;
+        icon.setAttribute("aria-hidden", "true");
+        const name = document.createElement("span");
+        name.className = "ai-check-name";
+        name.textContent = String(doc.label || "Document");
+        const step = document.createElement("span");
+        step.className = "ai-check-step";
+        step.textContent = String(doc.status_text || "");
+        item.append(icon, name, step);
+        return item;
+      }));
+      const note = card.querySelector("[data-ai-note]");
+      if (note && Date.now() - startedAt > 10 * 60 * 1000) {
+        note.textContent = "This is taking longer than usual. You can close this page. We will send you a notification when the check is done.";
+      }
+    };
+
+    const poll = async () => {
+      timer = null;
+      if (document.hidden) return;
+      try {
+        const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store", credentials: "same-origin" });
+        const data = await response.json();
+        if (!response.ok || !data || data.ok !== true) throw new Error("progress unavailable");
+        if (data.state !== "pending") {
+          window.location.reload();
+          return;
+        }
+        render(data);
+        delay = 4000;
+      } catch (error) {
+        delay = Math.min(delay * 2, 30000);
+      }
+      timer = window.setTimeout(poll, delay);
+    };
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && timer === null) poll();
+    });
+    timer = window.setTimeout(poll, 1500);
+  });
+})();

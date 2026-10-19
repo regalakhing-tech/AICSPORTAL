@@ -147,6 +147,8 @@ try {
         foreach ($requests as $gateRequestId => $gateRequest) {
             if ($gateRequest['gate_status'] === 'held') {
                 $requests[$gateRequestId]['gate_items'] = aics_ai_gate_applicant_items($connection, (int) $gateRequestId);
+            } elseif ($gateRequest['gate_status'] === 'pending') {
+                $requests[$gateRequestId]['gate_progress'] = aics_ai_gate_applicant_progress($connection, (int) $gateRequestId);
             }
         }
 
@@ -272,6 +274,7 @@ foreach ($requests as $requestId => $requestData) {
         (string) ($requestData['created_label'] ?? ''),
         (string) ($requestData['updated_label'] ?? '')
     );
+    $requests[$requestId]['stage_rows'] = status_gate_stage_override($requests[$requestId]['stage_rows'], (string) ($requestData['gate_status'] ?? 'released'));
 
     $totalRequiredFiles += $requiredCount;
     $totalUploadedRequiredFiles += $checkedRequiredCount;
@@ -395,6 +398,25 @@ function status_request_meta(string $status): array
             'timeline_level' => 1,
         ],
     };
+}
+
+/**
+ * Until AICS AI passes the documents, step 2 describes the AI check rather
+ * than PSWDO validation, which has not started yet.
+ *
+ * @param array<int, array{title:string,meta:string,badge:string,badge_label:string}> $rows
+ * @return array<int, array{title:string,meta:string,badge:string,badge_label:string}>
+ */
+function status_gate_stage_override(array $rows, string $gateStatus): array
+{
+    $step = match ($gateStatus) {
+        'pending' => ['meta' => 'AICS AI is checking your documents.', 'badge' => 'pending', 'badge_label' => 'Checking'],
+        'held' => ['meta' => 'Replace the document AICS AI could not accept.', 'badge' => 'pending', 'badge_label' => 'Action Needed'],
+        'admin_review' => ['meta' => 'Your documents are being reviewed before they go to PSWDO.', 'badge' => 'pending', 'badge_label' => 'In Review'],
+        default => null,
+    };
+    if ($step !== null && isset($rows[1])) $rows[1] = array_merge($rows[1], $step);
+    return $rows;
 }
 
 /**
@@ -1567,10 +1589,30 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                   </div>
                 </div>
               <?php elseif ($gateStatus === 'pending'): ?>
-                <div class="ai-gate-notice is-checking" role="status">
-                  <i class="fas fa-robot" aria-hidden="true"></i>
-                  <span>AICS AI is checking your documents.</span>
-                </div>
+                <?php
+                  $gateProgress = is_array($req['gate_progress'] ?? null) ? $req['gate_progress'] : ['total' => 0, 'checked' => 0, 'documents' => []];
+                  $gateIcons = ['done' => 'fas fa-circle-check', 'checking' => 'fas fa-circle-half-stroke', 'waiting' => 'far fa-circle'];
+                ?>
+                <section class="ai-check-live" data-progress-url="ai-check-progress.php?request_id=<?= (int) ($req['id'] ?? 0) ?>" aria-labelledby="ai-check-title-<?= (int) ($req['id'] ?? 0) ?>">
+                  <h3 class="ai-check-title" id="ai-check-title-<?= (int) ($req['id'] ?? 0) ?>">Checking your documents</h3>
+                  <p class="ai-check-lead">AICS AI is checking your documents. This usually takes 1 to 3 minutes.</p>
+                  <div class="ai-check-track" aria-hidden="true">
+                    <?php foreach ($gateProgress['documents'] as $gateDoc): ?>
+                      <span class="ai-check-segment is-<?= status_h((string) $gateDoc['state']) ?>" style="--fill: <?= (int) $gateDoc['percent'] ?>%"></span>
+                    <?php endforeach; ?>
+                  </div>
+                  <p class="ai-check-count" role="status" aria-live="polite"><strong><span data-ai-checked><?= (int) $gateProgress['checked'] ?></span> of <span data-ai-total><?= (int) $gateProgress['total'] ?></span></strong> documents checked</p>
+                  <ul class="ai-check-list">
+                    <?php foreach ($gateProgress['documents'] as $gateDoc): ?>
+                      <li class="ai-check-item is-<?= status_h((string) $gateDoc['state']) ?>">
+                        <i class="ai-check-icon <?= status_h($gateIcons[(string) $gateDoc['state']] ?? 'far fa-circle') ?>" aria-hidden="true"></i>
+                        <span class="ai-check-name"><?= status_h((string) $gateDoc['label']) ?></span>
+                        <span class="ai-check-step"><?= status_h((string) $gateDoc['status_text']) ?></span>
+                      </li>
+                    <?php endforeach; ?>
+                  </ul>
+                  <p class="ai-check-note" data-ai-note>You can leave this page. We will send you a notification when the check is done.</p>
+                </section>
               <?php elseif ($gateStatus === 'admin_review'): ?>
                 <div class="ai-gate-notice is-review" role="status">
                   <i class="fas fa-user-shield" aria-hidden="true"></i>
