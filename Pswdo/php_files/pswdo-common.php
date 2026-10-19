@@ -490,7 +490,7 @@ function pswdo_ensure_schema(mysqli $connection): void
             CREATE TABLE IF NOT EXISTS aics_request_prioritization (
                 request_id INT UNSIGNED NOT NULL,
                 urgency_score SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-                urgency_indicator VARCHAR(20) DEFAULT NULL,
+                urgency_indicator VARCHAR(32) DEFAULT NULL,
                 vulnerability_score SMALLINT UNSIGNED NOT NULL DEFAULT 0,
                 readiness_score SMALLINT UNSIGNED NOT NULL DEFAULT 0,
                 risk_penalty SMALLINT UNSIGNED NOT NULL DEFAULT 0,
@@ -564,10 +564,11 @@ function pswdo_ensure_schema(mysqli $connection): void
         SQL,
     ];
 
-    $connection->query("ALTER TABLE aics_request_prioritization ADD COLUMN IF NOT EXISTS urgency_indicator VARCHAR(20) DEFAULT NULL AFTER urgency_score");
+    $connection->query("ALTER TABLE aics_request_prioritization ADD COLUMN IF NOT EXISTS urgency_indicator VARCHAR(32) DEFAULT NULL AFTER urgency_score");
     $connection->query("ALTER TABLE aics_request_prioritization ADD COLUMN IF NOT EXISTS priority_basis VARCHAR(700) DEFAULT NULL AFTER priority_level");
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS urgency_response VARCHAR(3) DEFAULT NULL AFTER assistance_types_json");
-    $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS urgency_indicator VARCHAR(20) DEFAULT NULL AFTER urgency_response");
+    $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS urgency_indicator VARCHAR(32) DEFAULT NULL AFTER urgency_response");
+    aics_ensure_urgency_indicator_columns($connection);
 
     foreach ($queries as $query) {
         $connection->query($query);

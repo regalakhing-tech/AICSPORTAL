@@ -162,7 +162,7 @@ CREATE TABLE IF NOT EXISTS `aics_requests` (
   `client_categories_json` JSON DEFAULT NULL,
   `assistance_types_json` JSON NOT NULL,
   `urgency_response` VARCHAR(3) DEFAULT NULL,
-  `urgency_indicator` VARCHAR(20) DEFAULT NULL,
+  `urgency_indicator` VARCHAR(32) DEFAULT NULL,
   `amount` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   `claim_status` ENUM('claimed', 'unclaimed') NOT NULL,
   `amount_claimed` DECIMAL(12,2) DEFAULT NULL,
@@ -391,7 +391,7 @@ ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `client_category_other` VAR
 ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `assistance_type_other` VARCHAR(150) DEFAULT NULL AFTER `client_category_other`;
 ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `family_composition_json` JSON DEFAULT NULL AFTER `assistance_type_other`;
 ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `urgency_response` VARCHAR(3) DEFAULT NULL AFTER `assistance_types_json`;
-ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `urgency_indicator` VARCHAR(20) DEFAULT NULL AFTER `urgency_response`;
+ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `urgency_indicator` VARCHAR(32) DEFAULT NULL AFTER `urgency_response`;
 ALTER TABLE `aics_request_document_reviews` ADD COLUMN IF NOT EXISTS `review_status` ENUM('pending','checked','needs_reupload','invalid') NOT NULL DEFAULT 'pending' AFTER `is_checked`;
 ALTER TABLE `aics_request_document_reviews` ADD COLUMN IF NOT EXISTS `notified_at` TIMESTAMP NULL DEFAULT NULL AFTER `reviewed_at`;
 
@@ -435,7 +435,7 @@ CREATE TABLE IF NOT EXISTS `aics_request_validation_results` (
 CREATE TABLE IF NOT EXISTS `aics_request_prioritization` (
   `request_id` INT UNSIGNED NOT NULL,
   `urgency_score` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  `urgency_indicator` VARCHAR(20) DEFAULT NULL,
+  `urgency_indicator` VARCHAR(32) DEFAULT NULL,
   `vulnerability_score` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   `readiness_score` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   `risk_penalty` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
@@ -452,7 +452,7 @@ CREATE TABLE IF NOT EXISTS `aics_request_prioritization` (
   CONSTRAINT `fk_aics_request_prioritization_updated_by` FOREIGN KEY (`updated_by_account_id`) REFERENCES `aics_accounts`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-ALTER TABLE `aics_request_prioritization` ADD COLUMN IF NOT EXISTS `urgency_indicator` VARCHAR(20) DEFAULT NULL AFTER `urgency_score`;
+ALTER TABLE `aics_request_prioritization` ADD COLUMN IF NOT EXISTS `urgency_indicator` VARCHAR(32) DEFAULT NULL AFTER `urgency_score`;
 ALTER TABLE `aics_request_prioritization` ADD COLUMN IF NOT EXISTS `priority_basis` VARCHAR(700) DEFAULT NULL AFTER `priority_level`;
 
 CREATE TABLE IF NOT EXISTS `aics_request_notifications` (

@@ -423,7 +423,7 @@ try {
     $isDatabaseFailure = $exception instanceof mysqli_sql_exception
         || str_contains(strtolower($message), 'database connection failed');
     if ($isDatabaseFailure || !($exception instanceof RuntimeException)) {
-        error_log('Applicant request submission failed: category=' . $exception::class);
+        error_log('Applicant request submission failed: category=' . $exception::class . ' code=' . $exception->getCode() . ' at ' . basename($exception->getFile()) . ':' . $exception->getLine() . ' message=' . substr($message, 0, 300));
         respond_json(false, 'Unable to submit the request right now. Please try again.', 500);
     }
 
@@ -1393,7 +1393,7 @@ function ensure_tables_exist(mysqli $connection): void
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS applicant_occupation VARCHAR(150) DEFAULT NULL AFTER applicant_email");
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS applicant_estimated_monthly_income VARCHAR(40) DEFAULT NULL AFTER applicant_occupation");
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS urgency_response VARCHAR(3) DEFAULT NULL AFTER assistance_types_json");
-    $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS urgency_indicator VARCHAR(20) DEFAULT NULL AFTER urgency_response");
+    $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS urgency_indicator VARCHAR(32) DEFAULT NULL AFTER urgency_response");
     $connection->query("ALTER TABLE aics_request_documents ADD COLUMN IF NOT EXISTS document_type VARCHAR(60) DEFAULT NULL AFTER request_id");
     if (!aics_table_has_index($connection, 'aics_request_documents', 'uq_aics_request_documents_request_type')) {
         $connection->query('ALTER TABLE aics_request_documents ADD UNIQUE KEY uq_aics_request_documents_request_type (request_id, document_type)');
@@ -1408,6 +1408,7 @@ function ensure_tables_exist(mysqli $connection): void
 function persist_structured_priority_and_urgency(mysqli $connection, int $requestId, array $payload): void
 {
     // Applicant input is not evidence for Smart Prioritization. Await verified documents.
+    aics_ensure_urgency_indicator_columns($connection);
     $urgencyResponse = null;
     $isMedicalAssistance = in_array('medical', (array) ($payload['assistance_type'] ?? []), true);
     $urgencyIndicator = $isMedicalAssistance ? 'REQUIRES_STAFF_REVIEW' : 'STANDARD';
@@ -1417,7 +1418,7 @@ function persist_structured_priority_and_urgency(mysqli $connection, int $reques
     $requestStmt->execute(); $requestStmt->close();
 
     $priority = aics_priority_from_beneficiary_categories((array) ($payload['client_category'] ?? []));
-    $connection->query("ALTER TABLE aics_request_prioritization ADD COLUMN IF NOT EXISTS urgency_indicator VARCHAR(20) DEFAULT NULL AFTER urgency_score");
+    $connection->query("ALTER TABLE aics_request_prioritization ADD COLUMN IF NOT EXISTS urgency_indicator VARCHAR(32) DEFAULT NULL AFTER urgency_score");
     $connection->query("ALTER TABLE aics_request_prioritization ADD COLUMN IF NOT EXISTS priority_basis VARCHAR(700) DEFAULT NULL AFTER priority_level");
     $basis = $isMedicalAssistance ? 'Medical document findings pending verification.' : 'No Medical Assistance urgency rule applies.';
     $stmt = $connection->prepare('INSERT INTO aics_request_prioritization (request_id, urgency_score, urgency_indicator, vulnerability_score, readiness_score, risk_penalty, priority_score, priority_level, priority_basis) VALUES (?, 0, ?, 0, 0, 0, ?, ?, ?) ON DUPLICATE KEY UPDATE urgency_score = 0, urgency_indicator = VALUES(urgency_indicator), vulnerability_score = 0, readiness_score = 0, risk_penalty = 0, priority_score = VALUES(priority_score), priority_level = VALUES(priority_level), priority_basis = VALUES(priority_basis), updated_at = CURRENT_TIMESTAMP');

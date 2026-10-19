@@ -37,6 +37,7 @@ try {
     $connection = aics_db_connect();
     if (in_array('--schema-only', $arguments, true)) {
         aics_ai_gate_ensure_schema($connection);
+        aics_ensure_urgency_indicator_columns($connection);
         echo "AICS AI gate schema ready.\n";
         exit(0);
     }

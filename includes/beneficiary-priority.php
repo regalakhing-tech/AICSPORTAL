@@ -192,3 +192,21 @@ function aics_urgency_from_structured_response(string $assistanceType, ?string $
     }
     return ['response' => $normalized, 'indicator' => $normalized === 'yes' ? 'Urgent' : 'Standard'];
 }
+
+/**
+ * Urgency values include REQUIRES_STAFF_REVIEW (21 characters). Databases
+ * created with VARCHAR(20) columns reject it in strict SQL mode (Railway's
+ * MariaDB), failing every Medical submission, so widen them once.
+ */
+function aics_ensure_urgency_indicator_columns(mysqli $connection): void
+{
+    static $checked = [];
+    $key = spl_object_id($connection);
+    if (isset($checked[$key])) return;
+    $result = $connection->query("SELECT TABLE_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND COLUMN_NAME = 'urgency_indicator' AND TABLE_NAME IN ('aics_requests', 'aics_request_prioritization') AND CHARACTER_MAXIMUM_LENGTH < 32");
+    foreach ($result ? $result->fetch_all(MYSQLI_ASSOC) : [] as $row) {
+        $table = (string) $row['TABLE_NAME'];
+        $connection->query("ALTER TABLE `{$table}` MODIFY COLUMN urgency_indicator VARCHAR(32) DEFAULT NULL");
+    }
+    $checked[$key] = true;
+}
