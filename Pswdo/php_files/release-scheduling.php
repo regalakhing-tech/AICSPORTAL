@@ -571,6 +571,7 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
                             data-venue="<?= pswdo_h(trim((string) ($item['venue'] ?? '')) !== '' ? (string) $item['venue'] : 'PSWDO Office') ?>"
                             data-release-batch="<?= pswdo_h((string) ($item['release_batch'] ?? '')) ?>"
                             data-release-notes="<?= pswdo_h((string) ($item['release_notes'] ?? '')) ?>"
+                            data-amount-given="<?= ($item['amount_given'] ?? null) !== null ? pswdo_h(number_format((float) $item['amount_given'], 2, '.', '')) : '' ?>"
                             data-applicant-name="<?= pswdo_h((string) ($item['applicant_name'] ?? 'Applicant')) ?>"
                             data-contact-number="<?= pswdo_h(pswdo_applicant_sms_contact($item)) ?>"
                           >
@@ -581,6 +582,7 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
                             type="button"
                             class="btn-solid release-complete-btn js-open-mark-released"
                             data-request-id="<?= (int) ($item['request_id'] ?? 0) ?>"
+                            data-amount-given="<?= ($item['amount_given'] ?? null) !== null ? pswdo_h(number_format((float) $item['amount_given'], 2, '.', '')) : '' ?>"
                             data-beneficiary="<?= pswdo_h((string) ($item['beneficiary_name'] ?? 'this applicant')) ?>"
                             data-reference="<?= pswdo_h((string) ($item['reference_no'] ?? '')) ?>"
                             data-csrf="<?= pswdo_h($csrfToken) ?>"
@@ -698,6 +700,10 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
             <label for="release-modal-time">Release Time</label>
             <input id="release-modal-time" data-default-value="<?= pswdo_h($defaultScheduleTime) ?>" type="time" name="scheduled_time" value="<?= pswdo_h($defaultScheduleTime) ?>" required>
           </div>
+        </div>
+        <div class="field-wrap release-schedule-amount">
+          <label for="release-modal-amount">Amount to release (₱)</label>
+          <input id="release-modal-amount" type="number" name="amount_given" min="1" max="99999999.99" step="0.01" inputmode="decimal" placeholder="e.g. 5000.00" required>
         </div>
         <input id="release-modal-venue" type="hidden" name="venue" value="PSWDO Office">
         <input type="hidden" name="batch_limit" value="<?= $batchLimit ?>">
@@ -837,7 +843,7 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
     </div>
   </div>
 
-  <!-- Mark as Released modal (captures assistance amount) -->
+  <!-- Mark as Released modal: confirms the amount set in Schedule Release -->
   <div class="confirm-modal release-confirm-modal" id="mark-released-modal">
     <div class="confirm-card release-confirm-card">
       <div class="release-confirm-icon"><i class="fas fa-hand-holding-heart"></i></div>
@@ -856,18 +862,23 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
         <input type="hidden" name="return_batch_date_to" id="mark-released-date-to" value="">
         <input type="hidden" name="return_batch_key" id="mark-released-batch-key" value="">
         <input type="hidden" name="return_batch_limit" id="mark-released-batch-limit" value="">
-        <div class="field-wrap release-amount-field">
+        <div class="release-amount-summary" id="mark-released-amount-summary">
+          <span>Amount to release</span>
+          <strong id="mark-released-amount-value">₱0.00</strong>
+        </div>
+        <div class="field-wrap release-amount-field" id="mark-released-amount-field" hidden>
           <label for="mark-released-amount">Amount given (₱)</label>
           <input
             type="number"
             id="mark-released-amount"
             name="amount_given"
             min="1"
+            max="99999999.99"
             step="0.01"
             placeholder="e.g. 5000.00"
-            required
+            disabled
           >
-          <small>Enter the exact amount received.</small>
+          <small>No amount was set when this release was scheduled. Enter the amount given.</small>
         </div>
         <div class="confirm-actions">
           <button type="button" class="btn-outline" id="cancel-mark-released">Cancel</button>
@@ -952,9 +963,14 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
       const batchKey   = document.getElementById('mark-released-batch-key');
       const batchLimit = document.getElementById('mark-released-batch-limit');
       const amountInput= document.getElementById('mark-released-amount');
+      const amountWrap = document.getElementById('mark-released-amount-field');
+      const summary    = document.getElementById('mark-released-amount-summary');
+      const summaryValue = document.getElementById('mark-released-amount-value');
+      const confirmBtn = form ? form.querySelector('button[type="submit"]') : null;
       const cancelBtn  = document.getElementById('cancel-mark-released');
+      let hasAmount = false;
 
-      if (!modal || !form || !(amountInput instanceof HTMLInputElement)) return;
+      if (!modal || !form || !(amountInput instanceof HTMLInputElement) || !amountWrap || !summary || !summaryValue) return;
 
       function openModal(btn) {
         reqId.value      = btn.dataset.requestId    || '';
@@ -967,9 +983,19 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
         batchLimit.value = btn.dataset.returnBatchLimit || '';
         desc.textContent = (btn.dataset.beneficiary || 'This applicant')
           + ' · ' + (btn.dataset.reference || '');
+        const scheduledAmount = parseFloat(btn.dataset.amountGiven || '');
+        hasAmount = scheduledAmount > 0;
+        summaryValue.textContent = hasAmount
+          ? '₱' + scheduledAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : '';
+        summary.hidden = !hasAmount;
+        // Schedules saved without an amount (Set Schedule for All) still need one here.
+        amountWrap.hidden = hasAmount;
+        amountInput.disabled = hasAmount;
+        amountInput.required = !hasAmount;
         amountInput.value = '';
         modal.classList.add('open');
-        amountInput.focus();
+        if (hasAmount) confirmBtn?.focus(); else amountInput.focus();
       }
 
       function closeModal() {
@@ -992,6 +1018,7 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
       });
 
       form.addEventListener('submit', e => {
+        if (hasAmount) return;
         const val = parseFloat(amountInput.value);
         if (!val || val <= 0) {
           e.preventDefault();

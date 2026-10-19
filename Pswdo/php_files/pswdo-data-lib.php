@@ -2982,6 +2982,17 @@ function pswdo_send_sms_to_applicant_action(
 }
 
 /**
+ * "Amount: PHP 5,000.00" plus a line break, or "" when no amount is set yet.
+ *
+ * @param array<string, mixed> $item
+ */
+function pswdo_release_amount_sms_line(array $item): string
+{
+    $amount = (float) ($item['amount_given'] ?? 0);
+    return $amount > 0 ? 'Amount: PHP ' . number_format($amount, 2) . "\n" : '';
+}
+
+/**
  * @param array<string, mixed> $item
  */
 function pswdo_build_release_schedule_sms_message(array $item): string
@@ -3012,6 +3023,7 @@ function pswdo_build_release_schedule_sms_message(array $item): string
         . 'Date: ' . $scheduleDate . "\n"
         . 'Time: ' . $scheduleTime . "\n"
         . 'Venue: ' . $venue . "\n"
+        . pswdo_release_amount_sms_line($item)
         . "Please arrive on time and bring your valid ID and required documents.\n"
         . 'Thank you.';
 }
@@ -3047,8 +3059,8 @@ function pswdo_apply_release_schedule_sms_tokens(string $template, array $item):
     }
 
     return str_replace(
-        ['{beneficiary}', '{reference}', '{schedule_date}', '{schedule_time}', '{venue}'],
-        [$beneficiary, $referenceNo, $scheduleDate, $scheduleTime, $venue],
+        ['{beneficiary}', '{reference}', '{schedule_date}', '{schedule_time}', '{venue}', '{amount_line}'],
+        [$beneficiary, $referenceNo, $scheduleDate, $scheduleTime, $venue, pswdo_release_amount_sms_line($item)],
         $template
     );
 }
@@ -4375,6 +4387,7 @@ function pswdo_fetch_release_schedule_queue(
             rs.scheduled_time,
             rs.venue,
             rs.release_batch,
+            rs.amount_given,
             rs.release_status,
             rs.notes,
             rs.updated_at AS release_updated_at,
@@ -4433,6 +4446,7 @@ function pswdo_fetch_release_schedule_queue(
             rs.scheduled_time,
             rs.venue,
             rs.release_batch,
+            rs.amount_given,
             rs.release_status,
             rs.notes,
             rs.updated_at,
@@ -4533,6 +4547,7 @@ function pswdo_fetch_release_schedule_queue(
             'scheduled_time_label' => pswdo_release_time_label((string) ($row['scheduled_time'] ?? '')),
             'venue' => trim((string) ($row['venue'] ?? '')),
             'release_batch' => trim((string) ($row['release_batch'] ?? '')),
+            'amount_given' => ($row['amount_given'] ?? null) !== null ? (float) $row['amount_given'] : null,
             'release_status' => $releaseStatus,
             'release_status_label' => $labels[$releaseStatus] ?? 'Needs Schedule',
             'release_notes' => trim((string) ($row['notes'] ?? '')),
@@ -4571,6 +4586,17 @@ function pswdo_fetch_release_schedule_record(mysqli $connection, int $requestId)
     return null;
 }
 
+/** The amount to release must fit DECIMAL(10,2) and be more than zero. */
+function pswdo_validate_release_amount(float $amountGiven): void
+{
+    if (!($amountGiven > 0)) {
+        throw new RuntimeException('Enter the amount to release.');
+    }
+    if ($amountGiven > 99999999.99) {
+        throw new RuntimeException('The amount to release is too large.');
+    }
+}
+
 function pswdo_should_reopen_release_schedule_modal(string $actionType): bool
 {
     return strtolower(trim($actionType)) !== 'save_release_schedule';
@@ -4600,7 +4626,8 @@ function pswdo_save_release_schedule_action(
     string $scheduledTime,
     string $venue,
     int $batchLimit,
-    string $notes
+    string $notes,
+    float $amountGiven
 ): array {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $scheduledDate)) {
         throw new RuntimeException('A valid release date is required.');
@@ -4611,6 +4638,7 @@ function pswdo_save_release_schedule_action(
     if (trim($venue) === '') {
         throw new RuntimeException('Release venue is required.');
     }
+    pswdo_validate_release_amount($amountGiven);
 
     $lookup = $connection->prepare(
         'SELECT r.reference_no, r.request_status, rs.scheduled_date, rs.scheduled_time, rs.venue FROM aics_requests r LEFT JOIN aics_request_release_schedule rs ON rs.request_id = r.id WHERE r.id = ? LIMIT 1'
@@ -4664,28 +4692,31 @@ function pswdo_save_release_schedule_action(
             scheduled_time,
             venue,
             release_batch,
+            amount_given,
             release_status,
             notes,
             scheduled_by_account_id,
             updated_by_account_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             scheduled_date = VALUES(scheduled_date),
             scheduled_time = VALUES(scheduled_time),
             venue = VALUES(venue),
             release_batch = VALUES(release_batch),
+            amount_given = VALUES(amount_given),
             release_status = VALUES(release_status),
             notes = VALUES(notes),
             updated_by_account_id = VALUES(updated_by_account_id)
     SQL;
     $stmt = $connection->prepare($sql);
     $stmt->bind_param(
-        'issssssii',
+        'issssdssii',
         $requestId,
         $scheduledDate,
         $scheduledTimeSql,
         $venueValue,
         $batchValue,
+        $amountGiven,
         $releaseStatus,
         $notesValue,
         $accountId,
@@ -4841,13 +4872,21 @@ function pswdo_update_release_schedule_status_action(
         throw new RuntimeException('Unsupported release schedule status.');
     }
 
-    $lookup = $connection->prepare('SELECT reference_no FROM aics_requests WHERE id = ? LIMIT 1');
+    $lookup = $connection->prepare('SELECT r.reference_no, rs.amount_given FROM aics_requests r LEFT JOIN aics_request_release_schedule rs ON rs.request_id = r.id WHERE r.id = ? LIMIT 1');
     $lookup->bind_param('i', $requestId);
     $lookup->execute();
     $row = $lookup->get_result()?->fetch_assoc();
     $lookup->close();
     if (!is_array($row)) {
         throw new RuntimeException('Request not found for release update.');
+    }
+    if ($status === 'released') {
+        // The amount comes from the schedule; one entered here is for schedules saved without it.
+        if ($amountGiven > 0) {
+            pswdo_validate_release_amount($amountGiven);
+        } elseif ((float) ($row['amount_given'] ?? 0) <= 0) {
+            throw new RuntimeException('Enter the amount to release before completing the release.');
+        }
     }
 
     $referenceNo = trim((string) ($row['reference_no'] ?? ''));

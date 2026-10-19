@@ -24,6 +24,6 @@ release_notice_assert(!str_contains($page, 'Mass Notice + MSWDO Simulation'), 'P
 release_notice_assert(str_contains($page, "if (\$itemHasSchedule && \$itemReleaseStatus !== 'released')"), 'Every scheduled case must expose the Release action.');
 release_notice_assert(str_contains($page, 'class="btn-solid release-complete-btn js-open-mark-released"'), 'The Release action must open the completion popup.');
 release_notice_assert(str_contains($page, 'id="mark-released-modal"'), 'The Release completion popup is missing.');
-release_notice_assert(str_contains($page, 'id="mark-released-amount"'), 'The Release completion popup must collect the assistance amount.');
+release_notice_assert(str_contains($page, 'id="mark-released-amount"'), 'The Release completion popup keeps an amount field for schedules saved without one.');
 
 echo "PSWDO release bulk notice UI contract test passed.\n";

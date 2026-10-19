@@ -1319,7 +1319,7 @@
       {
         id: "release_schedule_default",
         label: "Release Schedule (Default)",
-        text: "Good day, {beneficiary}.\nThis is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nYour application, {reference}, is scheduled for assistance release on:\nDate: {schedule_date}\nTime: {schedule_time}\nVenue: {venue}\nPlease arrive on time and bring your valid ID and required documents.\nThank you.",
+        text: "Good day, {beneficiary}.\nThis is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nYour application, {reference}, is scheduled for assistance release on:\nDate: {schedule_date}\nTime: {schedule_time}\nVenue: {venue}\n{amount_line}Please arrive on time and bring your valid ID and required documents.\nThank you.",
       },
       {
         id: "release_schedule_reminder",
@@ -1329,7 +1329,7 @@
       {
         id: "release_schedule_notice",
         label: "Distribution Notice",
-        text: "Good day, {beneficiary}.\nThis is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nYour application, {reference}, is scheduled for assistance release on:\nDate: {schedule_date}\nTime: {schedule_time}\nVenue: {venue}\nPlease arrive on time and bring your valid ID and required documents.\nThank you.",
+        text: "Good day, {beneficiary}.\nThis is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nYour application, {reference}, is scheduled for assistance release on:\nDate: {schedule_date}\nTime: {schedule_time}\nVenue: {venue}\n{amount_line}Please arrive on time and bring your valid ID and required documents.\nThank you.",
       },
     ],
     ready_for_release: [
@@ -1370,6 +1370,8 @@
 
   function applyTemplateTokens(templateText, context) {
     const batchLine = context.releaseBatch ? `Batch: ${context.releaseBatch}. ` : "";
+    const amount = Number.parseFloat(context.amountGiven || "");
+    const amountLine = amount > 0 ? `Amount: PHP ${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` : "";
     return templateText
       .replaceAll("{reference}", context.referenceNo || "your application")
       .replaceAll("{beneficiary}", context.beneficiaryName || "Applicant")
@@ -1379,6 +1381,7 @@
       .replaceAll("{venue}", context.venue || "the assigned venue")
       .replaceAll("{release_batch}", context.releaseBatch || "")
       .replaceAll("{batch_line}", batchLine)
+      .replaceAll("{amount_line}", amountLine)
       .replaceAll("{document_label}", context.documentLabel || "the document")
       .replaceAll("{reason}", context.reason || "Please review and update.")
       .replaceAll("{rejection_reason}", context.rejectionReason || "Please coordinate with PSWDO for details.");
@@ -1520,6 +1523,7 @@
       scheduleTime: button.getAttribute("data-schedule-time") || "",
       venue: button.getAttribute("data-venue") || "",
       releaseBatch: button.getAttribute("data-release-batch") || "",
+      amountGiven: button.getAttribute("data-amount-given") || "",
       decisionStatus: normalizeDecisionStatus(button.getAttribute("data-decision-status") || "for_screening"),
       documentId: button.getAttribute("data-document-id") || "",
       documentReviewStatus: button.getAttribute("data-document-review-status") || "needs_reupload",
@@ -1712,6 +1716,7 @@ function showRuntimeToast(message, tone = "error") {
   const smsFields = document.getElementById("release-modal-sms-fields");
   const smsRecipientInput = document.getElementById("release-modal-sms-recipient");
   const smsMessageInput = document.getElementById("release-modal-sms-message");
+  const amountInput = document.getElementById("release-modal-amount");
   let smsActiveContext = { beneficiary: "Applicant", referenceNo: "-", contactNumber: "", batch: "", manuallyEdited: false };
   const autoOpenRequestId = (document.body?.getAttribute("data-release-schedule-request-id") || "").trim();
 
@@ -1751,13 +1756,21 @@ function showRuntimeToast(message, tone = "error") {
     return `${hour12}:${String(mm).padStart(2, "0")} ${period}`;
   }
 
+  function formatAmountLabel(value) {
+    const amount = Number.parseFloat(value || "");
+    if (!(amount > 0)) return "";
+    return amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
   function buildSmsTemplate() {
     const beneficiary = smsActiveContext.beneficiary || "Applicant";
     const reference = smsActiveContext.referenceNo || "";
     const dateLabel = formatDateLabel(dateInput.value || "") || "the scheduled date";
     const timeLabel = formatTimeLabel(timeInput.value || "") || "the scheduled time";
     const venue = (venueInput.value || "PSWDO Office").trim() || "PSWDO Office";
-    return `Good day, ${beneficiary}.\nThis is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nYour application, ${reference}, is scheduled for assistance release on:\nDate: ${dateLabel}\nTime: ${timeLabel}\nVenue: ${venue}\nPlease arrive on time and bring your valid ID and required documents.\nThank you.`;
+    const amountLabel = amountInput instanceof HTMLInputElement ? formatAmountLabel(amountInput.value) : "";
+    const amountLine = amountLabel ? `Amount: PHP ${amountLabel}\n` : "";
+    return `Good day, ${beneficiary}.\nThis is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nYour application, ${reference}, is scheduled for assistance release on:\nDate: ${dateLabel}\nTime: ${timeLabel}\nVenue: ${venue}\n${amountLine}Please arrive on time and bring your valid ID and required documents.\nThank you.`;
   }
 
   function refreshSmsTemplate(force) {
@@ -1783,12 +1796,14 @@ function showRuntimeToast(message, tone = "error") {
     const batch = button.getAttribute("data-release-batch") || "";
     const notes = button.getAttribute("data-release-notes") || "";
     const contactNumber = button.getAttribute("data-contact-number") || "";
+    const amountGiven = button.getAttribute("data-amount-given") || "";
 
     if (!/^\d+$/.test(requestId)) {
       return;
     }
 
     requestIdInput.value = requestId;
+    if (amountInput instanceof HTMLInputElement) amountInput.value = amountGiven;
     titleRef.textContent = referenceNo;
     metaBeneficiary.textContent = beneficiary;
     metaDetails.textContent = `${assistance} · ${classification}`;
@@ -1832,7 +1847,7 @@ function showRuntimeToast(message, tone = "error") {
     }
   });
 
-  [dateInput, timeInput, venueInput].forEach((field) => {
+  [dateInput, timeInput, venueInput, amountInput].forEach((field) => {
     if (field instanceof HTMLInputElement) {
       field.addEventListener("input", () => refreshSmsTemplate(false));
       field.addEventListener("change", () => refreshSmsTemplate(false));

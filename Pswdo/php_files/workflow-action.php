@@ -374,6 +374,7 @@ try {
         $venue = trim((string) ($_POST['venue'] ?? ''));
         $batchLimit = max(1, (int) ($_POST['batch_limit'] ?? 10));
         $notes = trim((string) ($_POST['notes'] ?? ''));
+        $amountGiven = (float) preg_replace('/[^\d.]/', '', (string) ($_POST['amount_given'] ?? '0'));
         $result = pswdo_save_release_schedule_action(
             $connection,
             $requestId,
@@ -382,7 +383,8 @@ try {
             $scheduledTime,
             $venue,
             $batchLimit,
-            $notes
+            $notes,
+            $amountGiven
         );
         $referenceNo = trim((string) ($result['reference_no'] ?? ''));
         $scheduleLabel = trim((string) ($result['schedule_label'] ?? 'the selected schedule'));
