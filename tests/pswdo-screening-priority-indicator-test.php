@@ -6,7 +6,8 @@ require_once __DIR__ . '/../Pswdo/php_files/pswdo-common.php';
 putenv('SMART_PRIORITY_MEDICAL_ANALYSIS=true');
 
 $cases = [
-    [['client_categories_json' => '["youth"]', 'assistance_code' => 'medical', 'urgency_indicator' => 'URGENT', 'priority_level' => 'HIGH', 'priority_rank' => 7], 'STANDARD'],
+    [['client_categories_json' => '["youth"]', 'assistance_code' => 'medical', 'urgency_indicator' => 'URGENT', 'priority_level' => 'HIGH', 'priority_rank' => 7], 'URGENT'],
+    [['client_categories_json' => '["youth"]', 'assistance_code' => 'medical', 'urgency_indicator' => 'STANDARD'], 'STANDARD'],
     [['client_categories_json' => '["senior_citizen"]', 'assistance_code' => 'medical', 'urgency_indicator' => 'STANDARD'], 'HIGH'],
     [['client_categories_json' => '["pwd"]', 'assistance_code' => 'medical', 'urgency_indicator' => 'URGENT'], 'URGENT'],
     [['client_categories_json' => '["senior_citizen"]', 'assistance_code' => 'burial', 'urgency_indicator' => 'URGENT'], 'STANDARD'],

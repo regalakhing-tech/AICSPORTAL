@@ -31,8 +31,12 @@ $assess = static fn (array $categories, string $assistance, array $documents): a
 
 smart_priority_assert($assess(['youth'], 'educational_basic', [])['indicator'] === 'STANDARD', 'Non-senior educational must be standard.');
 smart_priority_assert($assess(['senior_citizen'], 'educational_basic', [])['indicator'] === 'STANDARD', 'Senior educational must be standard.');
-smart_priority_assert($assess(['youth'], 'medical', [$document('Patient requires urgent surgery.')])['indicator'] === 'STANDARD', 'Non-senior medical must be standard.');
-smart_priority_assert($calls === 0, 'Gemini must not be called before both prerequisites pass.');
+smart_priority_assert($calls === 0, 'Gemini must not be called outside Medical Assistance.');
+smart_priority_assert($assess(['youth'], 'medical', [$document('Patient requires urgent surgery.')])['indicator'] === 'URGENT', 'Non-senior medical with current urgency must be urgent.');
+smart_priority_assert($calls === 1, 'Every Medical Assistance request must be analyzed.');
+smart_priority_assert($assess(['youth'], 'medical', [$document('Patient is stable and advised routine follow-up.')])['indicator'] === 'STANDARD', 'Non-senior medical without urgency must be standard.');
+smart_priority_assert($assess(['youth'], 'medical', [$document('API failure')])['indicator'] === 'STANDARD', 'Non-senior medical keeps its standard baseline when analysis is unavailable.');
+smart_priority_assert($assess(['youth'], 'medical', [])['indicator'] === 'STANDARD', 'Non-senior medical without medical documents must be standard.');
 smart_priority_assert($assess(['senior_citizen'], 'medical', [$document('Patient is stable and advised routine follow-up.')])['indicator'] === 'HIGH', 'Stable condition must be high.');
 smart_priority_assert($assess(['pwd'], 'medical', [$document('Patient requires urgent surgery.')])['indicator'] === 'URGENT', 'Current urgent surgery must be urgent.');
 $urgentBasis = $assess(['pwd'], 'medical', [$document('Patient requires urgent surgery.')])['basis'];
@@ -70,6 +74,7 @@ smart_priority_assert(aics_smart_priority_medical_document_type('medical_abstrac
 smart_priority_assert(aics_smart_priority_medical_document_type('billing_statement_or_prescription') === 'billing_statement', 'Billing or prescription slot must be eligible.');
 
 $prompt = aics_smart_priority_gemini_prompt();
+smart_priority_assert(str_contains($prompt, 'A scheduled or required operation or surgery for the current condition is sufficient for urgent=true; a purely elective or cosmetic procedure is not.'), 'Priority prompt must treat a needed operation as urgent.');
 smart_priority_assert(str_contains($prompt, 'CURRENT') && str_contains($prompt, 'PAST'), 'Priority prompt must distinguish current from historical care.');
 smart_priority_assert(str_contains($prompt, 'Do not verify') && str_contains($prompt, 'Do not compare'), 'Priority prompt must exclude verification and identity matching.');
 foreach (['diagnoses', 'disability', 'functional impairment', 'complications', 'physician recommendations', 'treatment requirements', 'hospitalization', 'prescriptions', 'billing', 'timing'] as $factor) {

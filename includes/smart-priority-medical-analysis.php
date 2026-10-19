@@ -32,11 +32,17 @@ function aics_smart_priority_analysis_enabled(): bool
         ['0', 'false', 'off', 'no'], true);
 }
 
+/** Every Medical Assistance request is analyzed for urgency. */
 function aics_smart_priority_qualifies(array $beneficiaryCategories, string $assistanceCode): bool
 {
-    if (strtolower(trim($assistanceCode)) !== 'medical') return false;
+    return strtolower(trim($assistanceCode)) === 'medical';
+}
+
+/** Priority without urgent evidence: HIGH for senior citizens and PWD, STANDARD for everyone else. */
+function aics_smart_priority_baseline(array $beneficiaryCategories): string
+{
     $categories = array_map(static fn ($value): string => strtolower(trim((string) $value)), $beneficiaryCategories);
-    return in_array('senior_citizen', $categories, true) || in_array('pwd', $categories, true);
+    return in_array('senior_citizen', $categories, true) || in_array('pwd', $categories, true) ? 'HIGH' : 'STANDARD';
 }
 
 function aics_smart_priority_medical_document_type(string $type): ?string
@@ -66,18 +72,20 @@ function aics_smart_priority_assess(array $beneficiaryCategories, string $assist
                                     array $documents, callable $analyze): array
 {
     if (!aics_smart_priority_qualifies($beneficiaryCategories, $assistanceCode)) {
-        return ['indicator' => 'STANDARD', 'basis' => 'Senior/PWD and Medical Assistance prerequisites are not both met.'];
+        return ['indicator' => 'STANDARD', 'basis' => 'Smart Priority applies to Medical Assistance only.'];
     }
+    $baseline = aics_smart_priority_baseline($beneficiaryCategories);
+    $group = $baseline === 'HIGH' ? 'Senior/PWD Medical Assistance' : 'Medical Assistance';
     foreach ($documents as $document) {
         if (is_array($document) && ($document['unavailable'] ?? false) === true &&
             aics_smart_priority_medical_document_type((string) ($document['document_type'] ?? '')) !== null) {
-            return ['indicator' => 'HIGH', 'basis' => 'A medical supporting document is unavailable for complete priority analysis.'];
+            return ['indicator' => $baseline, 'basis' => 'A medical supporting document is unavailable for complete priority analysis.'];
         }
     }
     $medicalDocuments = array_values(array_filter($documents, static fn ($document): bool =>
         is_array($document) && aics_smart_priority_medical_document_type((string) ($document['document_type'] ?? '')) !== null));
     if ($medicalDocuments === []) {
-        return ['indicator' => 'HIGH', 'basis' => 'Senior/PWD Medical Assistance; no current urgent trigger detected by priority analysis.'];
+        return ['indicator' => $baseline, 'basis' => $group . '; no current urgent trigger detected by priority analysis.'];
     }
     try {
         $result = $analyze($medicalDocuments);
@@ -89,10 +97,10 @@ function aics_smart_priority_assess(array $beneficiaryCategories, string $assist
             aics_smart_priority_result_explanation($result)];
     }
     if (is_array($result) && ($result['urgent'] ?? null) === false) {
-        return ['indicator' => 'HIGH', 'basis' => 'Senior/PWD Medical Assistance; no sufficient current urgency evidence. ' .
+        return ['indicator' => $baseline, 'basis' => $group . '; no sufficient current urgency evidence. ' .
             aics_smart_priority_result_explanation($result)];
     }
-    return ['indicator' => 'HIGH', 'basis' => 'Smart Priority medical analysis was unavailable; defaulted to HIGH.'];
+    return ['indicator' => $baseline, 'basis' => 'Smart Priority medical analysis was unavailable; defaulted to ' . $baseline . '.'];
 }
 
 /** Values for the existing priority columns; no new schema or workflow state. */
@@ -145,6 +153,7 @@ URGENT priority and meaningful timely assistance. A documented current neurologi
 weakness, inability to walk, breathing difficulty, or other serious functional limitation
 can be evidence even without an emergency label. Consider admission, surgery, dialysis,
 chemotherapy, transfusion, or other significant intervention in its full clinical context.
+A scheduled or required operation or surgery for the current condition is sufficient for urgent=true; a purely elective or cosmetic procedure is not.
 Do not require explicit words such as acute, urgent, emergency, or immediate. These words,
 a disease name alone, a billing line alone, or a medication name alone do not decide urgency.
 PAST history, completed treatment, stable chronic conditions, routine follow-up, and elective
@@ -440,7 +449,7 @@ function aics_smart_priority_cache_fingerprint(array $documents, string $prompt,
         'models' => aics_smart_priority_gemini_settings()['models'],
         'prompt' => $prompt,
         'schema' => $schema,
-        'revision' => 'priority-v3-extract-then-analyze',
+        'revision' => 'priority-v4-all-medical-operations',
     ]);
     return is_string($input) ? hash('sha256', $input) : null;
 }
@@ -477,12 +486,13 @@ function aics_smart_priority_for_request(mysqli $connection, int $requestId, arr
                                          string $assistanceCode): array
 {
     if (!aics_smart_priority_qualifies($beneficiaryCategories, $assistanceCode)) {
-        return ['indicator' => 'STANDARD', 'basis' => 'Senior/PWD and Medical Assistance prerequisites are not both met.'];
+        return ['indicator' => 'STANDARD', 'basis' => 'Smart Priority applies to Medical Assistance only.'];
     }
+    $baseline = aics_smart_priority_baseline($beneficiaryCategories);
     $statement = null;
     try {
         $statement = $connection->prepare("SELECT d.document_type, d.stored_name, r.reference_no FROM aics_request_documents d INNER JOIN aics_requests r ON r.id = d.request_id WHERE d.request_id = ? AND d.document_type IN ('med_cert', 'medical_certificate', 'medical_abstract', 'medical_abstract_certificate', 'billing_statement', 'billing_statement_or_prescription', 'prescription')");
-        if (!$statement) return ['indicator' => 'HIGH', 'basis' => 'Medical supporting documents are unavailable for priority analysis.'];
+        if (!$statement) return ['indicator' => $baseline, 'basis' => 'Medical supporting documents are unavailable for priority analysis.'];
         $statement->bind_param('i', $requestId);
         $statement->execute();
         $rows = $statement->get_result();
@@ -492,7 +502,7 @@ function aics_smart_priority_for_request(mysqli $connection, int $requestId, arr
             $documents[] = $file ?? ['document_type' => (string) ($row['document_type'] ?? ''), 'unavailable' => true];
         }
     } catch (Throwable) {
-        return ['indicator' => 'HIGH', 'basis' => 'Medical supporting documents are unavailable for priority analysis.'];
+        return ['indicator' => $baseline, 'basis' => 'Medical supporting documents are unavailable for priority analysis.'];
     } finally {
         if ($statement instanceof mysqli_stmt) $statement->close();
     }

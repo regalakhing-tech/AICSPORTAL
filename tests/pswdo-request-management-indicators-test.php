@@ -11,12 +11,14 @@ function indicator_assert(bool $condition, string $message): void
 $cases = [
     ['[]', 'STANDARD', 'educational_basic', 'STANDARD', 'priority-chip-normal'],
     ['[]', 'STANDARD', 'burial', 'STANDARD', 'priority-chip-normal'],
-    ['[]', 'URGENT', 'medical', 'STANDARD', 'priority-chip-normal'],
+    ['[]', 'URGENT', 'medical', 'URGENT', 'priority-chip-urgent'],
+    ['[]', 'STANDARD', 'medical', 'STANDARD', 'priority-chip-normal'],
+    ['[]', 'REQUIRES_STAFF_REVIEW', 'medical', 'STANDARD', 'priority-chip-normal'],
     ['["senior_citizen"]', 'URGENT', 'burial', 'STANDARD', 'priority-chip-normal'],
     ['["senior_citizen"]', 'REQUIRES_STAFF_REVIEW', 'medical', 'HIGH', 'priority-chip-request-high'],
     ['["pwd"]', 'STANDARD', 'medical', 'HIGH', 'priority-chip-request-high'],
     ['["senior_citizen","pwd"]', 'URGENT', 'medical', 'URGENT', 'priority-chip-urgent'],
-    ['invalid json', 'URGENT', 'medical', 'STANDARD', 'priority-chip-normal'],
+    ['invalid json', 'URGENT', 'medical', 'URGENT', 'priority-chip-urgent'],
 ];
 
 foreach ($cases as [$categories, $urgency, $assistance, $expected, $expectedClass]) {

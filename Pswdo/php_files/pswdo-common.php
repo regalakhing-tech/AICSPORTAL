@@ -95,14 +95,12 @@ function pswdo_request_management_indicator(string $beneficiaryCategoriesJson, s
 {
     $categories = json_decode($beneficiaryCategoriesJson, true);
     $categories = is_array($categories) ? array_filter($categories, 'is_string') : [];
-    $seniorOrPwdMedical = aics_priority_from_beneficiary_categories($categories)['label'] === 'HIGH'
-        && strtolower(trim($assistanceCode)) === 'medical';
-    if (!$seniorOrPwdMedical) {
-        return ['label' => 'STANDARD', 'class' => 'priority-chip-normal', 'icon' => 'fa-minus'];
-    }
+    $standard = ['label' => 'STANDARD', 'class' => 'priority-chip-normal', 'icon' => 'fa-minus'];
+    if (strtolower(trim($assistanceCode)) !== 'medical') return $standard;
     if (aics_normalize_medical_urgency($medicalUrgency) === 'URGENT') {
         return ['label' => 'URGENT', 'class' => 'priority-chip-urgent', 'icon' => 'fa-triangle-exclamation'];
     }
+    if (aics_priority_from_beneficiary_categories($categories)['label'] !== 'HIGH') return $standard;
     return ['label' => 'HIGH', 'class' => 'priority-chip-request-high', 'icon' => 'fa-arrow-up'];
 }
 
