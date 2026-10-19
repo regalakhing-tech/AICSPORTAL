@@ -469,6 +469,30 @@ CREATE TABLE IF NOT EXISTS `aics_request_notifications` (
   CONSTRAINT `fk_aics_request_notifications_sent_by` FOREIGN KEY (`sent_by_account_id`) REFERENCES `aics_accounts`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- AICS AI submission gate: PSWDO only sees requests whose documents passed the
+-- AICS AI check. Rows created before the gate stay visible ('released').
+ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `ai_gate_status` VARCHAR(16) NOT NULL DEFAULT 'released';
+ALTER TABLE `aics_requests` ALTER COLUMN `ai_gate_status` SET DEFAULT 'pending';
+ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `ai_gate_reason` VARCHAR(24) NULL DEFAULT NULL;
+ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `ai_gate_updated_at` DATETIME NULL DEFAULT NULL;
+ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `ai_gate_priority` VARCHAR(16) NULL DEFAULT NULL;
+ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `ai_gate_eta_days` TINYINT UNSIGNED NULL DEFAULT NULL;
+ALTER TABLE `aics_requests` ADD INDEX IF NOT EXISTS `idx_aics_requests_ai_gate_status` (`ai_gate_status`);
+CREATE TABLE IF NOT EXISTS `aics_ai_gate_events` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `request_id` INT UNSIGNED NOT NULL,
+  `event_type` VARCHAR(40) NOT NULL,
+  `document_type` VARCHAR(80) DEFAULT NULL,
+  `verdict_status` VARCHAR(40) DEFAULT NULL,
+  `detail` VARCHAR(500) NOT NULL DEFAULT '',
+  `actor_account_id` INT UNSIGNED DEFAULT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_aics_ai_gate_events_created_at` (`created_at`),
+  KEY `idx_aics_ai_gate_events_request_id` (`request_id`),
+  CONSTRAINT `fk_aics_ai_gate_events_request_id` FOREIGN KEY (`request_id`) REFERENCES `aics_requests`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- A notification can be a real applicant SMS or a simulated municipality
 -- coordination notice. Existing rows remain valid as legacy SMS/audit rows.
 ALTER TABLE `aics_request_notifications` ADD COLUMN IF NOT EXISTS `channel` VARCHAR(60) NOT NULL DEFAULT 'applicant_sms' AFTER `notification_stage`;

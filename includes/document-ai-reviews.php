@@ -193,6 +193,7 @@ function aics_ai_request_progress(mysqli $connection, int $requestId): array
             'progress_percent' => $isTerminal ? 100 : max(0, min(99, (int) ($row['progress_percent'] ?? aics_ai_stage_progress($stage)))),
             'is_terminal' => $isTerminal,
             'can_retry' => $status === 'failed',
+            'attempt_count' => (int) ($row['attempt_count'] ?? 0),
         ];
     }
 
