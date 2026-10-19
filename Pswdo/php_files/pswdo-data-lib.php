@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/pswdo-common.php';
+require_once __DIR__ . '/../../includes/ai-submission-gate.php';
 
 /** The beneficiary's contact is separate from the person receiving AICS notices. */
 function pswdo_applicant_sms_contact(array $row): string
@@ -384,12 +385,12 @@ function pswdo_fetch_dashboard_metrics(mysqli $connection): array
         'documents_uploaded' => 0,
     ];
 
-    $countResult = $connection->query('SELECT COUNT(*) AS total_requests FROM aics_requests');
+    $countResult = $connection->query('SELECT COUNT(*) AS total_requests FROM aics_requests WHERE ' . aics_ai_gate_visible_sql('aics_requests'));
     if ($countRow = $countResult?->fetch_assoc()) {
         $metrics['total_requests'] = (int) ($countRow['total_requests'] ?? 0);
     }
 
-    $statusResult = $connection->query('SELECT request_status, COUNT(*) AS total_count FROM aics_requests GROUP BY request_status');
+    $statusResult = $connection->query('SELECT request_status, COUNT(*) AS total_count FROM aics_requests WHERE ' . aics_ai_gate_visible_sql('aics_requests') . ' GROUP BY request_status');
     while ($row = $statusResult?->fetch_assoc()) {
         if (!is_array($row)) {
             break;
@@ -456,7 +457,7 @@ function pswdo_overview_period_range(string $period, ?string $today = null): arr
 /** Date of the most recent request, or '' when there are none. */
 function pswdo_fetch_latest_request_date(mysqli $connection): string
 {
-    $result = $connection->query("SELECT MAX(COALESCE(NULLIF(DATE(date_applied), '0000-00-00'), DATE(created_at))) AS latest FROM aics_requests");
+    $result = $connection->query("SELECT MAX(COALESCE(NULLIF(DATE(date_applied), '0000-00-00'), DATE(created_at))) AS latest FROM aics_requests WHERE " . aics_ai_gate_visible_sql('aics_requests'));
     $row = $result instanceof mysqli_result ? $result->fetch_assoc() : null;
     return is_array($row) && is_string($row['latest'] ?? null) ? $row['latest'] : '';
 }
@@ -495,7 +496,7 @@ function pswdo_fetch_period_metrics(mysqli $connection, string $period): array
         'cancelled' => 0,
     ];
 
-    $totalSql = "SELECT COUNT(*) AS total_count FROM aics_requests WHERE $dateExpression BETWEEN ? AND ?";
+    $totalSql = "SELECT COUNT(*) AS total_count FROM aics_requests WHERE $dateExpression BETWEEN ? AND ? AND " . aics_ai_gate_visible_sql('aics_requests');
     $totalStmt = $connection->prepare($totalSql);
     $totalStmt->bind_param('ss', $dateFrom, $dateTo);
     $totalStmt->execute();
@@ -503,7 +504,7 @@ function pswdo_fetch_period_metrics(mysqli $connection, string $period): array
     $totalStmt->close();
     $metrics['total_submitted'] = (int) ($totalRow['total_count'] ?? 0);
 
-    $statusSql = "SELECT request_status, COUNT(*) AS total_count FROM aics_requests WHERE $dateExpression BETWEEN ? AND ? GROUP BY request_status";
+    $statusSql = "SELECT request_status, COUNT(*) AS total_count FROM aics_requests WHERE $dateExpression BETWEEN ? AND ? AND " . aics_ai_gate_visible_sql('aics_requests') . " GROUP BY request_status";
     $statusStmt = $connection->prepare($statusSql);
     $statusStmt->bind_param('ss', $dateFrom, $dateTo);
     $statusStmt->execute();
@@ -550,6 +551,7 @@ function pswdo_fetch_period_metrics(mysqli $connection, string $period): array
  */
 function pswdo_fetch_period_trend(mysqli $connection, string $period): array
 {
+    $visibleSql = aics_ai_gate_visible_sql('aics_requests');
     $periodCode = pswdo_normalize_overview_period($period);
     $range = pswdo_overview_period_range($periodCode);
 
@@ -587,7 +589,7 @@ function pswdo_fetch_period_trend(mysqli $connection, string $period): array
                 request_status,
                 COUNT(*) AS total_count
             FROM aics_requests
-            WHERE $dateExpression = ?
+            WHERE $dateExpression = ? AND $visibleSql
             GROUP BY bucket_key, request_status
         SQL;
         $stmt = $connection->prepare($sql);
@@ -620,7 +622,7 @@ function pswdo_fetch_period_trend(mysqli $connection, string $period): array
                 request_status,
                 COUNT(*) AS total_count
             FROM aics_requests
-            WHERE $dateExpression BETWEEN ? AND ?
+            WHERE $dateExpression BETWEEN ? AND ? AND $visibleSql
             GROUP BY bucket_key, request_status
         SQL;
         $stmt = $connection->prepare($sql);
@@ -789,7 +791,7 @@ function pswdo_fetch_request_queue(mysqli $connection, array $filters = []): arr
         LEFT JOIN aics_request_prioritization pr ON pr.request_id = r.id
     SQL;
 
-    $where = [];
+    $where = [aics_ai_gate_visible_sql('r')];
     $params = [];
     $types = '';
 
@@ -3485,6 +3487,7 @@ function pswdo_sync_invalid_requirements_queue(mysqli $connection): void
  */
 function pswdo_fetch_prescreening_counts(mysqli $connection): array
 {
+    $visibleSql = aics_ai_gate_visible_sql('r');
     pswdo_sync_invalid_requirements_queue($connection);
 
     $counts = [
@@ -3505,6 +3508,7 @@ function pswdo_fetch_prescreening_counts(mysqli $connection): array
         FROM aics_request_prescreening p
         INNER JOIN aics_requests r ON r.id = p.request_id
         LEFT JOIN aics_request_release_schedule rs ON rs.request_id = r.id
+        WHERE $visibleSql
     SQL;
     $row = $connection->query($sql)?->fetch_assoc();
     if (is_array($row)) {
@@ -3565,6 +3569,7 @@ function pswdo_fetch_prescreening_queue(
     } elseif ($prescreenSort === 'high_priority' && $prescreenSortGroup === 'high_priority') {
         $whereParts[] = "{$smartPriorityOrderSql} IN (0, 1, 2, 4)";
     }
+    $whereParts[] = aics_ai_gate_visible_sql('r');
     $whereSql = 'WHERE ' . implode("\n          AND ", $whereParts);
 
     $defaultOrderSql = <<<SQL
@@ -3773,7 +3778,7 @@ function pswdo_count_requests_by_status_values(mysqli $connection, array $status
     }
 
     $placeholders = implode(',', array_fill(0, count($cleanValues), '?'));
-    $sql = "SELECT COUNT(*) AS total_count FROM aics_requests WHERE LOWER(TRIM(request_status)) IN ($placeholders)";
+    $sql = "SELECT COUNT(*) AS total_count FROM aics_requests WHERE LOWER(TRIM(request_status)) IN ($placeholders) AND " . aics_ai_gate_visible_sql('aics_requests');
     $stmt = $connection->prepare($sql);
     $types = str_repeat('s', count($cleanValues));
     $bindParams = [$types];
@@ -3794,6 +3799,7 @@ function pswdo_count_requests_by_status_values(mysqli $connection, array $status
 
 function pswdo_count_document_review_queue(mysqli $connection): int
 {
+    $visibleSql = aics_ai_gate_visible_sql('r');
     $sql = <<<SQL
         SELECT COUNT(*) AS total_count
         FROM (
@@ -3809,6 +3815,7 @@ function pswdo_count_document_review_queue(mysqli $connection): int
                 'not_approved', 'not approved', 'rejected', 'denied',
                 'cancelled', 'canceled'
             )
+              AND $visibleSql
             GROUP BY r.id
             HAVING uploaded_total > 0 AND checked_total < uploaded_total
         ) review_queue
@@ -3865,6 +3872,7 @@ function pswdo_fetch_workflow_lane_requests(mysqli $connection, string $lane, in
         return [];
     }
 
+    $conditions[] = aics_ai_gate_visible_sql('r');
     $whereSql = count($conditions) > 0 ? ('WHERE ' . implode(' AND ', $conditions)) : '';
 
     $sql = <<<SQL
@@ -5145,14 +5153,14 @@ function pswdo_fetch_report_summary(mysqli $connection, string $dateFrom, string
         'under_review' => 0,
     ];
 
-    $submittedStmt = $connection->prepare('SELECT COUNT(*) AS total_count FROM aics_requests WHERE DATE(created_at) BETWEEN ? AND ?');
+    $submittedStmt = $connection->prepare('SELECT COUNT(*) AS total_count FROM aics_requests WHERE DATE(created_at) BETWEEN ? AND ? AND ' . aics_ai_gate_visible_sql('aics_requests'));
     $submittedStmt->bind_param('ss', $dateFrom, $dateTo);
     $submittedStmt->execute();
     $submittedRow = $submittedStmt->get_result()?->fetch_assoc();
     $submittedStmt->close();
     $summary['total_submitted'] = (int) ($submittedRow['total_count'] ?? 0);
 
-    $statusResult = $connection->query('SELECT request_status, COUNT(*) AS total_count FROM aics_requests GROUP BY request_status');
+    $statusResult = $connection->query('SELECT request_status, COUNT(*) AS total_count FROM aics_requests WHERE ' . aics_ai_gate_visible_sql('aics_requests') . ' GROUP BY request_status');
     while ($row = $statusResult?->fetch_assoc()) {
         if (!is_array($row)) {
             break;
@@ -5181,7 +5189,7 @@ function pswdo_fetch_ai_operational_metrics(mysqli $connection, string $dateFrom
         'unavailable_rate' => null, 'median_ms' => null, 'p95_ms' => null,
         'feedback' => 0, 'agreement_rate' => null, 'override_rate' => null,
     ];
-    $stmt = $connection->prepare('SELECT findings FROM document_ai_reviews WHERE processed_at IS NOT NULL AND DATE(processed_at) BETWEEN ? AND ?');
+    $stmt = $connection->prepare('SELECT ai.findings FROM document_ai_reviews ai INNER JOIN aics_request_documents d ON d.id = ai.request_document_id INNER JOIN aics_requests r ON r.id = d.request_id WHERE ai.processed_at IS NOT NULL AND DATE(ai.processed_at) BETWEEN ? AND ? AND ' . aics_ai_gate_visible_sql('r'));
     $stmt->bind_param('ss', $dateFrom, $dateTo);
     $stmt->execute();
     $rows = $stmt->get_result()?->fetch_all(MYSQLI_ASSOC) ?: [];
@@ -5374,6 +5382,7 @@ function pswdo_fetch_release_notification_history(mysqli $connection, int $limit
 function pswdo_fetch_top_priority_cases(mysqli $connection, int $limit = 5): array
 {
     $rows = [];
+    $visibleSql = aics_ai_gate_visible_sql('r');
     $sql = <<<SQL
         SELECT
             r.reference_no,
@@ -5392,7 +5401,7 @@ function pswdo_fetch_top_priority_cases(mysqli $connection, int $limit = 5): arr
             GROUP BY request_id
         ) ra ON ra.request_id = r.id
         LEFT JOIN aics_assistance_types at ON at.id = ra.assistance_type_id
-        WHERE p.priority_rank IS NOT NULL
+        WHERE p.priority_rank IS NOT NULL AND $visibleSql
         ORDER BY p.priority_rank ASC
         LIMIT ?
     SQL;

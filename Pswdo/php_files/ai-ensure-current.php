@@ -26,6 +26,12 @@ if ($csrf === '' || $sessionCsrf === '' || !hash_equals($sessionCsrf, $csrf) || 
 try {
     $connection = aics_db_connect();
     pswdo_ensure_schema($connection);
+    if (!aics_ai_gate_is_released($connection, $requestId)) {
+        $connection->close();
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'message' => 'Request was not found.']);
+        exit;
+    }
     $cachedHealth = $_SESSION['aics_ai_health_v3']['payload'] ?? null;
     $canLaunch = aics_ai_health_allows_processing(is_array($cachedHealth) ? $cachedHealth : null);
     $stmt = $connection->prepare('SELECT d.id, d.document_type FROM aics_request_documents d WHERE d.id = ? AND d.request_id = ? LIMIT 1');

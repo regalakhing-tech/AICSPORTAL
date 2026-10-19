@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/ai-submission-gate.php';
+
 function aics_geo_normalize_municipality(string $value): string
 {
     $value = trim((string) preg_replace('/^\s*(?:municipality|city)\s+of\s+/i', '', $value));
@@ -238,7 +240,7 @@ function aics_geo_accumulate_application_row(array &$municipalities, int &$total
 /** Shared application-volume aggregation for public and PSWDO maps. */
 function aics_submitted_application_geo_stats(mysqli $connection, array $filters = []): array
 {
-    $where = ["LOWER(TRIM(COALESCE(r.province, 'antique'))) = 'antique'"];
+    $where = ["LOWER(TRIM(COALESCE(r.province, 'antique'))) = 'antique'", aics_ai_gate_visible_sql('r')];
     $types = '';
     $params = [];
     foreach (['status' => 'r.request_status'] as $input => $column) {
@@ -303,7 +305,7 @@ function aics_submitted_application_geo_stats(mysqli $connection, array $filters
     $mappedTotal = array_sum(array_map(static fn(array $item): int => (int) ($item['total'] ?? 0), $municipalities));
     $unmappedBarangays = array_sum(array_map(static fn(array $item): int => (int) ($item['unmapped_barangay'] ?? 0), $municipalities));
 
-    $yearStmt = $connection->prepare("SELECT DISTINCT YEAR(r.date_applied) AS application_year FROM aics_requests r WHERE LOWER(TRIM(COALESCE(r.province, 'antique'))) = 'antique' AND r.date_applied IS NOT NULL AND r.date_applied <> '0000-00-00' ORDER BY application_year ASC");
+    $yearStmt = $connection->prepare("SELECT DISTINCT YEAR(r.date_applied) AS application_year FROM aics_requests r WHERE LOWER(TRIM(COALESCE(r.province, 'antique'))) = 'antique' AND " . aics_ai_gate_visible_sql('r') . " AND r.date_applied IS NOT NULL AND r.date_applied <> '0000-00-00' ORDER BY application_year ASC");
     $availableYears = [];
     if ($yearStmt) {
         $yearStmt->execute();

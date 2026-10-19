@@ -7,7 +7,8 @@ $connection = aics_db_connect();
 pswdo_ensure_schema($connection);
 
 $metrics = pswdo_fetch_dashboard_metrics($connection);
-$dbRow = $connection->query('SELECT COUNT(*) AS total_requests FROM aics_requests')?->fetch_assoc();
+// PSWDO counts only requests that passed the AICS AI check (or predate it).
+$dbRow = $connection->query("SELECT COUNT(*) AS total_requests FROM aics_requests WHERE ai_gate_status = 'released'")?->fetch_assoc();
 
 $metricsTotal = (int) ($metrics['total_requests'] ?? 0);
 $dbTotal = (int) ($dbRow['total_requests'] ?? 0);

@@ -109,6 +109,10 @@ try {
     $connection = aics_db_connect();
     pswdo_ensure_schema($connection);
     $responseStatus = 'success';
+    if ($requestId > 0 && !aics_ai_gate_is_released($connection, $requestId)) {
+        $connection->close();
+        pswdo_redirect_with_message('error', 'This request is still being checked by AICS AI.', 0, $redirectPage, $redirectExtra);
+    }
 
     if ($actionType === 'mass_send_release_schedule_sms') {
         $smsMessage = trim((string) ($_POST['message_text'] ?? ''));

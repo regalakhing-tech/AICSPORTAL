@@ -22,7 +22,7 @@ try {
     $exists = $connection->prepare('SELECT id FROM aics_requests WHERE id = ? LIMIT 1');
     if (!$exists) throw new RuntimeException('Request lookup unavailable.');
     $exists->bind_param('i', $requestId); $exists->execute(); $request = $exists->get_result()?->fetch_assoc(); $exists->close();
-    if (!is_array($request)) { $connection->close(); http_response_code(404); echo json_encode(['ok' => false, 'message' => 'Request was not found.']); exit; }
+    if (!is_array($request) || !aics_ai_gate_is_released($connection, $requestId)) { $connection->close(); http_response_code(404); echo json_encode(['ok' => false, 'message' => 'Request was not found.']); exit; }
     $ensure = aics_ensure_current_ai_reviews_for_request($connection, $requestId);
     if ($ensure['worker_needed'] && !aics_launch_request_ai_processor($requestId, (string) $ensure['worker_lease_token'])) {
         foreach ($ensure['queued'] as $item) aics_mark_ai_review_failed($connection, (int) $item['review_id'], 'AI_PROCESSOR_LAUNCH_FAILED', 'Local verification could not be started.');
