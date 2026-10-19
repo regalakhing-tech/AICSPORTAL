@@ -28,6 +28,16 @@ if [ -f "$MIGRATE/aicsdb.sql" ]; then
         php "$APP/deploy/import-schema.php" "$MIGRATE/aicsdb.sql" && echo "$SUM" >> "$DATA/migrations.done"
     fi
 fi
+# One-time maintenance script sent with a deploy upload (never committed): runs
+# once per content, like the database import above.
+if [ -f "$MIGRATE/maintenance.php" ]; then
+    SUM=$(sha256sum "$MIGRATE/maintenance.php" | cut -d' ' -f1)
+    if grep -qx "$SUM" "$DATA/migrations.done" 2>/dev/null; then
+        echo "Maintenance $SUM already ran; skipped."
+    else
+        php "$MIGRATE/maintenance.php" && echo "$SUM" >> "$DATA/migrations.done"
+    fi
+fi
 if [ -d "$MIGRATE" ]; then
     echo "Migration part copied: $(find "$MIGRATE" -type f | wc -l) files."
 fi
