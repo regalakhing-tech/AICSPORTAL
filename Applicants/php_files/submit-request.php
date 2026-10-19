@@ -6,6 +6,7 @@ require_once __DIR__ . '/auth-common.php';
 require_once __DIR__ . '/application-rules.php';
 require_once __DIR__ . '/application-access.php';
 require_once __DIR__ . '/../../includes/document-requirements.php';
+require_once __DIR__ . '/../../includes/applicant-id-verification.php';
 
 aics_start_session();
 $assetCssVersion = (string) (filemtime(__DIR__ . '/../css files/applicant-pages.css') ?: time());
@@ -43,6 +44,7 @@ $profileComplete = true;
 $accessState = ['mode' => 'NEW_APPLICATION'];
 $activeRequestContext = null;
 $profileDefaults = [];
+$profileIdDocuments = [];
 $newApplicationDate = (new DateTimeImmutable('today', aics_dashboard_timezone()))->format('Y-m-d');
 $educationOptions = aics_education_options();
 $occupationOptions = aics_occupation_options();
@@ -117,6 +119,14 @@ if ($editRequestId <= 0) {
       $profileDefaults = $profileStmt->get_result()?->fetch_assoc() ?: [];
       $profileStmt->close();
       $profileDefaults['estimated_monthly_income'] = aics_income_value($profileDefaults['estimated_monthly_income'] ?? null) ?? '';
+      // ID photos saved at sign-up are offered for the applicant ID slots.
+      foreach (aics_profile_id_documents($connection, $accountId) as $type => $document) {
+        $profileIdDocuments[$type] = [
+          'preview_url' => 'profile-id-photo.php?side=' . ($type === 'valid_id' ? 'front' : 'back'),
+          'mime_type' => $document['mime_type'],
+          'id_type_label' => $document['id_type_label'],
+        ];
+      }
 
       // Most recent active (non-terminal) request — for Edit button
       $existingSql = <<<SQL
@@ -1152,6 +1162,7 @@ if ($editRequestId > 0) {
     window.AICS_READ_ONLY_BOOTSTRAP = <?= json_encode($readOnlyBootstrap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: 'null' ?>;
     window.AICS_DOCUMENT_REQUIREMENTS = <?= json_encode($clientDocumentRequirements, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>;
     window.AICS_PROFILE_DEFAULTS = <?= json_encode($profileDefaults, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>;
+    window.AICS_PROFILE_ID_DOCUMENTS = <?= json_encode((object) $profileIdDocuments, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>;
     window.AICS_FAMILY_OPTIONS = <?= json_encode(['occupation' => $occupationOptions, 'education' => $educationOptions, 'income' => aics_income_options()], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}' ?>;
   </script>
   <script src="../js files/antique-barangays.js"></script>

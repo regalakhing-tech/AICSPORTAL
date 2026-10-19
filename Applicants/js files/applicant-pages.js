@@ -751,21 +751,29 @@ function initializeDynamicUploadDropZones(container) {
 }
 
 function renderApplicantIdUploads(container) {
+  // New applications reuse the ID photos saved at sign-up; a new photo replaces them.
+  const profileIds = AICS_EDIT_CONTEXT.isEditMode ? {} : (window.AICS_PROFILE_ID_DOCUMENTS || {});
+  const usesProfileIds = Boolean(profileIds.valid_id && profileIds.valid_id_back);
   const group = document.createElement("div");
   group.className = "applicant-id-upload-group";
-  group.innerHTML = `<p class="applicant-id-upload-help">Add clear photos of the front and back of your valid ID. You can check each photo before submitting.</p>
+  group.innerHTML = `<p class="applicant-id-upload-help"></p>
     <div class="applicant-id-upload-tiles"></div>`;
+  const profileIdLabel = usesProfileIds ? String(profileIds.valid_id.id_type_label || "").trim() : "";
+  group.querySelector(".applicant-id-upload-help").textContent = usesProfileIds
+    ? `We will use the ID photos from your profile${profileIdLabel ? `: ${profileIdLabel}` : ""}. You don't need to upload them again. To use a different ID, tap a photo and choose a new one.`
+    : "Add clear photos of the front and back of your valid ID. You can check each photo before submitting.";
   const tiles = group.querySelector(".applicant-id-upload-tiles");
 
   [["valid_id", "Front of ID", "Front"], ["valid_id_back", "Back or second view", "Back"]].forEach(([type, title, badge]) => {
     const draftInfo = window.AICS_DRAFT_DOCUMENTS?.[type] || null;
-    const existingInfo = draftInfo || AICS_EDIT_CONTEXT.existingDocumentsByType[type] || null;
+    const profileInfo = usesProfileIds ? { ...profileIds[type], file_name: "From your profile" } : null;
+    const existingInfo = draftInfo || AICS_EDIT_CONTEXT.existingDocumentsByType[type] || profileInfo || null;
     const isLocked = AICS_EDIT_CONTEXT.isEditMode && AICS_EDIT_CONTEXT.lockedDocumentTypes.has(type);
     const previewUrl = draftInfo?.document_id
       ? `draft-document-view.php?document_id=${encodeURIComponent(String(draftInfo.document_id))}`
       : existingInfo?.document_id && AICS_EDIT_CONTEXT.requestId > 0
         ? `document-view.php?request_id=${encodeURIComponent(String(AICS_EDIT_CONTEXT.requestId))}&document_id=${encodeURIComponent(String(existingInfo.document_id))}`
-        : "";
+        : existingInfo === profileInfo && profileInfo ? String(profileInfo.preview_url || "") : "";
     const isImage = String(existingInfo?.mime_type || "").startsWith("image/");
     const field = document.createElement("div");
     field.className = "field applicant-id-upload-field";
@@ -2976,6 +2984,7 @@ function initApplicantIntakeForm() {
       const beneficiaryAddress = [document.getElementById("beneficiary-sitio-purok")?.value, barangaySelect?.value, municipalitySelect?.value, document.getElementById("beneficiary-province")?.value].filter(Boolean).join(", ") || "-";
       const applicantAddress = document.getElementById("applicant-complete-address")?.value.trim() || "-";
       const uploadedDocumentTypes = new Set(Object.keys(window.AICS_DRAFT_DOCUMENTS || {}));
+      if (!AICS_EDIT_CONTEXT.isEditMode) Object.keys(window.AICS_PROFILE_ID_DOCUMENTS || {}).forEach((type) => uploadedDocumentTypes.add(type));
       Array.from(
         document.querySelectorAll('#dynamic-upload-container input[type="file"]'),
       ).filter((input) => input.files && input.files.length > 0).forEach((input) => {

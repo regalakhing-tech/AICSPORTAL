@@ -357,3 +357,72 @@ function aics_id_run_check(string $front, string $back, int $timeoutSeconds = 75
     }
     return $decoded;
 }
+
+/**
+ * The ID photos saved at sign-up, as request documents: front → valid_id,
+ * back → valid_id_back. Empty when either photo is missing.
+ *
+ * @return array<string, array{path:string, extension:string, mime_type:string, size:int, original_name:string, id_type_label:string}>
+ */
+function aics_profile_id_documents(mysqli $connection, int $accountId): array
+{
+    if ($accountId <= 0) return [];
+    $record = aics_id_verification_for_account($connection, $accountId);
+    if (!is_array($record)) return [];
+    $mimeTypes = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'];
+    $documents = [];
+    foreach (['valid_id' => 'front', 'valid_id_back' => 'back'] as $type => $side) {
+        $path = aics_id_photo_path_for_account($accountId, $record, $side);
+        if ($path === null) return [];
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $documents[$type] = [
+            'path' => $path,
+            'extension' => $extension,
+            'mime_type' => $mimeTypes[$extension] ?? 'image/jpeg',
+            'size' => (int) filesize($path),
+            'original_name' => 'profile-id-' . $side . '.' . $extension,
+            'id_type_label' => (string) ($record['id_type_label'] ?? ''),
+        ];
+    }
+    return $documents;
+}
+
+/**
+ * Copy the profile ID photos into a request for the ID slots that have no
+ * document yet (an uploaded or draft photo always wins). Returns the number added.
+ *
+ * @param array<string, array<string,mixed>> $profileDocuments from aics_profile_id_documents()
+ * @param list<string> $createdFilePaths
+ */
+function aics_attach_profile_id_documents(mysqli $connection, int $requestId, string $uploadDirectory, string $relativeDirectory, array $profileDocuments, array &$createdFilePaths): int
+{
+    if ($requestId <= 0 || $profileDocuments === []) return 0;
+    $existing = [];
+    $stmt = $connection->prepare('SELECT document_type FROM aics_request_documents WHERE request_id = ?');
+    $stmt->bind_param('i', $requestId);
+    $stmt->execute();
+    foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) $existing[strtolower((string) $row['document_type'])] = true;
+    $stmt->close();
+    if (!is_dir($uploadDirectory) && !mkdir($uploadDirectory, 0775, true) && !is_dir($uploadDirectory)) {
+        throw new RuntimeException('Failed to create upload directory.');
+    }
+    $insert = $connection->prepare('INSERT INTO aics_request_documents (request_id, document_type, original_name, stored_name, file_path, mime_type, file_size) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $added = 0;
+    foreach (['valid_id', 'valid_id_back'] as $type) {
+        $document = $profileDocuments[$type] ?? null;
+        if (!is_array($document) || isset($existing[$type]) || !is_file((string) $document['path'])) continue;
+        $stored = $type . '-' . date('YmdHis') . '-' . bin2hex(random_bytes(4)) . '.' . $document['extension'];
+        $target = rtrim($uploadDirectory, '\/') . DIRECTORY_SEPARATOR . $stored;
+        if (!copy((string) $document['path'], $target)) throw new RuntimeException('Unable to attach your profile ID photo. Please upload it again.');
+        $createdFilePaths[] = $target;
+        $relative = rtrim($relativeDirectory, '/') . '/' . $stored;
+        $original = (string) $document['original_name'];
+        $mime = (string) $document['mime_type'];
+        $size = (int) $document['size'];
+        $insert->bind_param('isssssi', $requestId, $type, $original, $stored, $relative, $mime, $size);
+        $insert->execute();
+        $added++;
+    }
+    $insert->close();
+    return $added;
+}

@@ -10,6 +10,7 @@ require_once __DIR__ . '/application-rules.php';
 require_once __DIR__ . '/../../includes/document-requirements.php';
 require_once __DIR__ . '/../../includes/document-ai-reviews.php';
 require_once __DIR__ . '/../../includes/beneficiary-priority.php';
+require_once __DIR__ . '/../../includes/applicant-id-verification.php';
 
 const MAX_UPLOAD_SIZE = 26_214_400; // 25 MB
 const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
@@ -49,6 +50,8 @@ try {
         }
     }
     $draftDocuments = $draftId !== '' ? aics_draft_documents($connection, $accountId, $draftId) : [];
+    // The ID photos saved at sign-up fill the applicant ID slots unless new photos are uploaded.
+    $profileIdDocuments = $isEditMode ? [] : aics_profile_id_documents($connection, $accountId);
 
     $profileCompletion = aics_applicant_profile_completion_state($connection, $accountId);
     if (!$profileCompletion['complete']) {
@@ -112,7 +115,7 @@ try {
     $requestPost['date_applied'] = $isEditMode && is_array($editContext)
         ? (string) ($editContext['date_applied'] ?? '')
         : aics_current_application_date();
-    $payload = validate_request_payload($requestPost, $_FILES, $isEditMode, $editContext, $draftDocuments);
+    $payload = validate_request_payload($requestPost, $_FILES, $isEditMode, $editContext, $draftDocuments, $profileIdDocuments);
     if (!$isEditMode) {
         enforce_application_cooldown($connection, $accountId);
     }
@@ -387,6 +390,9 @@ try {
         );
         $savedDocuments += aics_finalize_draft_documents($connection, $accountId, $draftId, $requestId, $referenceNo, $allowedDraftDocumentTypes, $createdSubmissionFiles);
     }
+    if (!$isEditMode && $profileIdDocuments !== []) {
+        $savedDocuments += aics_attach_profile_id_documents($connection, $requestId, __DIR__ . '/../uploads/' . $referenceNo, 'AICS/Applicants/uploads/' . $referenceNo, $profileIdDocuments, $createdSubmissionFiles);
+    }
 
     if (!$isEditMode && $draftId !== '') {
         aics_consume_claimed_draft($connection, $accountId, $draftId);
@@ -587,7 +593,7 @@ function apply_authenticated_profile_to_request(array $post, mysqli $connection,
  *   documents:array<int,array<string,mixed>>
  * }
  */
-function validate_request_payload(array $post, array $files, bool $isEditMode = false, ?array $editContext = null, array $draftDocuments = []): array
+function validate_request_payload(array $post, array $files, bool $isEditMode = false, ?array $editContext = null, array $draftDocuments = [], array $profileDocuments = []): array
 {
     $required = [
         'date_applied',
@@ -685,7 +691,8 @@ function validate_request_payload(array $post, array $files, bool $isEditMode = 
         $isEditMode,
         $existingDocsByType,
         $lockedDocTypes,
-        $draftDocuments
+        $draftDocuments,
+        $profileDocuments
     );
 
     $clientCategoryOther = sanitize_nullable_string($post['client_category_other'] ?? null);
@@ -831,7 +838,8 @@ function normalize_dynamic_documents(
     bool $isEditMode = false,
     array $existingDocsByType = [],
     array $lockedDocTypes = [],
-    array $draftDocuments = []
+    array $draftDocuments = [],
+    array $profileDocuments = []
 ): array {
     $requiredDocs = aics_required_document_codes($assistanceType);
     if (count($requiredDocs) === 0) {
@@ -885,7 +893,7 @@ function normalize_dynamic_documents(
             continue;
         }
 
-        if ($hasDraftDocument) {
+        if ($hasDraftDocument || isset($profileDocuments[$docIdKey])) {
             continue;
         }
 
