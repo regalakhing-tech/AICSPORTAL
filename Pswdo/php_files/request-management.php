@@ -586,6 +586,8 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
           <h3><i class="fas fa-user-pen"></i> Applicant</h3>
           <div class="request-detail-grid">
             <div class="request-detail-item"><span>Name</span><strong><?= pswdo_h($applicantDisplayName !== '' ? $applicantDisplayName : 'Not available') ?></strong></div>
+            <?php $applicantRelationship = trim((string) ($request['applicant_relationship'] ?? '')); ?>
+            <div class="request-detail-item"><span>Relationship to Beneficiary</span><strong><?= pswdo_h($applicantRelationship === 'Self' ? 'Self (same as beneficiary)' : ($applicantRelationship !== '' ? $applicantRelationship : 'Not provided')) ?></strong></div>
             <div class="request-detail-item"><span>Contact</span><strong><?= pswdo_h(trim((string) ($request['applicant_contact_number'] ?? '')) !== '' ? (string) $request['applicant_contact_number'] : 'Not available') ?></strong></div>
             <div class="request-detail-item"><span>Email</span><strong><?= pswdo_h(trim((string) ($request['applicant_email'] ?? '')) !== '' ? (string) $request['applicant_email'] : 'Not available') ?></strong></div>
             <div class="request-detail-item"><span>Address</span><strong><?= pswdo_h($applicantLocationLabel) ?></strong></div>
@@ -605,11 +607,14 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                 }
                 return false;
             }));
+            // Older requests have an income per member; new ones have one household total.
+            $familyHasMemberIncome = array_filter($familyComposition, static fn ($member): bool => is_array($member) && trim((string) ($member['estimated_monthly_income'] ?? '')) !== '') !== [];
+            $familyTotalIncome = trim((string) ($request['family_total_income'] ?? ''));
           ?>
           <?php if (count($familyComposition) > 0): ?>
             <div class="table-wrap family-composition-table-wrap">
               <table class="modal-doc-table family-composition-table">
-                <thead><tr><th>Name</th><th>Relationship to Beneficiary</th><th>Age</th><th>Occupation / Source of Income</th><th>Educational Attainment</th><th>Estimated Monthly Income</th></tr></thead>
+                <thead><tr><th>Name</th><th>Relationship to Beneficiary</th><th>Age</th><th>Occupation / Source of Income</th><th>Educational Attainment</th><?php if ($familyHasMemberIncome): ?><th>Estimated Monthly Income</th><?php endif; ?></tr></thead>
                 <tbody>
                   <?php foreach ($familyComposition as $member): ?>
                     <?php
@@ -624,11 +629,14 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                       <td><?= isset($member['age']) && $member['age'] !== null && $member['age'] !== '' ? (int) $member['age'] : 'Not provided' ?></td>
                       <td><?= pswdo_h($memberOccupation !== '' ? $memberOccupation : 'Not provided') ?></td>
                       <td><?= pswdo_h(trim((string) ($member['educational_attainment'] ?? '')) !== '' ? (string) $member['educational_attainment'] : 'Not provided') ?></td>
-                      <td><?= pswdo_h(trim((string) ($member['estimated_monthly_income'] ?? '')) !== '' ? (string) $member['estimated_monthly_income'] : 'Not provided') ?></td>
+                      <?php if ($familyHasMemberIncome): ?><td><?= pswdo_h(trim((string) ($member['estimated_monthly_income'] ?? '')) !== '' ? (string) $member['estimated_monthly_income'] : 'Not provided') ?></td><?php endif; ?>
                     </tr>
                   <?php endforeach; ?>
                 </tbody>
               </table>
+            </div>
+            <div class="request-detail-grid">
+              <div class="request-detail-item request-detail-item-income-wide"><span>Total Estimated Monthly Family Income</span><strong><?= pswdo_h($familyTotalIncome !== '' ? $familyTotalIncome : 'Not provided') ?></strong></div>
             </div>
           <?php else: ?>
             <p class="empty-note">No household members added.</p>

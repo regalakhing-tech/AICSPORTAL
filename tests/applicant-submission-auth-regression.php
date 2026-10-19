@@ -91,7 +91,7 @@ function submission_valid_fields(string $phone): array
         'date_applied' => date('Y-m-d'), 'beneficiary_first_name' => 'Test', 'beneficiary_last_name' => 'Beneficiary',
         'beneficiary_birth_date' => '1995-01-01', 'beneficiary_age' => '31', 'beneficiary_complete_name' => 'Test Beneficiary',
         'beneficiary_barangay' => 'Atabay', 'beneficiary_sitio_purok' => 'Purok 2', 'beneficiary_municipality' => 'San Jose de Buenavista', 'beneficiary_province' => 'Antique',
-        'contact_number' => $phone, 'applicant_first_name' => 'Browser', 'applicant_last_name' => 'Supplied',
+        'contact_number' => $phone, 'applicant_first_name' => 'Browser', 'applicant_last_name' => 'Supplied', 'applicant_relationship' => 'Sibling',
         'applicant_birth_date' => '1990-01-01', 'applicant_age' => '36', 'barangay' => 'Atabay', 'sitio_purok' => 'Purok 1',
         'municipality' => 'San Jose de Buenavista', 'province' => 'Antique', 'gender' => 'male', 'employment' => 'Student',
         'estimated_income' => 'No Income', 'civil_status' => 'single', 'highest_educational_attainment' => 'College Graduate',

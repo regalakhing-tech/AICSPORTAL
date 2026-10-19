@@ -23,6 +23,7 @@ $staffRow = null;
 
 try {
     $connection = aics_db_connect();
+    aics_ensure_request_intake_columns($connection);
 
     $sql = <<<SQL
         SELECT
@@ -40,6 +41,7 @@ try {
             r.applicant_first_name,
             r.applicant_middle_name,
             r.applicant_last_name,
+            r.applicant_relationship,
             r.contact_number,
             r.sitio_purok,
             r.barangay,
@@ -53,6 +55,7 @@ try {
             r.highest_educational_attainment,
             r.problem_presented,
             r.family_composition_json,
+            r.family_total_income,
             r.client_categories_json,
             r.assistance_types_json,
             r.assistance_type_other,
@@ -596,10 +599,15 @@ $isPdfExport = !empty($_GET['format']) && $_GET['format'] === 'pdf';
   </div>
 
   <?php if ($applicantName !== ''): ?>
-  <div class="gis-data-grid cols-1">
+  <?php $applicantRelationship = trim((string) ($row['applicant_relationship'] ?? '')); ?>
+  <div class="gis-data-grid cols-2">
     <div class="gis-field">
       <label>Applicant</label>
       <span class="gis-value"><?= $h($applicantName) ?></span>
+    </div>
+    <div class="gis-field">
+      <label>Relationship to Beneficiary</label>
+      <span class="gis-value"><?= $h($applicantRelationship === 'Self' ? 'Self' : ($applicantRelationship !== '' ? $applicantRelationship : 'Not provided')) ?></span>
     </div>
   </div>
   <?php endif; ?>
@@ -641,6 +649,10 @@ $isPdfExport = !empty($_GET['format']) && $_GET['format'] === 'pdf';
         <td><?= $h($mIncome) ?></td>
       </tr>
       <?php endfor; ?>
+      <tr>
+        <td colspan="6" style="text-align:right;font-weight:700">Total Estimated Monthly Family Income</td>
+        <td><?= $h(aics_income_value($row['family_total_income'] ?? null) ?? '') ?></td>
+      </tr>
     </tbody>
   </table>
 
@@ -669,7 +681,7 @@ $isPdfExport = !empty($_GET['format']) && $_GET['format'] === 'pdf';
     </div>
     <div class="gis-cat-col">
       <div class="gis-cat-item"><?= $chk($catChecked('ips')) ?> IPS&rsquo;s</div>
-      <div class="gis-cat-item"><?= $chk($catChecked('family_head')) ?> Family Head</div>
+      <div class="gis-cat-item"><?= $chk($catChecked('solo_parent') || $catChecked('family_head')) ?> Solo Parent</div>
       <div class="gis-cat-item"><?= $chk($catChecked('men_women')) ?> Men/Women</div>
       <div class="gis-cat-other"><?= $chk($catChecked('others')) ?> Others: <span class="gis-cat-other-line"><?= $h($catChecked('others') ? $catOther : '') ?></span></div>
     </div>

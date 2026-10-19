@@ -394,6 +394,8 @@ ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `urgency_response` VARCHAR(
 ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `urgency_indicator` VARCHAR(32) DEFAULT NULL AFTER `urgency_response`;
 ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `urgency_basis` VARCHAR(700) DEFAULT NULL AFTER `urgency_indicator`;
 ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `urgency_analyzed_at` DATETIME DEFAULT NULL AFTER `urgency_basis`;
+ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `applicant_relationship` VARCHAR(40) DEFAULT NULL;
+ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `family_total_income` VARCHAR(40) DEFAULT NULL;
 ALTER TABLE `aics_request_document_reviews` ADD COLUMN IF NOT EXISTS `review_status` ENUM('pending','checked','needs_reupload','invalid') NOT NULL DEFAULT 'pending' AFTER `is_checked`;
 ALTER TABLE `aics_request_document_reviews` ADD COLUMN IF NOT EXISTS `notified_at` TIMESTAMP NULL DEFAULT NULL AFTER `reviewed_at`;
 

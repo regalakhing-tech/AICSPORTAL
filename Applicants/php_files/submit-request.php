@@ -195,6 +195,7 @@ if ($editRequestId > 0) {
 
     $connection = aics_db_connect();
     aics_ensure_auth_schema($connection);
+    aics_ensure_request_intake_columns($connection);
 
     // Only the authenticated request owner may provide legacy fallbacks.
     // Current request snapshots remain authoritative in Edit Mode.
@@ -233,6 +234,8 @@ if ($editRequestId > 0) {
         r.applicant_email,
         r.applicant_occupation,
         r.applicant_estimated_monthly_income,
+        r.applicant_relationship,
+        r.family_total_income,
         r.barangay,
         r.sitio_purok,
         r.municipality,
@@ -401,6 +404,8 @@ if ($editRequestId > 0) {
         'applicant_email' => $requestOrLegacyProfile('applicant_email', 'email'),
         'applicant_occupation' => trim((string) ($requestRow['applicant_occupation'] ?? '')) !== '' ? (string) $requestRow['applicant_occupation'] : (!$snapshotPresent ? $profileOccupation : ''),
         'applicant_estimated_monthly_income' => trim((string) ($requestRow['applicant_estimated_monthly_income'] ?? '')) !== '' ? (string) $requestRow['applicant_estimated_monthly_income'] : (!$snapshotPresent ? (aics_income_value($profileDefaults['estimated_monthly_income'] ?? null) ?? '') : ''),
+        'applicant_relationship' => (string) ($requestRow['applicant_relationship'] ?? ''),
+        'family_total_income' => (string) ($requestRow['family_total_income'] ?? ''),
         'barangay' => $requestOrLegacyProfile('barangay', 'barangay'),
         'sitio_purok' => $requestOrLegacyProfile('sitio_purok', 'address_line'),
         'municipality' => $requestOrLegacyProfile('municipality', 'municipality'),
@@ -767,6 +772,14 @@ if ($editRequestId > 0) {
                 <div class="step-panel-card">
                   <div class="mini-section-title">Applicant Information</div>
                   <div class="form-grid">
+                    <div class="field field-full" id="applicant-relationship-field">
+                      <label for="applicant-relationship">Relationship to Beneficiary <span class="required-star">*</span></label>
+                      <select name="applicant_relationship" id="applicant-relationship" required>
+                        <option value="" selected disabled hidden>Select how you are related to the beneficiary</option>
+                        <?php foreach (aics_applicant_relationship_options() as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?>
+                      </select>
+                      <small class="field-help">Needed because you are applying for another person ("Same as Applicant" is not checked).</small>
+                    </div>
                     <div class="field">
                       <label>Applicant First Name <span class="required-star">*</span></label>
                       <input type="text" name="applicant_first_name" id="applicant-first-name" placeholder="e.g. Maria" required readonly class="readonly-field">
@@ -902,8 +915,8 @@ if ($editRequestId > 0) {
                         <span><i class="fas fa-house-user"></i> IPs</span>
                       </label>
                       <label class="choice-card">
-                        <input type="radio" name="client_category" value="family_head">
-                        <span><i class="fas fa-people-group"></i> Family Head</span>
+                        <input type="radio" name="client_category" value="solo_parent">
+                        <span><i class="fas fa-hands-holding-child"></i> Solo Parent</span>
                       </label>
                       <label class="choice-card">
                         <input type="radio" name="client_category" value="others">
@@ -914,7 +927,7 @@ if ($editRequestId > 0) {
                     <div class="form-grid">
                       <div class="field field-full" id="client-category-other-field">
                         <label>Please specify <span class="required-star">*</span></label>
-                        <input type="text" name="client_category_other" id="client-category-other" placeholder="e.g. Solo parent, displaced worker, OFW family">
+                        <input type="text" name="client_category_other" id="client-category-other" placeholder="e.g. Displaced worker, OFW family">
                       </div>
                     </div>
                   </div>
@@ -947,7 +960,6 @@ if ($editRequestId > 0) {
                   <div class="family-head">Relationship to Beneficiary</div>
                   <div class="family-head">Occupation</div>
                   <div class="family-head">Educational Attainment</div>
-                  <div class="family-head">Estimated Monthly Income</div>
                   <div class="family-head family-action-head">Action</div>
                   <input type="text" name="family_name[]" placeholder="Full name (e.g. Maria Dela Cruz)" class="family-row-input">
                   <input type="number" name="family_age[]" min="0" max="120" placeholder="Age" inputmode="numeric" class="family-row-input numeric-only">
@@ -957,7 +969,6 @@ if ($editRequestId > 0) {
                     <input type="text" name="family_occupation_other[]" placeholder="Specify occupation" class="family-occupation-other" maxlength="150" hidden>
                   </div>
                   <select name="family_education[]" class="family-row-input"><option value="" selected disabled hidden>Select educational attainment</option><?php foreach ($educationOptions as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
-                  <select name="family_estimated_income[]" class="family-row-input"><option value="" selected disabled hidden>Select estimated monthly income</option><?php foreach (aics_income_options() as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
                   <input type="text" name="family_name[]" placeholder="Full name (e.g. Juan Dela Cruz)" class="family-row-input">
                   <input type="number" name="family_age[]" min="0" max="120" placeholder="Age" inputmode="numeric" class="family-row-input numeric-only">
                   <select name="family_relationship[]" class="family-row-input"><option value="" selected disabled hidden>Relationship</option><option value="Spouse">Spouse</option><option value="Child">Child</option><option value="Parent">Parent</option><option value="Sibling">Sibling</option><option value="Grandparent">Grandparent</option><option value="Grandchild">Grandchild</option><option value="Other Relative">Other Relative</option><option value="Non-relative">Non-relative</option></select>
@@ -966,12 +977,19 @@ if ($editRequestId > 0) {
                     <input type="text" name="family_occupation_other[]" placeholder="Specify occupation" class="family-occupation-other" maxlength="150" hidden>
                   </div>
                   <select name="family_education[]" class="family-row-input"><option value="" selected disabled hidden>Select educational attainment</option><?php foreach ($educationOptions as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
-                  <select name="family_estimated_income[]" class="family-row-input"><option value="" selected disabled hidden>Select estimated monthly income</option><?php foreach (aics_income_options() as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
                 </div>
                 <div class="family-add-row-wrap">
                   <button type="button" class="family-add-btn" id="family-add-row-btn">
                     <i class="fas fa-plus"></i> Add Member
                   </button>
+                </div>
+                <div class="field family-total-income-field">
+                  <label for="family-total-income">Total Estimated Monthly Family Income <span class="required-star">*</span></label>
+                  <select name="family_total_income" id="family-total-income" required>
+                    <option value="" selected disabled hidden>Select the total for the whole household</option>
+                    <?php foreach (aics_income_options() as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?>
+                  </select>
+                  <small class="field-help">The combined monthly income of all the household members listed above. Enter one total only, not each member's income.</small>
                 </div>
                 </div>
               </div>
@@ -1131,6 +1149,7 @@ if ($editRequestId > 0) {
           <section class="confirm-review-section">
             <h4><i class="fas fa-user-pen"></i> Applicant Information</h4>
             <div class="confirm-review-grid">
+              <div class="summary-row"><span class="summary-label">Relationship to Beneficiary</span><strong class="summary-value" id="modal-confirm-applicant-relationship">-</strong></div>
               <div class="summary-row"><span class="summary-label">Occupation / Source of Income</span><strong class="summary-value" id="modal-confirm-applicant-occupation">-</strong></div>
               <div class="summary-row"><span class="summary-label">Estimated Monthly Income</span><strong class="summary-value" id="modal-confirm-applicant-income">-</strong></div>
               <div class="summary-row summary-row-wide"><span class="summary-label">Applicant Address</span><strong class="summary-value" id="modal-confirm-applicant-address">-</strong></div>
@@ -1141,6 +1160,7 @@ if ($editRequestId > 0) {
             <h4><i class="fas fa-paperclip"></i> Supporting Information</h4>
             <div class="confirm-review-grid">
               <div class="summary-row summary-row-wide"><span class="summary-label">Family Composition</span><strong class="summary-value" id="modal-confirm-family">-</strong></div>
+              <div class="summary-row"><span class="summary-label">Total Estimated Monthly Family Income</span><strong class="summary-value" id="modal-confirm-family-income">-</strong></div>
               <div class="summary-row summary-row-documents"><span class="summary-label">Documents Attached</span><strong class="summary-documents-value" id="modal-confirm-docs">0 documents attached</strong></div>
             </div>
           </section>

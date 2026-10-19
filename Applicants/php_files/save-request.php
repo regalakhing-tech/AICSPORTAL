@@ -258,6 +258,7 @@ try {
 
         persist_applicant_request_snapshot($connection, $requestId, $payload);
         persist_beneficiary_address_snapshot($connection, $requestId, $payload);
+        persist_household_income_snapshot($connection, $requestId, $payload);
         persist_structured_priority_and_urgency($connection, $requestId, $payload);
 
         sync_request_assistance_mapping($connection, $requestId, (string) ($payload['assistance_type'][0] ?? ''));
@@ -371,6 +372,7 @@ try {
 
     persist_applicant_request_snapshot($connection, $requestId, $payload);
     persist_beneficiary_address_snapshot($connection, $requestId, $payload);
+    persist_household_income_snapshot($connection, $requestId, $payload);
 
     $insertRelation = $connection->prepare('INSERT IGNORE INTO aics_account_requests (account_id, request_id) VALUES (?, ?)');
     if (!$insertRelation) {
@@ -646,7 +648,7 @@ function validate_request_payload(array $post, array $files, bool $isEditMode = 
         throw new RuntimeException('Select exactly one valid beneficiary category.');
     }
     $beneficiaryCategory = trim($rawBeneficiaryCategory);
-    $allowedBeneficiaryCategories = ['youth', 'senior_citizen', 'pwd', 'pantawid', 'ips', 'family_head', 'others'];
+    $allowedBeneficiaryCategories = ['youth', 'senior_citizen', 'pwd', 'pantawid', 'ips', 'solo_parent', 'family_head', 'others'];
     if (!in_array($beneficiaryCategory, $allowedBeneficiaryCategories, true)) {
         throw new RuntimeException('Select exactly one valid beneficiary category.');
     }
@@ -748,6 +750,7 @@ function validate_request_payload(array $post, array $files, bool $isEditMode = 
         'applicant_email' => sanitize_nullable_string($post['applicant_email'] ?? null),
         'applicant_occupation' => sanitize_string((string) ($post['applicant_occupation'] ?? '')),
         'applicant_estimated_monthly_income' => sanitize_string((string) ($post['applicant_estimated_monthly_income'] ?? '')),
+        'applicant_relationship' => aics_applicant_relationship_from_post($post),
         'barangay' => sanitize_string((string) $post['barangay']),
         'sitio_purok' => sanitize_nullable_string($post['sitio_purok'] ?? null),
         'municipality' => sanitize_string((string) $post['municipality']),
@@ -762,6 +765,7 @@ function validate_request_payload(array $post, array $files, bool $isEditMode = 
         'client_category_other' => $clientCategoryOther,
         'assistance_type_other' => $assistanceTypeOther,
         'family_composition' => $familyComposition,
+        'family_total_income' => aics_family_total_income_from_post($post),
         'client_category' => $clientCategories,
         'assistance_type' => [$assistanceType],
         'amount' => $amount,
@@ -1392,6 +1396,7 @@ function ensure_tables_exist(mysqli $connection): void
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS applicant_email VARCHAR(180) DEFAULT NULL AFTER applicant_contact_number");
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS applicant_occupation VARCHAR(150) DEFAULT NULL AFTER applicant_email");
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS applicant_estimated_monthly_income VARCHAR(40) DEFAULT NULL AFTER applicant_occupation");
+    aics_ensure_request_intake_columns($connection);
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS urgency_response VARCHAR(3) DEFAULT NULL AFTER assistance_types_json");
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS urgency_indicator VARCHAR(32) DEFAULT NULL AFTER urgency_response");
     $connection->query("ALTER TABLE aics_request_documents ADD COLUMN IF NOT EXISTS document_type VARCHAR(60) DEFAULT NULL AFTER request_id");
@@ -1435,7 +1440,7 @@ function persist_applicant_request_snapshot(mysqli $connection, int $requestId, 
 {
     $stmt = $connection->prepare(
         'UPDATE aics_requests
-         SET applicant_contact_number = ?, applicant_email = ?, applicant_occupation = ?, applicant_estimated_monthly_income = ?
+         SET applicant_contact_number = ?, applicant_email = ?, applicant_occupation = ?, applicant_estimated_monthly_income = ?, applicant_relationship = ?
          WHERE id = ? LIMIT 1'
     );
     if (!$stmt) throw new RuntimeException('Unable to prepare the Applicant snapshot.');
@@ -1443,12 +1448,24 @@ function persist_applicant_request_snapshot(mysqli $connection, int $requestId, 
     $email = $payload['applicant_email'] ?? null;
     $occupation = (string) ($payload['applicant_occupation'] ?? '');
     $income = (string) ($payload['applicant_estimated_monthly_income'] ?? '');
-    $stmt->bind_param('ssssi', $contact, $email, $occupation, $income, $requestId);
+    $relationship = (string) ($payload['applicant_relationship'] ?? '');
+    $stmt->bind_param('sssssi', $contact, $email, $occupation, $income, $relationship, $requestId);
     $stmt->execute();
     if ($stmt->affected_rows < 0) {
         $stmt->close();
         throw new RuntimeException('Unable to save the Applicant snapshot.');
     }
+    $stmt->close();
+}
+
+/** Stores the household's one estimated monthly income (all members combined). */
+function persist_household_income_snapshot(mysqli $connection, int $requestId, array $payload): void
+{
+    $stmt = $connection->prepare('UPDATE aics_requests SET family_total_income = ? WHERE id = ? LIMIT 1');
+    if (!$stmt) throw new RuntimeException('Unable to prepare the household income.');
+    $income = $payload['family_total_income'] ?? null;
+    $stmt->bind_param('si', $income, $requestId);
+    $stmt->execute();
     $stmt->close();
 }
 
@@ -1519,10 +1536,6 @@ function normalize_family_composition(array $post, bool $notApplicable = false):
         if ($occupation === 'Other' && $occupationOther === null) {
             throw new RuntimeException('Specify the occupation for each family member marked Other.');
         }
-        if ($name !== null && !aics_is_valid_income_value($income)) {
-            throw new RuntimeException('Select a valid estimated monthly income for each household member.');
-        }
-
         $rows[] = [
             'name' => $name ?? '',
             'age' => $age,

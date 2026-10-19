@@ -5356,7 +5356,7 @@ body.account-banned-lockdown .sidebar-overlay {
 
 .family-composition-grid {
   display: grid;
-  grid-template-columns: 1.35fr 0.55fr 1fr 1fr 1.1fr 1.15fr 0.72fr;
+  grid-template-columns: 1.45fr 0.55fr 1.05fr 1.1fr 1.2fr 0.72fr;
   gap: 10px;
   margin-top: 16px;
 }
@@ -5404,6 +5404,15 @@ body.account-banned-lockdown .sidebar-overlay {
 
 .family-composition-grid input {
   min-width: 0;
+}
+
+.family-total-income-field {
+  max-width: 460px;
+  margin-top: 18px;
+}
+
+.family-total-income-field select {
+  width: 100%;
 }
 
 /* ---------- Group label & choice cards ---------- */

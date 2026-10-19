@@ -62,7 +62,7 @@ function flow_fields(string $beneficiaryPhone): array
         'beneficiary_birth_date'=>'1950-04-12','beneficiary_age'=>'76','beneficiary_complete_name'=>'Elena Santos Reyes','contact_number'=>$beneficiaryPhone,
         'beneficiary_barangay'=>'Atabay','beneficiary_sitio_purok'=>'Purok 7','beneficiary_municipality'=>'San Jose de Buenavista','beneficiary_province'=>'Antique',
         'employment'=>'Pensioner','estimated_income'=>'Below ₱10,000','gender'=>'female','client_category'=>'senior_citizen',
-        'family_name'=>['Marco Reyes','Liza Reyes'],'family_age'=>['48','42'],'family_relationship'=>['Child','Child'],
+        'applicant_relationship'=>'Child','family_name'=>['Marco Reyes','Liza Reyes'],'family_age'=>['48','42'],'family_relationship'=>['Child','Child'],
         'family_occupation'=>['Driver','Employed – Private'],'family_occupation_other'=>['',''],
         'family_education'=>['College Undergraduate','College Graduate'],'family_estimated_income'=>['₱10,000 – ₱19,999','₱20,000 – ₱29,999'],
         'assistance_type'=>'medical','urgency_response'=>'yes','problem_presented'=>'Complete Medical application data-flow regression.','claim_status'=>'unclaimed','amount'=>'0',

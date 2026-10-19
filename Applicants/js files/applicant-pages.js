@@ -1161,6 +1161,18 @@ function initApplicantIntakeForm() {
   const municipalitySelect = document.getElementById("municipality-select");
   const barangaySelect = document.getElementById("barangay-select");
   const applicantIsBeneficiary = document.getElementById("applicant-is-beneficiary");
+  const applicantRelationshipField = document.getElementById("applicant-relationship-field");
+  const applicantRelationship = document.getElementById("applicant-relationship");
+
+  // The applicant states their relationship only when the beneficiary is someone
+  // else; a disabled field is neither validated nor submitted.
+  function syncApplicantRelationship() {
+    if (!(applicantRelationshipField instanceof HTMLElement) || !(applicantRelationship instanceof HTMLSelectElement)) return;
+    const isSelf = applicantIsBeneficiary instanceof HTMLInputElement && applicantIsBeneficiary.checked;
+    applicantRelationshipField.hidden = isSelf;
+    applicantRelationship.disabled = isSelf;
+    applicantRelationship.required = !isSelf;
+  }
 
   const dateApplied = form.querySelector('input[name="date_applied"]');
   const dateAppliedDisplay = document.getElementById("date-applied-display");
@@ -1999,6 +2011,11 @@ function initApplicantIntakeForm() {
     assignValue("date_applied", values.date_applied);
     syncApplicationDateDisplay();
     assignValue("beneficiary_first_name", values.beneficiary_first_name);
+    assignValue("applicant_relationship", values.applicant_relationship);
+    if (applicantIsBeneficiary instanceof HTMLInputElement && values.applicant_relationship === "Self") {
+      applicantIsBeneficiary.checked = true;
+    }
+    syncApplicantRelationship();
     assignValue("beneficiary_middle_name", values.beneficiary_middle_name);
     assignValue("beneficiary_last_name", values.beneficiary_last_name);
     assignValue("beneficiary_extension", values.beneficiary_extension);
@@ -2095,9 +2112,7 @@ function initApplicantIntakeForm() {
     const familyOccupationOtherInputs = Array.from(
       form.querySelectorAll('input[name="family_occupation_other[]"]'),
     );
-    const familyIncomeInputs = Array.from(
-      form.querySelectorAll('select[name="family_estimated_income[]"]'),
-    );
+    assignValue("family_total_income", values.family_total_income);
 
     familyRows.forEach((row, index) => {
       if (familyNameInputs[index]) {
@@ -2121,9 +2136,6 @@ function initApplicantIntakeForm() {
         familyEducationInputs[index].value = String(
           displayValue(row.educational_attainment),
         );
-      }
-      if (familyIncomeInputs[index]) {
-        familyIncomeInputs[index].value = displayValue(row.estimated_monthly_income);
       }
     });
 
@@ -2382,18 +2394,6 @@ function initApplicantIntakeForm() {
         shell.scrollIntoView({ behavior: "smooth", block: "center" });
       }
       return false;
-    }
-    const incomeInputs = Array.from(form.querySelectorAll('select[name="family_estimated_income[]"]'));
-    const namedRows = nameInputs.filter((input) => input.value.trim() !== "");
-    for (const nameInput of namedRows) {
-      const rowIndex = nameInputs.indexOf(nameInput);
-      const incomeInput = incomeInputs[rowIndex];
-      if (incomeInput && !incomeInput.value) {
-        incomeInput.setCustomValidity("Estimated Monthly Income is required for each household member.");
-        incomeInput.reportValidity();
-        return false;
-      }
-      if (incomeInput) incomeInput.setCustomValidity("");
     }
     return true;
   }
@@ -2734,6 +2734,7 @@ function initApplicantIntakeForm() {
   }
   if (applicantIsBeneficiary instanceof HTMLInputElement) {
     applicantIsBeneficiary.addEventListener("change", () => {
+      syncApplicantRelationship();
       const contactInput = form.querySelector('[name="contact_number"]');
       const incomeInput = form.querySelector('[name="estimated_income"]');
       const province = document.getElementById("beneficiary-province");
@@ -3017,9 +3018,17 @@ function initApplicantIntakeForm() {
       setModalText("modal-confirm-contact", contactNumber);
       setModalText("modal-confirm-beneficiary-occupation", beneficiaryOccupation);
       setModalText("modal-confirm-beneficiary-income", beneficiaryIncome);
+      setModalText("modal-confirm-applicant-relationship",
+        applicantIsBeneficiary instanceof HTMLInputElement && applicantIsBeneficiary.checked
+          ? "Self (same as beneficiary)"
+          : (applicantRelationship instanceof HTMLSelectElement && applicantRelationship.value) || "-");
       setModalText("modal-confirm-applicant-occupation", applicantOccupation);
       setModalText("modal-confirm-applicant-income", applicantIncome);
       setModalText("modal-confirm-family", familySummary);
+      setModalText("modal-confirm-family-income",
+        form.querySelector('#family-members-not-applicable')?.checked
+          ? "Not Applicable"
+          : form.querySelector('[name="family_total_income"]')?.value || "-");
       setModalText("modal-confirm-beneficiary-address", beneficiaryAddress);
       setModalText("modal-confirm-applicant-address", applicantAddress);
       setModalText("modal-confirm-docs",
@@ -3168,7 +3177,7 @@ function initApplicantIntakeForm() {
     const container = document.getElementById('family-composition-body');
     if (!container) return;
     container.querySelectorAll('.family-mobile-label').forEach((label) => label.remove());
-    const labels = ['Name', 'Age', 'Relationship to Beneficiary', 'Occupation', 'Educational Attainment', 'Estimated Monthly Income'];
+    const labels = ['Name', 'Age', 'Relationship to Beneficiary', 'Occupation', 'Educational Attainment'];
     const cards = Array.from(container.querySelectorAll(':scope > .family-member-card'));
     cards.forEach((card, cardIndex) => {
       const rowNumber = cardIndex + 1;
@@ -3212,8 +3221,8 @@ function initApplicantIntakeForm() {
     const container = document.getElementById('family-composition-body');
     if (!container || container.querySelector(':scope > .family-member-card')) return;
     const fields = Array.from(container.children).filter((item) => !item.classList.contains('family-head'));
-    for (let index = 0; index < fields.length; index += 6) {
-      const rowFields = fields.slice(index, index + 6);
+    for (let index = 0; index < fields.length; index += 5) {
+      const rowFields = fields.slice(index, index + 5);
       if (rowFields.length) container.appendChild(createFamilyMemberCard(rowFields));
     }
   }
@@ -3249,7 +3258,6 @@ function initApplicantIntakeForm() {
       createFamilySelect("family_relationship[]", "Relationship", ["Spouse", "Child", "Parent", "Sibling", "Grandparent", "Grandchild", "Other Relative", "Non-relative"]),
       occupationWrap,
       createFamilySelect("family_education[]", "Select educational attainment", familyOptions.education),
-      createFamilySelect("family_estimated_income[]", "Select estimated monthly income", familyOptions.income),
     ];
     tbody.appendChild(createFamilyMemberCard(inputs));
     labelFamilyCompositionRows();

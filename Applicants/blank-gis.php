@@ -451,7 +451,7 @@
     </div>
     <div class="gis-cat-col">
       <div class="gis-cat-item"><div class="gis-check-box"></div> IPS&rsquo;s</div>
-      <div class="gis-cat-item"><div class="gis-check-box"></div> Family Head</div>
+      <div class="gis-cat-item"><div class="gis-check-box"></div> Solo Parent</div>
       <div class="gis-cat-item"><div class="gis-check-box"></div> Men/Women</div>
       <div class="gis-cat-other"><div class="gis-check-box"></div> Others: <span class="gis-cat-other-line"></span></div>
     </div>

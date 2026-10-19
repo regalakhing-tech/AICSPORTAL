@@ -591,6 +591,7 @@ function pswdo_ensure_schema(mysqli $connection): void
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS applicant_email VARCHAR(180) DEFAULT NULL AFTER applicant_contact_number");
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS applicant_occupation VARCHAR(150) DEFAULT NULL AFTER applicant_email");
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS applicant_estimated_monthly_income VARCHAR(40) DEFAULT NULL AFTER applicant_occupation");
+    aics_ensure_request_intake_columns($connection);
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS beneficiary_barangay VARCHAR(120) DEFAULT NULL AFTER beneficiary_complete_name");
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS beneficiary_sitio_purok VARCHAR(120) DEFAULT NULL AFTER beneficiary_barangay");
     $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS beneficiary_municipality VARCHAR(120) DEFAULT NULL AFTER beneficiary_sitio_purok");

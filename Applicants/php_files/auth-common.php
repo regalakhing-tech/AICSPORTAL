@@ -430,6 +430,50 @@ function aics_education_options(): array
     return ['No Formal Education', 'Elementary Undergraduate', 'Elementary Graduate', 'Junior High School', 'Senior High School', 'Vocational / Technical', 'College Undergraduate', 'College Graduate', 'Postgraduate'];
 }
 
+/**
+ * How the applicant is related to the beneficiary. "Self" is not listed: it is
+ * saved when "Same as Applicant" is checked.
+ *
+ * @return array<int,string>
+ */
+function aics_applicant_relationship_options(): array
+{
+    return ['Spouse', 'Child', 'Parent', 'Sibling', 'Grandparent', 'Grandchild', 'Other Relative', 'Non-relative'];
+}
+
+/** "Self" when the applicant is the beneficiary, otherwise the chosen relationship. */
+function aics_applicant_relationship_from_post(array $post): string
+{
+    if ((string) ($post['applicant_is_beneficiary'] ?? '') === '1') return 'Self';
+    $relationship = trim((string) ($post['applicant_relationship'] ?? ''));
+    if (!in_array($relationship, aics_applicant_relationship_options(), true)) {
+        throw new RuntimeException('Select your relationship to the beneficiary.');
+    }
+    return $relationship;
+}
+
+/** The household's one estimated monthly income (all members combined); null when there is no household. */
+function aics_family_total_income_from_post(array $post): ?string
+{
+    if ((string) ($post['family_members_not_applicable'] ?? '') === '1') return null;
+    $income = trim((string) ($post['family_total_income'] ?? ''));
+    if (!aics_is_valid_income_value($income)) {
+        throw new RuntimeException('Select the total estimated monthly income of the whole household.');
+    }
+    return $income;
+}
+
+/** Adds the applicant relationship and household income columns to older databases, once per connection. */
+function aics_ensure_request_intake_columns(mysqli $connection): void
+{
+    static $checked = [];
+    $key = spl_object_id($connection);
+    if (isset($checked[$key])) return;
+    $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS applicant_relationship VARCHAR(40) DEFAULT NULL");
+    $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS family_total_income VARCHAR(40) DEFAULT NULL");
+    $checked[$key] = true;
+}
+
 /** @return array<int,string> */
 function aics_occupation_options(): array
 {

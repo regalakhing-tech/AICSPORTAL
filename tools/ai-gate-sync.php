@@ -20,6 +20,7 @@ if (PHP_SAPI !== 'cli') {
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/ai-submission-gate.php';
+require_once __DIR__ . '/../Applicants/php_files/auth-common.php';
 
 $arguments = array_slice($argv, 1);
 $requestId = null;
@@ -38,6 +39,7 @@ try {
     if (in_array('--schema-only', $arguments, true)) {
         aics_ai_gate_ensure_schema($connection);
         aics_ensure_urgency_indicator_columns($connection);
+        aics_ensure_request_intake_columns($connection);
         echo "AICS AI gate schema ready.\n";
         exit(0);
     }

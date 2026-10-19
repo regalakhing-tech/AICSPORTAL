@@ -45,6 +45,7 @@ $logoUrl = $projectRootUrl . '/asset/logocp.png';
 try {
     $connection = aics_db_connect();
     aics_ensure_auth_schema($connection);
+    aics_ensure_request_intake_columns($connection);
 
     $whereSql = $isApplicantViewer
         ? 'WHERE ar.account_id = ? AND r.id = ?'
@@ -79,6 +80,7 @@ try {
             r.estimated_income,
             r.problem_presented,
             r.family_composition_json,
+            r.family_total_income,
             r.client_categories_json,
             r.assistance_types_json,
             r.assistance_type_other,
@@ -242,6 +244,7 @@ if ($format === 'txt') {
             $idx = $i + 1;
             $lines[] = "Member {$idx}: " . trim((string) ($member['name'] ?? '')) . ' | Age ' . trim((string) ($member['age'] ?? '')) . ' | ' . trim((string) ($member['relationship'] ?? '')) . ' | ' . trim((string) ($member['occupation'] ?? '')) . ' | ' . trim((string) ($member['educational_attainment'] ?? '')) . ' | Estimated Monthly Income: ' . export_fill(aics_income_value($member['estimated_monthly_income'] ?? null) ?? '');
         }
+        $lines[] = 'Total Estimated Monthly Family Income: ' . export_fill(aics_income_value($row['family_total_income'] ?? null) ?? '');
         $lines[] = '';
     }
     $lines[] = 'Generated: ' . date('Y-m-d H:i:s');
@@ -740,6 +743,10 @@ function export_fail(string $message, int $statusCode, string $format): void
                 <td><?= export_h(export_fill(aics_income_value($member['estimated_monthly_income'] ?? null) ?? '')) ?></td>
               </tr>
             <?php endforeach; ?>
+            <tr>
+              <td colspan="6" style="text-align: right; font-weight: 700;">Total Estimated Monthly Family Income</td>
+              <td><?= export_h(export_fill(aics_income_value($row['family_total_income'] ?? null) ?? '')) ?></td>
+            </tr>
           </tbody>
         </table>
       </div>

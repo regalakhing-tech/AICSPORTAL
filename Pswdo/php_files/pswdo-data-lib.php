@@ -777,6 +777,8 @@ function pswdo_fetch_request_queue(mysqli $connection, array $filters = []): arr
             COALESCE(NULLIF(TRIM(r.applicant_contact_number), ''), ap.contact_number) AS applicant_contact_number,
             COALESCE(NULLIF(TRIM(r.applicant_occupation), ''), ap.occupation) AS applicant_occupation,
             COALESCE(NULLIF(TRIM(r.applicant_estimated_monthly_income), ''), ap.estimated_monthly_income) AS applicant_estimated_monthly_income,
+            r.applicant_relationship,
+            r.family_total_income,
             COALESCE(NULLIF(TRIM(CONCAT_WS(' ', r.applicant_first_name, r.applicant_middle_name, r.applicant_last_name)), ''), NULLIF(TRIM(CONCAT_WS(' ', ap.first_name, ap.middle_name, ap.last_name)), '')) AS applicant_profile_name
         FROM aics_requests r
         LEFT JOIN (
@@ -930,6 +932,8 @@ function pswdo_fetch_request_queue(mysqli $connection, array $filters = []): arr
             'applicant_contact_number' => trim((string) ($row['applicant_contact_number'] ?? '')),
             'applicant_occupation' => trim((string) ($row['applicant_occupation'] ?? '')),
             'applicant_estimated_monthly_income' => aics_income_value($row['applicant_estimated_monthly_income'] ?? null) ?? '',
+            'applicant_relationship' => trim((string) ($row['applicant_relationship'] ?? '')),
+            'family_total_income' => aics_income_value($row['family_total_income'] ?? null) ?? '',
             'family_composition' => array_values($familyComposition),
             'applicant_age' => (int) ($row['applicant_age'] ?? 0),
             'beneficiary_age' => (int) ($row['beneficiary_age'] ?? 0),
