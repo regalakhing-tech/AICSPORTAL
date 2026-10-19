@@ -6,8 +6,14 @@ require_once __DIR__ . '/../../includes/document-requirements.php';
 
 const AICS_DRAFT_TTL_DAYS = 30;
 
+/**
+ * Draft uploads live in private storage when it is configured (on Railway it is
+ * the persistent volume, so drafts survive a redeploy); otherwise in the temp folder.
+ */
 function aics_draft_upload_root(): string
 {
+    $private = trim((string) getenv('AICS_PRIVATE_ROOT'));
+    if ($private !== '') return rtrim($private, '\/') . DIRECTORY_SEPARATOR . 'draft_uploads';
     return rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'aics-draft-uploads';
 }
 

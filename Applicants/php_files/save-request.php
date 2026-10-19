@@ -1402,13 +1402,18 @@ function ensure_tables_exist(mysqli $connection): void
     // looks up their existing IDs in sync_request_assistance_mapping().
     $connection->query("CREATE TABLE IF NOT EXISTS aics_request_validation_results (request_id INT UNSIGNED NOT NULL, duplicate_flag TINYINT(1) NOT NULL DEFAULT 0, repeated_claim_flag TINYINT(1) NOT NULL DEFAULT 0, inconsistency_flag TINYINT(1) NOT NULL DEFAULT 0, risk_score SMALLINT UNSIGNED NOT NULL DEFAULT 0, validation_note VARCHAR(500) DEFAULT NULL, updated_by_account_id INT UNSIGNED DEFAULT NULL, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (request_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     aics_ensure_ai_review_schema($connection);
+    // Schema changes commit any open transaction in MySQL, so they all run here,
+    // before the submission transaction starts.
+    $connection->query("ALTER TABLE aics_request_prioritization ADD COLUMN IF NOT EXISTS urgency_indicator VARCHAR(32) DEFAULT NULL AFTER urgency_score");
+    $connection->query("ALTER TABLE aics_request_prioritization ADD COLUMN IF NOT EXISTS priority_basis VARCHAR(700) DEFAULT NULL AFTER priority_level");
+    aics_ensure_urgency_indicator_columns($connection);
 }
 
 /** @param array<string,mixed> $payload */
 function persist_structured_priority_and_urgency(mysqli $connection, int $requestId, array $payload): void
 {
     // Applicant input is not evidence for Smart Prioritization. Await verified documents.
-    aics_ensure_urgency_indicator_columns($connection);
+    // Runs inside the submission transaction: no schema changes here (see ensure_tables_exist).
     $urgencyResponse = null;
     $isMedicalAssistance = in_array('medical', (array) ($payload['assistance_type'] ?? []), true);
     $urgencyIndicator = $isMedicalAssistance ? 'REQUIRES_STAFF_REVIEW' : 'STANDARD';
@@ -1418,8 +1423,6 @@ function persist_structured_priority_and_urgency(mysqli $connection, int $reques
     $requestStmt->execute(); $requestStmt->close();
 
     $priority = aics_priority_from_beneficiary_categories((array) ($payload['client_category'] ?? []));
-    $connection->query("ALTER TABLE aics_request_prioritization ADD COLUMN IF NOT EXISTS urgency_indicator VARCHAR(32) DEFAULT NULL AFTER urgency_score");
-    $connection->query("ALTER TABLE aics_request_prioritization ADD COLUMN IF NOT EXISTS priority_basis VARCHAR(700) DEFAULT NULL AFTER priority_level");
     $basis = $isMedicalAssistance ? 'Medical document findings pending verification.' : 'No Medical Assistance urgency rule applies.';
     $stmt = $connection->prepare('INSERT INTO aics_request_prioritization (request_id, urgency_score, urgency_indicator, vulnerability_score, readiness_score, risk_penalty, priority_score, priority_level, priority_basis) VALUES (?, 0, ?, 0, 0, 0, ?, ?, ?) ON DUPLICATE KEY UPDATE urgency_score = 0, urgency_indicator = VALUES(urgency_indicator), vulnerability_score = 0, readiness_score = 0, risk_penalty = 0, priority_score = VALUES(priority_score), priority_level = VALUES(priority_level), priority_basis = VALUES(priority_basis), updated_at = CURRENT_TIMESTAMP');
     if (!$stmt) throw new RuntimeException('Unable to save request priority.');
