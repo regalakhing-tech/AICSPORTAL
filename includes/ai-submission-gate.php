@@ -114,6 +114,7 @@ function aics_ai_gate_stage_title(string $stage): string
         'ai_check_admin_review' => 'AICS AI: Being reviewed',
         'ai_check_passed' => 'AICS AI: Documents checked',
         'ai_check_admin_release' => 'Sent to PSWDO for review',
+        'ai_check_urgent' => 'AICS AI: Marked urgent',
         default => 'AICS AI update',
     };
 }
@@ -359,8 +360,10 @@ function aics_ai_gate_priority_indicator(mysqli $connection, int $requestId): st
     $categories = is_array($categories) ? array_map(static fn ($value): string => strtolower(trim((string) $value)), $categories) : [];
     $assistance = (string) ($row['assistance_code'] ?? '');
     try {
+        // Release never waits for AICS AI urgency: a cached analysis is used if there
+        // is one; tools/smart-priority-refresh.php upgrades urgent requests later.
         $urgency = aics_smart_priority_analysis_enabled()
-            ? aics_smart_priority_for_request($connection, $requestId, $categories, $assistance)
+            ? aics_smart_priority_for_request($connection, $requestId, $categories, $assistance, false)
             : aics_medical_urgency_from_document_reviews($connection, $requestId, $assistance);
     } catch (Throwable) {
         return 'STANDARD';
@@ -827,4 +830,26 @@ function aics_ai_gate_fix_instruction(array $doc): string
         return 'The document does not match your application. Check that it is the right document for the right person and upload it again.';
     }
     return 'Take a new, sharp photo in good light that shows the whole page.';
+}
+
+/**
+ * After release the background job may find the medical case urgent: mark the
+ * request urgent (about 1 day) and tell the applicant once. Only requests
+ * released by the AICS AI gate are changed.
+ */
+function aics_ai_gate_note_priority(mysqli $connection, int $requestId, string $indicator): bool
+{
+    if (strtoupper(trim($indicator)) !== 'URGENT') return false;
+    aics_ai_gate_ensure_schema($connection);
+    $eta = aics_ai_gate_eta_days('URGENT');
+    $stmt = $connection->prepare("UPDATE aics_requests SET ai_gate_priority = 'URGENT', ai_gate_eta_days = ? WHERE id = ? AND ai_gate_status = 'released' AND ai_gate_updated_at IS NOT NULL AND COALESCE(ai_gate_priority, '') <> 'URGENT'");
+    $stmt->bind_param('ii', $eta, $requestId);
+    $stmt->execute();
+    $changed = $stmt->affected_rows === 1;
+    $stmt->close();
+    if (!$changed) return false;
+    $reference = (string) ($connection->query('SELECT reference_no FROM aics_requests WHERE id = ' . (int) $requestId)?->fetch_row()[0] ?? '');
+    aics_ai_gate_log_event($connection, $requestId, 'ai_priority_urgent', null, null, 'AICS AI found the medical case urgent. Expected processing time: about ' . $eta . ' day(s).', null);
+    aics_ai_gate_notify($connection, $requestId, 'ai_check_urgent', 'AICS AI marked request ' . $reference . ' as urgent. Expected processing time: about ' . $eta . ' day(s).');
+    return true;
 }

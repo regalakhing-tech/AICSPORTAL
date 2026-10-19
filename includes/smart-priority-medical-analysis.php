@@ -455,7 +455,8 @@ function aics_smart_priority_cache_fingerprint(array $documents, string $prompt,
 }
 
 /** Failed calls retry after five minutes. */
-function aics_smart_priority_cached_analyze(array $documents): ?array
+/** Cache file for these medical documents, or null when no safe cache folder is available. */
+function aics_smart_priority_cache_file(array $documents): ?string
 {
     $root = rtrim(aics_smart_priority_setting('AICS_EXTERNAL_AI_STATE_ROOT', 'C:\\xampp\\aics_private\\external_ai'), '\\/') . DIRECTORY_SEPARATOR . 'smart_priority';
     $project = realpath(__DIR__ . '/../..');
@@ -464,11 +465,48 @@ function aics_smart_priority_cached_analyze(array $documents): ?array
     $normalizedRoot = strtolower(str_replace('\\', '/', (string) $resolved));
     $normalizedProject = strtolower(rtrim(str_replace('\\', '/', (string) $project), '/'));
     if ($resolved === false || ($project !== false && ($normalizedRoot === $normalizedProject ||
-        str_starts_with($normalizedRoot, $normalizedProject . '/')))) return aics_smart_priority_gemini_analyze($documents);
+        str_starts_with($normalizedRoot, $normalizedProject . '/')))) return null;
     $contract = aics_smart_priority_cache_contract();
     $fingerprint = aics_smart_priority_cache_fingerprint($documents, $contract['prompt'], $contract['schema']);
-    if ($fingerprint === null) return aics_smart_priority_gemini_analyze($documents);
-    $cache = $resolved . DIRECTORY_SEPARATOR . $fingerprint . '.json';
+    return $fingerprint === null ? null : $resolved . DIRECTORY_SEPARATOR . $fingerprint . '.json';
+}
+
+/**
+ * The cached AICS AI urgency analysis for these documents, without calling AICS AI.
+ *
+ * @return array{hit:bool, result:?array}
+ */
+function aics_smart_priority_cache_lookup(array $documents): array
+{
+    $cache = aics_smart_priority_cache_file($documents);
+    $stored = $cache !== null && is_file($cache) ? json_decode((string) @file_get_contents($cache), true) : null;
+    if (is_array($stored) && (int) ($stored['expires'] ?? 0) > time()) {
+        return ['hit' => true, 'result' => is_array($stored['result'] ?? null) ? $stored['result'] : null];
+    }
+    return ['hit' => false, 'result' => null];
+}
+
+/**
+ * Smart Priority from the cached analysis only, for page loads that must not
+ * wait for AICS AI. 'pending' => true means the analysis has not run yet.
+ */
+function aics_smart_priority_cache_only_assess(array $beneficiaryCategories, string $assistanceCode, array $documents): array
+{
+    $pending = false;
+    $cachedAnalyze = static function (array $medicalDocuments) use (&$pending): ?array {
+        $cached = aics_smart_priority_cache_lookup($medicalDocuments);
+        if (!$cached['hit']) $pending = true;
+        return $cached['result'];
+    };
+    $result = aics_smart_priority_assess($beneficiaryCategories, $assistanceCode, $documents, $cachedAnalyze);
+    return $pending ? $result + ['pending' => true] : $result;
+}
+
+function aics_smart_priority_cached_analyze(array $documents): ?array
+{
+    $cache = aics_smart_priority_cache_file($documents);
+    if ($cache === null) return aics_smart_priority_gemini_analyze($documents);
+    $resolved = dirname($cache);
     $stored = is_file($cache) ? json_decode((string) @file_get_contents($cache), true) : null;
     if (is_array($stored) && (int) ($stored['expires'] ?? 0) > time()) return $stored['result'] ?? null;
     $result = aics_smart_priority_gemini_analyze($documents);
@@ -482,8 +520,13 @@ function aics_smart_priority_cached_analyze(array $documents): ?array
 }
 
 /** Query only already-uploaded medical slots; the Valid ID is never selected. */
+/**
+ * Smart Priority for a request. With $allowAnalysis = false (page loads) only a
+ * cached AICS AI analysis is used and 'pending' => true marks a missing one; the
+ * background job (tools/smart-priority-refresh.php) runs the analysis.
+ */
 function aics_smart_priority_for_request(mysqli $connection, int $requestId, array $beneficiaryCategories,
-                                         string $assistanceCode): array
+                                         string $assistanceCode, bool $allowAnalysis = true): array
 {
     if (!aics_smart_priority_qualifies($beneficiaryCategories, $assistanceCode)) {
         return ['indicator' => 'STANDARD', 'basis' => 'Smart Priority applies to Medical Assistance only.'];
@@ -506,5 +549,6 @@ function aics_smart_priority_for_request(mysqli $connection, int $requestId, arr
     } finally {
         if ($statement instanceof mysqli_stmt) $statement->close();
     }
+    if (!$allowAnalysis) return aics_smart_priority_cache_only_assess($beneficiaryCategories, $assistanceCode, $documents);
     return aics_smart_priority_assess($beneficiaryCategories, $assistanceCode, $documents, 'aics_smart_priority_cached_analyze');
 }

@@ -1521,9 +1521,13 @@ function pswdo_required_documents_by_assistance(mysqli $connection): array
 }
 
 /**
+ * Page loads pass $allowAnalysis = false: Smart Priority then uses the cached
+ * AICS AI analysis only and never waits for AI; while an analysis is pending the
+ * stored urgency is kept. tools/smart-priority-refresh.php runs the analysis.
+ *
  * @param array<string, mixed> $request
  */
-function pswdo_refresh_request_scoring(mysqli $connection, array $request, ?int $updatedByAccountId): void
+function pswdo_refresh_request_scoring(mysqli $connection, array $request, ?int $updatedByAccountId, bool $allowAnalysis = false): void
 {
     $requestId = (int) ($request['id'] ?? 0);
     if ($requestId <= 0) return;
@@ -1542,12 +1546,20 @@ function pswdo_refresh_request_scoring(mysqli $connection, array $request, ?int 
     $categories = json_decode((string) ($request['client_categories_json'] ?? '[]'), true);
     $categories = is_array($categories) ? array_map(static fn($value): string => strtolower(trim((string) $value)), $categories) : [];
     $urgency = aics_smart_priority_analysis_enabled()
-        ? aics_smart_priority_for_request($connection, $requestId, $categories, (string) ($request['assistance_code'] ?? ''))
+        ? aics_smart_priority_for_request($connection, $requestId, $categories, (string) ($request['assistance_code'] ?? ''), $allowAnalysis)
         : aics_medical_urgency_from_document_reviews($connection, $requestId, (string) ($request['assistance_code'] ?? ''));
+    if (!empty($urgency['pending'])) {
+        $storedStmt = $connection->prepare('SELECT urgency_indicator FROM aics_requests WHERE id = ? LIMIT 1');
+        $storedStmt->bind_param('i', $requestId);
+        $storedStmt->execute();
+        $stored = strtoupper(trim((string) ($storedStmt->get_result()?->fetch_row()[0] ?? '')));
+        $storedStmt->close();
+        if (in_array($stored, ['URGENT', 'HIGH', 'STANDARD'], true)) $urgency['indicator'] = $stored;
+        $urgency['basis'] = 'AICS AI medical urgency analysis is in progress.';
+    }
     if (aics_smart_priority_analysis_enabled()) $priority = aics_smart_priority_storage_values($urgency['indicator']);
     $categoryBasis = in_array('senior_citizen', $categories, true) ? 'Senior Citizen' : (in_array('pwd', $categories, true) ? 'PWD' : 'Other beneficiary category');
     $basis = $categoryBasis . ' | ' . pswdo_assistance_label((string) ($request['assistance_code'] ?? '')) . ' | ' . $urgency['basis'];
-    $connection->query("ALTER TABLE aics_request_prioritization ADD COLUMN IF NOT EXISTS priority_basis VARCHAR(700) DEFAULT NULL AFTER priority_level");
     $requestUpdate = $connection->prepare('UPDATE aics_requests SET urgency_indicator = ? WHERE id = ? LIMIT 1');
     if ($requestUpdate) { $requestUpdate->bind_param('si', $urgency['indicator'], $requestId); $requestUpdate->execute(); $requestUpdate->close(); }
     $priStmt = $connection->prepare('INSERT INTO aics_request_prioritization (request_id, urgency_score, urgency_indicator, vulnerability_score, readiness_score, risk_penalty, priority_score, priority_level, priority_basis, updated_by_account_id) VALUES (?, 0, ?, 0, 0, 0, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE urgency_score = 0, urgency_indicator = VALUES(urgency_indicator), vulnerability_score = 0, readiness_score = 0, risk_penalty = 0, priority_score = VALUES(priority_score), priority_level = VALUES(priority_level), priority_basis = VALUES(priority_basis), updated_by_account_id = VALUES(updated_by_account_id), updated_at = CURRENT_TIMESTAMP');
@@ -1567,7 +1579,7 @@ function pswdo_calculate_application_priority(array $request): array
 /** Refresh advisory priority from existing document-review results before queue ranking. */
 function pswdo_refresh_smart_priorities(mysqli $connection): void
 {
-    $sql = "SELECT r.id, r.client_categories_json, r.assistance_types_json, at.assistance_code FROM aics_requests r LEFT JOIN (SELECT request_id, MIN(assistance_type_id) AS assistance_type_id FROM aics_request_assistance GROUP BY request_id) ra ON ra.request_id = r.id LEFT JOIN aics_assistance_types at ON at.id = ra.assistance_type_id WHERE LOWER(TRIM(r.request_status)) NOT IN ('released', 'not approved', 'not_approved', 'cancelled')";
+    $sql = "SELECT r.id, r.client_categories_json, r.assistance_types_json, at.assistance_code FROM aics_requests r LEFT JOIN (SELECT request_id, MIN(assistance_type_id) AS assistance_type_id FROM aics_request_assistance GROUP BY request_id) ra ON ra.request_id = r.id LEFT JOIN aics_assistance_types at ON at.id = ra.assistance_type_id WHERE LOWER(TRIM(r.request_status)) NOT IN ('released', 'not approved', 'not_approved', 'cancelled') AND " . aics_ai_gate_visible_sql('r');
     $result = $connection->query($sql);
     while ($row = $result?->fetch_assoc()) {
         $assistance = trim((string) ($row['assistance_code'] ?? ''));

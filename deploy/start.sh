@@ -54,6 +54,15 @@ runuser -u www-data -- /usr/local/bin/php "$APP/tools/ai-gate-sync.php" --health
         sleep 60
     done
 ) &
+# Smart Priority (AICS AI medical urgency) runs here, in the background, so PSWDO
+# pages never wait for it.
+(
+    set +e
+    while true; do
+        sleep 120
+        runuser -u www-data -- /usr/local/bin/php "$APP/tools/smart-priority-refresh.php" --quiet
+    done
+) &
 
 # mod_php needs the prefork MPM only; remove any other MPM before Apache starts.
 echo "MPMs found: $(ls /etc/apache2/mods-enabled | grep '^mpm_' | tr '\n' ' ')"
