@@ -29,6 +29,8 @@ if ($accountId <= 0) {
 }
 
 $connection = null;
+$obsoleteFile = '';
+$returnToStatus = false;
 
 try {
     $connection = aics_db_connect();
@@ -38,6 +40,7 @@ try {
 
     $actionMode = strtolower(trim((string) ($_POST['action_mode'] ?? 'full_upload')));
     if ($actionMode === 'reupload_single') {
+        $returnToStatus = true;
         $targetRequestId = (int) ($_POST['request_id'] ?? 0);
         $targetDocType = aics_normalize_document_type((string) ($_POST['document_type'] ?? ''));
         if ($targetRequestId <= 0 || $targetDocType === '') {
@@ -56,7 +59,25 @@ try {
         $connection->begin_transaction();
         $normalized = normalize_single_upload($_FILES['reupload_file'] ?? null, $targetDocType);
 
-        // A replacement is a new document record; retain prior review history.
+        // One document per type: the replacement takes the old one's place (its AI
+        // review goes with it). Documents PSWDO already checked stay locked.
+        $existing = $connection->prepare('SELECT d.id, d.stored_name, COALESCE(dr.is_checked, 0) AS is_checked FROM aics_request_documents d LEFT JOIN aics_request_document_reviews dr ON dr.request_document_id = d.id WHERE d.request_id = ? AND d.document_type = ? LIMIT 1');
+        $existing->bind_param('is', $requestId, $targetDocType);
+        $existing->execute();
+        $existingDoc = $existing->get_result()?->fetch_assoc();
+        $existing->close();
+        if (is_array($existingDoc)) {
+            if ((int) $existingDoc['is_checked'] === 1) {
+                throw new RuntimeException('This document was already checked by PSWDO and cannot be replaced.');
+            }
+            $remove = $connection->prepare('DELETE FROM aics_request_documents WHERE id = ? AND request_id = ?');
+            $existingId = (int) $existingDoc['id'];
+            $remove->bind_param('ii', $existingId, $requestId);
+            $remove->execute();
+            $remove->close();
+            $oldName = basename((string) $existingDoc['stored_name']);
+            if ($oldName !== '') $obsoleteFile = $uploadDirectory . DIRECTORY_SEPARATOR . $oldName;
+        }
 
         $savedName = sprintf('%s-%s-%s.%s', $targetDocType, date('YmdHis'), bin2hex(random_bytes(4)), $normalized['extension']);
         $absolutePath = $uploadDirectory . DIRECTORY_SEPARATOR . $savedName;
@@ -88,10 +109,11 @@ try {
         }
 
         $connection->commit();
+        if ($obsoleteFile !== '' && is_file($obsoleteFile)) @unlink($obsoleteFile);
         if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
         aics_queue_ai_reviews_after_commit($connection, $requestId);
         $connection->close();
-        redirect_status('Document re-uploaded. Verification is queued for PSWDO review.', true);
+        redirect_status('Document replaced. AICS AI is checking it now.', true);
     }
 
     [$requestId, $referenceNo, $assistanceTypes] = find_latest_request($connection, $accountId);
@@ -190,7 +212,13 @@ try {
         }
     }
 
-    redirect_documents($exception->getMessage(), false);
+    // Database errors are not shown to applicants.
+    $message = $exception instanceof mysqli_sql_exception
+        ? 'The document could not be saved right now. Please try again.'
+        : $exception->getMessage();
+    if ($exception instanceof mysqli_sql_exception) error_log('Applicant document upload failed: code=' . $exception->getCode());
+    if ($returnToStatus) redirect_status($message, false);
+    redirect_documents($message, false);
 }
 
 function redirect_documents(string $message, bool $success): void
@@ -204,7 +232,7 @@ function redirect_documents(string $message, bool $success): void
 function redirect_status(string $message, bool $success): void
 {
     $status = $success ? 'success' : 'error';
-    $location = '../dashboard.php?page=status&upload=' . urlencode($status) . '&message=' . urlencode($message);
+    $location = 'application-status.php?upload=' . urlencode($status) . '&message=' . urlencode($message);
     header('Location: ' . $location);
     exit;
 }

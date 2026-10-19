@@ -11195,6 +11195,59 @@ body .status-page .ai-check-note {
 .submit-upload-progress > span { display: block; width: var(--upload, 0%); height: 100%; background: var(--primary); transition: width 0.2s ease; }
 @media (prefers-reduced-motion: reduce) { .submit-upload-progress > span { transition: none; } }
 
+/* Application Status: replace a document AICS AI could not accept. */
+body .status-page .ai-gate-hold-lead { margin: 2px 0 10px; }
+body .status-page .ai-gate-fix-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+body .status-page .ai-gate-fix {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 12px 14px;
+  border: 1px solid #fecdd3;
+  border-radius: 12px;
+  background: #ffffff;
+}
+body .status-page .ai-gate-fix-name { grid-column: 1; font-weight: 700; color: #881337; }
+body .status-page .ai-gate-fix-text { grid-column: 1; color: #4c0519; }
+body .status-page .ai-gate-fix-form { grid-column: 2; grid-row: 1 / span 2; margin: 0; }
+body .status-page .ai-gate-fix-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--touch-target);
+  padding: 0 16px;
+  border-radius: 10px;
+  background: #e11d48;
+  color: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+body .status-page .ai-gate-fix-button:hover { background: #be123c; }
+body .status-page .ai-gate-fix-button:focus-within { outline: 3px solid #fda4af; outline-offset: 2px; }
+body .status-page .ai-gate-fix-button input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+
+/* Step 2 once AICS AI has a result: still icons, no spinner. */
+body .status-page .status-stage-attention { border-color: #fdba74; background: #fff7ed; }
+body .status-page .status-stage-attention .stage-icon-circle.icon-attention { background: #ea580c; color: #ffffff; }
+body .status-page .status-stage-attention .stage-step-tag { color: #c2410c; font-weight: 800; }
+body .status-page .status-stage-review { border-color: #fde68a; background: #fffbeb; }
+body .status-page .status-stage-review .stage-icon-circle.icon-review { background: #d97706; color: #ffffff; }
+body .status-page .status-stage-review .stage-step-tag { color: #b45309; font-weight: 800; }
+body .status-page .badge.attention,
+body .status-page .badge.review {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+body .status-page .badge.attention { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+body .status-page .badge.review { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+
 /* AICS AI submission gate notices (Application Status). */
 body .status-page .ai-gate-notice {
   display: flex;
@@ -11321,4 +11374,8 @@ body .status-page .ai-gate-notice.is-eta > i { color: #059669; }
   body .status-page .ai-check-live { padding: 14px 14px 12px; border-radius: 14px; }
   body .status-page .ai-check-item { grid-template-columns: 20px minmax(0, 1fr); }
   body .status-page .ai-check-step { grid-column: 2; text-align: left; }
+
+  body .status-page .ai-gate-fix { grid-template-columns: minmax(0, 1fr); }
+  body .status-page .ai-gate-fix-form { grid-column: 1; grid-row: auto; margin-top: 6px; }
+  body .status-page .ai-gate-fix-button { width: 100%; justify-content: center; white-space: normal; }
 }

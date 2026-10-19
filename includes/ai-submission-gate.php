@@ -678,7 +678,12 @@ function aics_ai_gate_applicant_items(mysqli $connection, int $requestId): array
     $items = [];
     foreach (array_merge($decision['blocking'], $decision['uncertain'], $decision['retry']) as $doc) {
         $status = !empty($doc['local_only']) ? 'needs_staff_review' : (string) ($doc['reason_status'] ?? $doc['status'] ?? '');
-        $items[] = ['label' => aics_document_requirement_label((string) ($doc['document_type'] ?? '')), 'reason' => aics_ai_gate_document_reason($status)];
+        $items[] = [
+            'type' => aics_normalize_document_type((string) ($doc['document_type'] ?? '')),
+            'label' => aics_document_requirement_label((string) ($doc['document_type'] ?? '')),
+            'reason' => aics_ai_gate_document_reason($status),
+            'fix' => aics_ai_gate_fix_instruction($doc),
+        ];
     }
     return $items;
 }
@@ -791,4 +796,35 @@ function aics_ai_gate_applicant_progress(mysqli $connection, int $requestId): ar
         'checked' => count(array_filter($documents, static fn (array $doc): bool => $doc['state'] === 'done')),
         'documents' => $documents,
     ];
+}
+
+/**
+ * One plain instruction telling the applicant how to fix a document AICS AI
+ * could not accept, based on which of its checks failed.
+ */
+function aics_ai_gate_fix_instruction(array $doc): string
+{
+    $findings = is_array($doc['findings'] ?? null) ? $doc['findings'] : [];
+    $verdict = is_array($findings['verdict'] ?? null) ? $findings['verdict'] : [];
+    $required = trim((string) ($verdict['required_label'] ?? '')) ?: aics_document_requirement_label((string) ($doc['document_type'] ?? ''));
+    $detected = trim((string) ($verdict['detected_label'] ?? ''));
+    $state = static fn (string $key): string => strtolower(trim((string) ($findings['thesis_checks'][$key]['state'] ?? '')));
+    $wrongDocument = ($findings['checks']['document_type']['classification']['decision'] ?? '') === 'wrong_slot'
+        || ($detected !== '' && strcasecmp($detected, $required) !== 0 && $state('consistent') === 'fail');
+    if ($wrongDocument) {
+        return $detected !== ''
+            ? "This looks like a {$detected}, not a {$required}. Upload your {$required}."
+            : "This is not a {$required}. Upload your {$required}.";
+    }
+    if ($state('unaltered') === 'fail' || $state('untampered') === 'fail') return 'This document looks edited. Upload a photo or scan of the original document.';
+    if ($state('consistent') === 'fail') return 'The name or details on this document do not match your application. Upload the document issued for the person named in your application.';
+    $unreadable = in_array($state('readable'), ['fail', 'review'], true);
+    $incomplete = in_array($state('complete'), ['fail', 'review'], true);
+    if ($unreadable && $incomplete) return 'Take a new, sharp photo in good light that shows the whole page.';
+    if ($unreadable) return 'The photo is blurry or hard to read. Take a new photo in good light and keep the camera steady.';
+    if ($incomplete) return 'Part of the document is missing or cut off. Upload a photo or scan that shows the whole document.';
+    if ((string) ($doc['reason_status'] ?? $doc['status'] ?? '') === 'flagged_inconsistency') {
+        return 'The document does not match your application. Check that it is the right document for the right person and upload it again.';
+    }
+    return 'Take a new, sharp photo in good light that shows the whole page.';
 }

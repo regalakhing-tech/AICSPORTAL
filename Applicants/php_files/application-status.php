@@ -411,8 +411,8 @@ function status_gate_stage_override(array $rows, string $gateStatus): array
 {
     $step = match ($gateStatus) {
         'pending' => ['meta' => 'AICS AI is checking your documents.', 'badge' => 'pending', 'badge_label' => 'Checking'],
-        'held' => ['meta' => 'Replace the document AICS AI could not accept.', 'badge' => 'pending', 'badge_label' => 'Action Needed'],
-        'admin_review' => ['meta' => 'Your documents are being reviewed before they go to PSWDO.', 'badge' => 'pending', 'badge_label' => 'In Review'],
+        'held' => ['meta' => 'Replace the document AICS AI could not accept.', 'badge' => 'attention', 'badge_label' => 'Action Needed'],
+        'admin_review' => ['meta' => 'Your documents are being reviewed before they go to PSWDO.', 'badge' => 'review', 'badge_label' => 'In Review'],
         default => null,
     };
     if ($step !== null && isset($rows[1])) $rows[1] = array_merge($rows[1], $step);
@@ -1576,16 +1576,30 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
 
               <?php $gateStatus = (string) ($req['gate_status'] ?? 'released'); ?>
               <?php if ($gateStatus === 'held'): ?>
+                <?php $gateItems = (array) ($req['gate_items'] ?? []); ?>
                 <div class="ai-gate-notice ai-gate-hold-banner" role="alert">
                   <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
                   <div>
-                    <strong>AICS AI found a problem with your documents</strong>
-                    <ul>
-                      <?php foreach ((array) ($req['gate_items'] ?? []) as $gateItem): ?>
-                        <li><?= status_h((string) ($gateItem['label'] ?? 'Document')) ?> &mdash; <?= status_h((string) ($gateItem['reason'] ?? 'needs a clearer copy')) ?></li>
+                    <strong><?= count($gateItems) === 1 ? 'Replace this document to continue' : 'Replace these documents to continue' ?></strong>
+                    <p class="ai-gate-hold-lead">AICS AI checked your application and could not accept <?= count($gateItems) === 1 ? 'one document' : count($gateItems) . ' documents' ?>. Replace <?= count($gateItems) === 1 ? 'it' : 'them' ?> here and AICS AI will check again right away.</p>
+                    <ul class="ai-gate-fix-list">
+                      <?php foreach ($gateItems as $gateItem): ?>
+                        <li class="ai-gate-fix">
+                          <span class="ai-gate-fix-name"><?= status_h((string) ($gateItem['label'] ?? 'Document')) ?></span>
+                          <span class="ai-gate-fix-text"><?= status_h((string) ($gateItem['fix'] ?? 'Take a new, sharp photo in good light that shows the whole page.')) ?></span>
+                          <form method="post" action="<?= status_h($docUploadUrl) ?>" enctype="multipart/form-data" class="ai-gate-fix-form">
+                            <input type="hidden" name="action_mode" value="reupload_single">
+                            <input type="hidden" name="request_id" value="<?= (int) ($req['id'] ?? 0) ?>">
+                            <input type="hidden" name="document_type" value="<?= status_h((string) ($gateItem['type'] ?? '')) ?>">
+                            <label class="ai-gate-fix-button">
+                              <i class="fas fa-upload" aria-hidden="true"></i>
+                              <span class="ai-gate-fix-button-text">Upload a new file</span>
+                              <input type="file" name="reupload_file" accept=".pdf,.jpg,.jpeg,.png" required aria-label="Upload a new <?= status_h((string) ($gateItem['label'] ?? 'document')) ?>" onchange="this.form.querySelector('.ai-gate-fix-button-text').textContent = 'Uploading\u2026'; this.form.submit();">
+                            </label>
+                          </form>
+                        </li>
                       <?php endforeach; ?>
                     </ul>
-                    <a href="<?= status_h($dashboardUrl) ?>?page=cancel-request">Upload a clear replacement in Manage Applications</a>. It will be checked again automatically.
                   </div>
                 </div>
               <?php elseif ($gateStatus === 'pending'): ?>
@@ -1648,6 +1662,10 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                             <span class="stage-icon-circle icon-pending" title="In Progress"><span class="stage-pulse-beacon"></span><i class="fas fa-spinner fa-spin-pulse"></i></span>
                           <?php elseif ($stageBadge === 'danger'): ?>
                             <span class="stage-icon-circle icon-danger" title="Alert"><i class="fas fa-xmark"></i></span>
+                          <?php elseif ($stageBadge === 'attention'): ?>
+                            <span class="stage-icon-circle icon-attention" title="Action needed"><i class="fas fa-exclamation"></i></span>
+                          <?php elseif ($stageBadge === 'review'): ?>
+                            <span class="stage-icon-circle icon-review" title="In review"><i class="fas fa-hourglass-half"></i></span>
                           <?php else: ?>
                             <span class="stage-icon-circle icon-muted" title="Step <?= $stageStepNum ?>"><?= $stageStepNum ?></span>
                           <?php endif; ?>
@@ -1782,8 +1800,10 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                       <p>We could not match requirements for this application type yet.</p>
                     </div>
                   <?php else: ?>
+                    <?php $gateFixes = array_column((array) ($req['gate_items'] ?? []), 'fix', 'type'); ?>
                     <?php foreach ($requiredStates as $state): ?>
                       <?php if (!is_array($state)) { continue; } ?>
+                      <?php $aiFix = (string) ($gateFixes[(string) ($state['type'] ?? '')] ?? ''); ?>
                       <?php $isUploaded = (bool) ($state['uploaded'] ?? false); ?>
                       <?php $isChecked = (bool) ($state['checked'] ?? false); ?>
                       <?php $reviewStatus = strtolower(trim((string) ($state['review_status'] ?? 'pending'))); ?>
@@ -1801,6 +1821,8 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                             <?php elseif ($isUploaded && in_array($reviewStatus, ['needs_reupload', 'invalid'], true)): ?>
                               Uploaded <?= status_h((string) ($state['label'] ?? 'document')) ?>
                               <?= (string) (($state['reviewed_at_label'] ?? '') !== '' ? (' · Reviewed ' . (string) $state['reviewed_at_label']) : '') ?>
+                            <?php elseif ($isUploaded && $aiFix !== ''): ?>
+                              AICS AI could not accept this document. <?= status_h($aiFix) ?>
                             <?php elseif ($isUploaded): ?>
                               Uploaded <?= status_h((string) ($state['label'] ?? 'document')) ?>
                               · Uploaded — waiting for PSWDO review
@@ -1809,9 +1831,9 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                             <?php endif; ?>
                           </span>
                         </div>
-                        <span class="badge badge-senior <?= $isChecked ? 'ok' : ($isUploaded ? 'pending' : 'danger') ?>">
+                        <span class="badge badge-senior <?= $isChecked ? 'ok' : ($isUploaded && $aiFix === '' ? 'pending' : 'danger') ?>">
                           <?=
-                            $reviewStatus === 'needs_reupload' ? 'Needs Changes'
+                            $reviewStatus === 'needs_reupload' || $aiFix !== '' ? 'Needs Changes'
                             : ($reviewStatus === 'invalid' ? 'Invalid'
                             : ($isChecked ? 'Checked' : ($isUploaded ? 'Uploaded' : 'Not Uploaded')))
                           ?>
