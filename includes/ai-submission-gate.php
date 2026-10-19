@@ -69,6 +69,9 @@ function aics_ai_gate_decide(array $progress, ?int $maxRetries = null): array
             }
         } elseif (in_array($status, AICS_AI_GATE_BLOCKING_STATUSES, true)) {
             $blocking[] = $document;
+        } elseif (!empty($document['unclear'])) {
+            // Only readability/completeness in doubt: the applicant can fix it with a clearer photo.
+            $blocking[] = ['reason_status' => 'needs_reupload'] + $document;
         } elseif (!in_array($status, AICS_AI_GATE_PASSED_STATUSES, true)) {
             $uncertain[] = $document;
         }
@@ -123,7 +126,7 @@ function aics_ai_gate_applicant_message(string $stage, string $referenceNo, arra
             $parts = [];
             foreach ($items as $item) {
                 $label = aics_document_requirement_label((string) ($item['document_type'] ?? ''));
-                $parts[] = $label . ' (' . aics_ai_gate_document_reason(strtolower((string) ($item['status'] ?? ''))) . ')';
+                $parts[] = $label . ' (' . aics_ai_gate_document_reason(strtolower((string) ($item['reason_status'] ?? $item['status'] ?? ''))) . ')';
             }
             return 'AICS AI found a problem with ' . count($items) . ' document(s) in request ' . $referenceNo . ': '
                 . implode('; ', $parts) . '. Upload a clear replacement in Manage Applications. It will be checked again automatically.';
@@ -135,6 +138,13 @@ function aics_ai_gate_applicant_message(string $stage, string $referenceNo, arra
         default => throw new InvalidArgumentException('Unknown AICS AI gate notice.'),
     };
     return mb_strimwidth($text, 0, 600, '…');
+}
+
+/** SQL condition for requests the applicant has not cancelled (the gate leaves cancelled ones alone). */
+function aics_ai_gate_active_sql(string $alias = ''): string
+{
+    $column = ($alias !== '' ? $alias . '.' : '') . 'request_status';
+    return "LOWER(TRIM(COALESCE({$column}, ''))) NOT IN ('cancelled', 'canceled')";
 }
 
 /** SQL condition that keeps PSWDO queries to released requests. */
@@ -203,6 +213,12 @@ function aics_ai_gate_stale_minutes(): int
     return max(1, (int) (getenv('AICS_AI_STALE_MINUTES') ?: 30));
 }
 
+/** A worker counts as running while it reported progress (or started) this recently. */
+function aics_ai_gate_heartbeat_minutes(): int
+{
+    return aics_ai_gate_env_int('AICS_AI_WORKER_HEARTBEAT_MINUTES', 10);
+}
+
 /**
  * Start an AI worker. Tests set AICS_AI_GATE_TEST_LAUNCH=ok|fail (with
  * AICS_HTTP_TEST_MODE=1) to record the launch without starting Python.
@@ -217,19 +233,24 @@ function aics_ai_gate_launch(string $workerArgument, int $id, string $leaseToken
     return aics_launch_document_ai_processor($id, $workerArgument, $leaseToken);
 }
 
-/** Requests with a live AI worker: a fresh request lease, or a claimed review still inside the stall window. */
+/**
+ * Requests with a live AI worker: a lease taken in the last few minutes (the
+ * worker is starting), or a claimed review whose worker reported progress
+ * recently. A crashed worker stops counting after the heartbeat window instead
+ * of holding its slot until the 30-minute stall recovery.
+ */
 function aics_ai_gate_busy_workers(mysqli $connection): int
 {
     aics_ensure_request_ai_worker_lease_schema($connection);
-    $stale = aics_ai_gate_stale_minutes();
+    $window = aics_ai_gate_heartbeat_minutes();
     $stmt = $connection->prepare("SELECT COUNT(*) AS total FROM (
         SELECT request_id FROM document_ai_request_worker_leases WHERE acquired_at > DATE_SUB(CURRENT_TIMESTAMP, INTERVAL ? MINUTE)
         UNION
         SELECT d.request_id FROM document_ai_reviews ai INNER JOIN aics_request_documents d ON d.id = ai.request_document_id
-        WHERE ai.status = 'processing' AND ai.attempt_count > 0 AND ai.processing_started_at > DATE_SUB(CURRENT_TIMESTAMP, INTERVAL ? MINUTE)
+        WHERE ai.status = 'processing' AND ai.attempt_count > 0 AND COALESCE(ai.worker_heartbeat_at, ai.processing_started_at) > DATE_SUB(CURRENT_TIMESTAMP, INTERVAL ? MINUTE)
     ) busy");
     if (!$stmt) throw new RuntimeException('Unable to count AI workers.');
-    $stmt->bind_param('ii', $stale, $stale);
+    $stmt->bind_param('ii', $window, $window);
     $stmt->execute();
     $total = (int) ($stmt->get_result()?->fetch_assoc()['total'] ?? 0);
     $stmt->close();
@@ -255,12 +276,28 @@ function aics_ai_gate_request_documents(mysqli $connection, int $requestId): arr
         $findings = is_array($findings) ? $findings : [];
         $doc['retry_count'] = (int) ($row['gate_retry_count'] ?? 0);
         $doc['local_only'] = ($findings['verdict']['source'] ?? '') === 'local' && $doc['status'] !== 'processing';
+        $doc['unclear'] = $doc['status'] === 'needs_staff_review' && aics_ai_gate_only_unclear($findings);
         $doc['minutes_since_result'] = isset($row['minutes_since_result']) ? (int) $row['minutes_since_result'] : null;
         $doc['findings'] = $findings;
         $doc['last_error_message'] = (string) ($row['last_error_message'] ?? '');
     }
     unset($doc);
     return $progress;
+}
+
+/**
+ * True when AICS AI doubted only how readable or complete the document is (a
+ * blurry, dark or cut-off photo) and every other check passed. The applicant
+ * can fix that with a clearer photo, so it never needs an admin's time.
+ */
+function aics_ai_gate_only_unclear(array $findings): bool
+{
+    if (($findings['verdict']['source'] ?? '') !== 'gemini' || !is_array($findings['thesis_checks'] ?? null)) return false;
+    $doubts = [];
+    foreach ($findings['thesis_checks'] as $key => $check) {
+        if (strtolower((string) ($check['state'] ?? '')) !== 'pass') $doubts[] = (string) $key;
+    }
+    return $doubts !== [] && array_diff($doubts, ['readable', 'complete']) === [];
 }
 
 /** One-line AI finding for the admin log. */
@@ -462,14 +499,14 @@ function aics_ai_gate_process_request(mysqli $connection, array $request, int &$
  *
  * @return array{released:int, held:int, admin_review:int, dispatched:int, retried:int}
  */
-function aics_ai_gate_sync(mysqli $connection, ?int $requestId = null, bool $drive = true): array
+function aics_ai_gate_sync(mysqli $connection, ?int $requestId = null, bool $drive = true, int $batch = AICS_AI_GATE_SYNC_BATCH): array
 {
     $totals = ['released' => 0, 'held' => 0, 'admin_review' => 0, 'dispatched' => 0, 'retried' => 0];
     aics_ai_gate_ensure_schema($connection);
     aics_ai_gate_purge_events($connection);
-    $sql = "SELECT id, reference_no, ai_gate_status, ai_gate_reason FROM aics_requests WHERE ai_gate_status = 'pending'"
+    $sql = "SELECT id, reference_no, ai_gate_status, ai_gate_reason FROM aics_requests WHERE ai_gate_status = 'pending' AND " . aics_ai_gate_active_sql()
         . ($requestId !== null ? ' AND id = ' . (int) $requestId : '')
-        . ' ORDER BY COALESCE(ai_gate_updated_at, created_at), id LIMIT ' . AICS_AI_GATE_SYNC_BATCH;
+        . ' ORDER BY COALESCE(ai_gate_updated_at, created_at), id LIMIT ' . max(1, $batch);
     $result = $connection->query($sql);
     $requests = $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
     if ($requests === []) return $totals;
@@ -555,7 +592,7 @@ function aics_ai_gate_admin_request_reupload(mysqli $connection, int $requestId,
 function aics_ai_gate_admin_retry(mysqli $connection, ?int $requestId, int $adminAccountId): int
 {
     aics_ai_gate_ensure_schema($connection);
-    $sql = "SELECT id, reference_no, ai_gate_status, ai_gate_reason FROM aics_requests WHERE ai_gate_status IN ('admin_review', 'pending')"
+    $sql = "SELECT id, reference_no, ai_gate_status, ai_gate_reason FROM aics_requests WHERE ai_gate_status IN ('admin_review', 'pending') AND " . aics_ai_gate_active_sql()
         . ($requestId !== null ? ' AND id = ' . (int) $requestId : " AND ai_gate_status = 'admin_review' AND ai_gate_reason = 'ai_unavailable'");
     $result = $connection->query($sql);
     $retried = 0;
@@ -621,7 +658,7 @@ function aics_ai_gate_sync_for_account(mysqli $connection, int $accountId): void
 {
     if ($accountId <= 0) return;
     aics_ai_gate_ensure_schema($connection);
-    $stmt = $connection->prepare("SELECT r.id FROM aics_requests r INNER JOIN aics_account_requests ar ON ar.request_id = r.id WHERE ar.account_id = ? AND r.ai_gate_status = 'pending' ORDER BY r.id DESC LIMIT 5");
+    $stmt = $connection->prepare("SELECT r.id FROM aics_requests r INNER JOIN aics_account_requests ar ON ar.request_id = r.id WHERE ar.account_id = ? AND r.ai_gate_status = 'pending' AND " . aics_ai_gate_active_sql('r') . ' ORDER BY r.id DESC LIMIT 5');
     if (!$stmt) return;
     $stmt->bind_param('i', $accountId);
     $stmt->execute();
@@ -640,7 +677,7 @@ function aics_ai_gate_applicant_items(mysqli $connection, int $requestId): array
     $decision = aics_ai_gate_decide(aics_ai_gate_request_documents($connection, $requestId));
     $items = [];
     foreach (array_merge($decision['blocking'], $decision['uncertain'], $decision['retry']) as $doc) {
-        $status = !empty($doc['local_only']) ? 'needs_staff_review' : (string) ($doc['status'] ?? '');
+        $status = !empty($doc['local_only']) ? 'needs_staff_review' : (string) ($doc['reason_status'] ?? $doc['status'] ?? '');
         $items[] = ['label' => aics_document_requirement_label((string) ($doc['document_type'] ?? '')), 'reason' => aics_ai_gate_document_reason($status)];
     }
     return $items;
@@ -657,7 +694,7 @@ function aics_ai_gate_attention_count(mysqli $connection): int
 {
     aics_ai_gate_ensure_schema($connection);
     $minutes = aics_ai_gate_alert_minutes();
-    $stmt = $connection->prepare("SELECT COUNT(*) AS total FROM aics_requests WHERE ai_gate_status = 'admin_review' OR (ai_gate_status = 'pending' AND COALESCE(ai_gate_updated_at, created_at) < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL ? MINUTE))");
+    $stmt = $connection->prepare("SELECT COUNT(*) AS total FROM aics_requests WHERE " . aics_ai_gate_active_sql() . " AND (ai_gate_status = 'admin_review' OR (ai_gate_status = 'pending' AND COALESCE(ai_gate_updated_at, created_at) < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL ? MINUTE)))");
     if (!$stmt) return 0;
     $stmt->bind_param('i', $minutes);
     $stmt->execute();
@@ -670,7 +707,7 @@ function aics_ai_gate_attention_count(mysqli $connection): int
 function aics_ai_gate_requests_in_state(mysqli $connection, string $state, int $limit = 100): array
 {
     aics_ai_gate_ensure_schema($connection);
-    $stmt = $connection->prepare('SELECT id, reference_no, beneficiary_complete_name, ai_gate_reason, TIMESTAMPDIFF(MINUTE, COALESCE(ai_gate_updated_at, created_at), CURRENT_TIMESTAMP) AS minutes_waiting FROM aics_requests WHERE ai_gate_status = ? ORDER BY COALESCE(ai_gate_updated_at, created_at), id LIMIT ?');
+    $stmt = $connection->prepare('SELECT id, reference_no, beneficiary_complete_name, ai_gate_reason, TIMESTAMPDIFF(MINUTE, COALESCE(ai_gate_updated_at, created_at), CURRENT_TIMESTAMP) AS minutes_waiting FROM aics_requests WHERE ai_gate_status = ? AND ' . aics_ai_gate_active_sql() . ' ORDER BY COALESCE(ai_gate_updated_at, created_at), id LIMIT ?');
     if (!$stmt) return [];
     $stmt->bind_param('si', $state, $limit);
     $stmt->execute();
@@ -701,4 +738,15 @@ function aics_ai_gate_recent_events(mysqli $connection, int $limitRequests = 100
         $groups[$id]['events'][] = $row;
     }
     return array_values($groups);
+}
+
+/**
+ * Gate sync for PSWDO page loads. When the container scheduler and the AI
+ * worker already drive the gate (AICS_AI_GATE_SCHEDULER=1), page loads skip it
+ * so a long queue never slows PSWDO down.
+ */
+function aics_ai_gate_page_sync(mysqli $connection): void
+{
+    if (getenv('AICS_AI_GATE_SCHEDULER') === '1') return;
+    aics_ai_gate_sync($connection);
 }

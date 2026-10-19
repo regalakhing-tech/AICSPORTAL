@@ -34,6 +34,15 @@ foreach (['likely_valid', 'needs_reupload', 'flagged_inconsistency', 'needs_staf
     $localDone = $d([$doc($status, 3, 5, true)]);
     gate_assert($localDone['state'] === 'admin_review' && $localDone['reason'] === 'ai_unavailable', "local-only {$status} goes to admin after retries");
 }
+$unclear = $d([$doc('needs_staff_review', 0, 6) + ['unclear' => true], $doc('likely_valid')]);
+gate_assert($unclear['state'] === 'held' && $unclear['blocking'][0]['review_id'] === 6, 'a document AICS AI found only blurry or incomplete goes back to the applicant');
+gate_assert(str_contains(aics_ai_gate_applicant_message('ai_check_hold', 'X', $unclear['blocking'], 0, 'STANDARD'), '(blurry, cut off, or incomplete)'), 'the applicant is told it is blurry');
+$blur = ['verdict' => ['source' => 'gemini'], 'thesis_checks' => ['complete' => ['state' => 'pass'], 'consistent' => ['state' => 'pass'], 'readable' => ['state' => 'review'], 'unaltered' => ['state' => 'pass'], 'untampered' => ['state' => 'pass']]];
+gate_assert(aics_ai_gate_only_unclear($blur), 'only readability in doubt');
+gate_assert(aics_ai_gate_only_unclear(array_replace_recursive($blur, ['thesis_checks' => ['complete' => ['state' => 'fail']]])), 'readability and completeness in doubt');
+gate_assert(!aics_ai_gate_only_unclear(array_replace_recursive($blur, ['thesis_checks' => ['consistent' => ['state' => 'review']]])), 'a doubtful match is for the admin');
+gate_assert(!aics_ai_gate_only_unclear(array_replace_recursive($blur, ['thesis_checks' => ['readable' => ['state' => 'pass']]])), 'nothing unclear');
+gate_assert(!aics_ai_gate_only_unclear(['verdict' => ['source' => 'local']] + $blur), 'OCR-only results are retried, not judged');
 gate_assert(aics_ai_gate_decide($p([$doc('failed', 3)]))['reason'] === 'ai_failed', 'default retry limit is 4');
 gate_assert(aics_ai_gate_decide($p([$doc('failed', 4)]))['reason'] === 'ai_unavailable', 'default retry limit reached');
 putenv('AICS_AI_GATE_MAX_RETRIES=2'); gate_assert(aics_ai_gate_decide($p([$doc('failed', 2)]))['reason'] === 'ai_unavailable', 'retry limit env override'); putenv('AICS_AI_GATE_MAX_RETRIES');

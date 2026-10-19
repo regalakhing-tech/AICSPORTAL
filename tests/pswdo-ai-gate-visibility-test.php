@@ -35,7 +35,7 @@ foreach (['workflow-action.php', 'ai-ensure-request-current.php', 'ai-ensure-cur
     visibility_assert(str_contains((string) file_get_contents($root . '/Pswdo/php_files/' . $file), 'aics_ai_gate_is_released('), "{$file} must refuse requests still being checked.");
 }
 foreach (['overview-dashboard.php', 'request-management.php', 'prescreening-queue.php'] as $file) {
-    visibility_assert(str_contains((string) file_get_contents($root . '/Pswdo/php_files/' . $file), 'aics_ai_gate_sync('), "{$file} must run the AICS AI gate.");
+    visibility_assert(str_contains((string) file_get_contents($root . '/Pswdo/php_files/' . $file), 'aics_ai_gate_page_sync('), "{$file} must run the AICS AI gate.");
 }
 
 visibility_assert(AICS_DB_NAME === AICS_HTTP_REGRESSION_DB && getenv('AICS_HTTP_TEST_MODE') === '1', 'Use only the isolated regression database.');

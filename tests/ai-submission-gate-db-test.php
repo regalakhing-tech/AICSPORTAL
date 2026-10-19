@@ -231,6 +231,61 @@ $tests['testPurge'] = function () use ($c): void {
     gate_db_assert(gate_count($c, 'aics_ai_gate_events', $id) === 1 && gate_count($c, 'aics_ai_gate_events', $id, "detail = 'recent'") === 1, 'only the 6-day-old record is kept');
 };
 
+$tests['testBlurredDocumentGoesBackToApplicant'] = function () use ($c): void {
+    gate_reset_workers($c);
+    $checks = static fn (string $readable, string $consistent): array => ['verdict' => ['source' => 'gemini', 'headline' => 'Staff review needed', 'reason' => 'The document image is heavily blurred.'],
+        'thesis_checks' => ['complete' => ['state' => 'pass'], 'consistent' => ['state' => $consistent], 'readable' => ['state' => $readable], 'unaltered' => ['state' => 'pass'], 'untampered' => ['state' => 'pass']]];
+    [$blurred] = gate_fixture($c, 'needs_staff_review', ['findings' => $checks('review', 'pass')]);
+    aics_ai_gate_sync($c, $blurred);
+    gate_db_assert(gate_value($c, "SELECT ai_gate_status FROM aics_requests WHERE id = {$blurred}") === 'held', 'a blurred document goes back to the applicant');
+    gate_db_assert(gate_count($c, 'aics_request_notifications', $blurred, "message_text LIKE '%(blurry, cut off, or incomplete)%'") === 1, 'the applicant is told it is blurry');
+    gate_db_assert(aics_ai_gate_applicant_items($c, $blurred)[0]['reason'] === 'blurry, cut off, or incomplete', 'status page names the reason');
+    [$doubtful] = gate_fixture($c, 'needs_staff_review', ['findings' => $checks('pass', 'review')]);
+    aics_ai_gate_sync($c, $doubtful);
+    gate_db_assert(gate_value($c, "SELECT ai_gate_status FROM aics_requests WHERE id = {$doubtful}") === 'admin_review', 'a doubtful match still goes to the admin');
+};
+
+$tests['testCancelledRequestIsIgnored'] = function () use ($c): void {
+    gate_reset_workers($c);
+    [$id] = gate_fixture($c, 'processing');
+    $c->query("UPDATE aics_requests SET request_status = 'cancelled', ai_gate_updated_at = NOW() - INTERVAL 2 HOUR WHERE id = {$id}");
+    $result = aics_ai_gate_sync($c);
+    gate_db_assert($result['dispatched'] === 0 && $GLOBALS['aics_ai_gate_test_launches'] === [], 'no AI work for a cancelled request');
+    gate_db_assert(aics_ai_gate_attention_count($c) === (int) gate_value($c, "SELECT COUNT(*) FROM aics_requests WHERE ai_gate_status = 'admin_review'"), 'a cancelled request raises no admin alert');
+    gate_db_assert(!in_array($id, array_map('intval', array_column(aics_ai_gate_requests_in_state($c, 'pending'), 'id')), true), 'a cancelled request is not listed as waiting');
+    $c->query("UPDATE document_ai_reviews ai JOIN aics_request_documents d ON d.id = ai.request_document_id SET ai.status = 'likely_valid' WHERE d.request_id = {$id}");
+    aics_ai_gate_sync($c, $id);
+    gate_db_assert(gate_count($c, 'aics_request_notifications', $id) === 0, 'a cancelled request is never announced to PSWDO');
+};
+
+$tests['testCrashedWorkerFreesItsSlot'] = function () use ($c): void {
+    gate_reset_workers($c);
+    [$crashed] = gate_fixture($c, 'likely_valid', [], 'special_cases', 'released');
+    $c->query("INSERT INTO document_ai_request_worker_leases (request_id, lease_token, acquired_at) VALUES ({$crashed}, '" . str_repeat('b', 32) . "', NOW() - INTERVAL 20 MINUTE)");
+    gate_db_assert(aics_ai_gate_busy_workers($c) === 0, 'a 20-minute-old lease without heartbeats is not a running worker');
+    [$working] = gate_fixture($c, 'processing', ['attempt_count' => 1, 'started' => 'NOW() - INTERVAL 25 MINUTE']);
+    $c->query("UPDATE document_ai_reviews ai JOIN aics_request_documents d ON d.id = ai.request_document_id SET ai.worker_heartbeat_at = NOW() - INTERVAL 1 MINUTE WHERE d.request_id = {$working}");
+    gate_db_assert(aics_ai_gate_busy_workers($c) === 1, 'a worker with a recent heartbeat is running');
+    $c->query("UPDATE aics_requests SET ai_gate_status = 'released' WHERE id = {$working}");
+    $c->query("DELETE FROM document_ai_request_worker_leases WHERE request_id = {$crashed}");
+};
+
+$tests['testPageSyncDefersToScheduler'] = function () use ($c): void {
+    gate_reset_workers($c);
+    [$id] = gate_fixture($c, 'processing');
+    putenv('AICS_AI_GATE_SCHEDULER=1');
+    aics_ai_gate_page_sync($c);
+    gate_db_assert($GLOBALS['aics_ai_gate_test_launches'] === [], 'with the container scheduler, PSWDO page loads do not drive the AI');
+    putenv('AICS_AI_GATE_SCHEDULER');
+    aics_ai_gate_page_sync($c);
+    gate_db_assert(in_array(['--request-id', $id], $GLOBALS['aics_ai_gate_test_launches'], true), 'without a scheduler, page loads drive the AI');
+    $c->query("UPDATE aics_requests SET ai_gate_status = 'released' WHERE id = {$id}");
+    $many = [];
+    for ($i = 0; $i < 3; $i++) $many[] = gate_fixture($c, 'needs_reupload')[0];
+    $result = aics_ai_gate_sync($c, null, true, 2);
+    gate_db_assert($result['held'] === 2, 'a batch size limits one pass, got ' . $result['held']);
+};
+
 $failed = 0;
 foreach ($tests as $name => $test) {
     try {

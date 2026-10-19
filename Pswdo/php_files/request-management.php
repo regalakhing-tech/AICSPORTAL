@@ -46,7 +46,7 @@ try {
     $connection = aics_db_connect();
     pswdo_ensure_schema($connection);
     // Decide AICS AI checks first so this page lists every request that has passed.
-    aics_ai_gate_sync($connection);
+    aics_ai_gate_page_sync($connection);
     $profile = pswdo_fetch_staff_profile($connection, $accountId, $displayName);
     $displayName = (string) ($profile['display_name'] ?? $displayName);
     $initials = (string) ($profile['initials'] ?? $initials);

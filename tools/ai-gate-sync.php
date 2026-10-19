@@ -52,7 +52,7 @@ try {
             . "\n";
         exit(0);
     }
-    $totals = aics_ai_gate_sync($connection, $requestId);
+    $totals = aics_ai_gate_sync($connection, $requestId, true, 500);
     if (in_array('--quiet', $arguments, true) && array_sum($totals) === 0) exit(0);
     echo 'AICS AI gate: ' . implode(' ', array_map(static fn (string $key, int $value): string => $key . '=' . $value, array_keys($totals), $totals)) . "\n";
     exit(0);
