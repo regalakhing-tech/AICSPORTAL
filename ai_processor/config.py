@@ -31,6 +31,7 @@ class Settings:
     db_user: str = (os.getenv('AICS_TEST_DB_USER') if os.getenv('AICS_HTTP_TEST_MODE', '') == '1' else os.getenv('AICS_DB_USER', 'root')) or ''
     db_password: str = (os.getenv('AICS_TEST_DB_PASSWORD') if os.getenv('AICS_HTTP_TEST_MODE', '') == '1' else os.getenv('AICS_DB_PASS', '')) or ''
     project_root: str = os.getenv('AICS_PROJECT_ROOT', str(_DEFAULT_PROJECT_ROOT))
+    php_executable: str = os.getenv('AICS_PHP_EXECUTABLE', '')
     upload_root: str = os.getenv('AICS_UPLOAD_ROOT', str(_DEFAULT_PROJECT_ROOT / 'Applicants' / 'uploads'))
     poppler_path: str = os.getenv('AICS_POPPLER_PATH', '')
     pdf_timeout_seconds: int = int(os.getenv('AICS_PDF_TIMEOUT_SECONDS', '60'))

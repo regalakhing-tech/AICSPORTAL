@@ -31,6 +31,7 @@ ENV PORT=8080 \
     AICS_AI_REVIEW_ARTIFACT_ROOT=/var/www/html/AICS/AICS/Applicants/uploads/.private/ai_review_artifacts \
     AICS_EXTERNAL_AI_STATE_ROOT=/var/www/html/AICS/AICS/Applicants/uploads/.private/external_ai \
     AICS_EXTERNAL_AI_ENV_FILE=/var/www/html/AICS/AICS/Applicants/uploads/.private/aics-ai.env \
+    AICS_PHP_EXECUTABLE=/usr/local/bin/php \
     AICS_PYTHON_EXECUTABLE=/opt/venv/bin/python \
     AICS_TESSERACT_PATH=/usr/bin/tesseract \
     AICS_POPPLER_PATH=/usr/bin

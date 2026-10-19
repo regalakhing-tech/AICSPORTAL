@@ -3,6 +3,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from .config import SETTINGS, validate_worker_configuration
+from .gate_trigger import trigger_gate_sync
 from .database import connect, claim_one, claim_document, finish, fail, prior_fields, get_request_verification_context, update_stage
 from .document_loader import resolve_path, load_images
 from .image_quality import analyze_document_quality
@@ -320,10 +321,16 @@ if __name__ == '__main__':
         logger.error('AI worker configuration rejected code=%s', exc)
         raise SystemExit(2)
     if args.request_id is not None:
-        process_request(args.request_id, args.dry_run, args.request_lease)
+        try:
+            process_request(args.request_id, args.dry_run, args.request_lease)
+        finally:
+            trigger_gate_sync(SETTINGS.php_executable, SETTINGS.project_root)
         raise SystemExit(0)
     if args.document_id is not None:
-        process_one(args.dry_run, args.document_id)
+        try:
+            process_one(args.dry_run, args.document_id)
+        finally:
+            trigger_gate_sync(SETTINGS.php_executable, SETTINGS.project_root)
         raise SystemExit(0)
     for _ in range(1 if args.once else max(1,args.batch)):
         if not process_one(args.dry_run): break

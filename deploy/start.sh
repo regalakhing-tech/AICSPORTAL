@@ -33,6 +33,18 @@ if [ -d "$MIGRATE" ]; then
 fi
 chown -R www-data:www-data "$APP/Applicants/uploads"
 
+# AICS AI gate: add its columns, log AI health, then start, retry and decide AI
+# checks every minute (as www-data, like the web server and its AI workers).
+php "$APP/tools/ai-gate-sync.php" --schema-only || echo "AICS AI gate schema setup failed."
+runuser -u www-data -- /usr/local/bin/php "$APP/tools/ai-gate-sync.php" --health || echo "AICS AI health check failed."
+(
+    set +e
+    while true; do
+        runuser -u www-data -- /usr/local/bin/php "$APP/tools/ai-gate-sync.php" --quiet
+        sleep 60
+    done
+) &
+
 # mod_php needs the prefork MPM only; remove any other MPM before Apache starts.
 echo "MPMs found: $(ls /etc/apache2/mods-enabled | grep '^mpm_' | tr '\n' ' ')"
 rm -f /etc/apache2/mods-enabled/mpm_event.* /etc/apache2/mods-enabled/mpm_worker.*

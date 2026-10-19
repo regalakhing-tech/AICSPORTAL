@@ -478,6 +478,7 @@ ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `ai_gate_updated_at` DATETI
 ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `ai_gate_priority` VARCHAR(16) NULL DEFAULT NULL;
 ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `ai_gate_eta_days` TINYINT UNSIGNED NULL DEFAULT NULL;
 ALTER TABLE `aics_requests` ADD INDEX IF NOT EXISTS `idx_aics_requests_ai_gate_status` (`ai_gate_status`);
+ALTER TABLE `document_ai_reviews` ADD COLUMN IF NOT EXISTS `gate_retry_count` TINYINT UNSIGNED NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS `aics_ai_gate_events` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `request_id` INT UNSIGNED NOT NULL,
