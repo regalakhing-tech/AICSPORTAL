@@ -466,8 +466,9 @@ else applicantDrawerMedia.addListener(syncApplicantDrawerMode);
 syncApplicantDrawerMode();
 
 function initLogoutConfirm() {
-  const logoutLinks = Array.from(document.querySelectorAll("a.logout-btn"));
-  if (logoutLinks.length === 0) {
+  // Every logout link asks first: the sidebar's, and the header avatar menu's,
+  // which is the only one on phones (the sidebar is hidden there).
+  if (!document.querySelector('a.logout-btn, a[href*="auth-logout.php"]')) {
     return;
   }
 
@@ -515,13 +516,13 @@ function initLogoutConfirm() {
     }
   }
 
-  logoutLinks.forEach((link) => {
-    link.addEventListener("click", (event) => {
-      event.preventDefault();
-      const href = link.getAttribute("href") || "auth-logout.php";
-      openModal(href);
-    });
-  });
+  document.addEventListener("click", (event) => {
+    const link = event.target instanceof Element ? event.target.closest('a[href*="auth-logout.php"]') || event.target.closest("a.logout-btn") : null;
+    if (!(link instanceof HTMLAnchorElement)) return;
+    event.preventDefault();
+    document.querySelectorAll(".account-popover").forEach((menu) => { menu.hidden = true; });
+    openModal(link.getAttribute("href") || "auth-logout.php");
+  }, true); // capture: the avatar menu stops its clicks from bubbling
 
   if (cancelBtn) {
     cancelBtn.addEventListener("click", closeModal);
