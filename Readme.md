@@ -27,9 +27,9 @@ It runs locally on **XAMPP** (Apache + PHP + MySQL), with an optional **Python w
 
 | Portal | Login page | Who uses it | What they can do |
 |---|---|---|---|
-| **Applicant** | `Applicants/login.html` | Members of the public | Sign up with phone OTP (email optional), complete a profile, file an AICS request, upload requirements, track status, read notifications, cancel or edit pending requests, chat with the AICS Guide |
-| **PSWDO** | `Pswdo/login.php` | PSWDO personnel | Pre-screening queue, request management, AI document verdicts, duplicate/repeat-claim checks, smart prioritization (PWD / senior citizen), status decisions, release scheduling, printable reports and GIS forms, map analytics, SMS notices |
-| **Admin** | `ADMIN/login.php` | System administrators | Create and manage staff accounts, account status (active / disabled / locked / banned), security and audit logs, overview dashboard, database backups and maintenance |
+| **Applicant** | `Applicants/login.html` | Members of the public | Sign up with phone OTP (email optional), complete a profile, file an AICS request, upload requirements, track status (including AICS AI re-upload requests and the expected processing time), read notifications, cancel or edit pending requests, chat with the AICS Guide |
+| **PSWDO** | `Pswdo/login.php` | PSWDO personnel | Only requests that passed the AICS AI check. Pre-screening queue, request management, AI document verdicts, duplicate/repeat-claim checks, smart prioritization (urgent medical cases, PWD / senior citizen), status decisions, release scheduling, printable reports and GIS forms, map analytics, SMS notices |
+| **Admin** | `ADMIN/login.php` | System administrators | Create and manage staff accounts, account status (active / disabled / locked / banned), AICS AI Screening (requests the AI could not confirm or check, AI service alerts, 7-day log), security and audit logs, overview dashboard, database backups and maintenance |
 
 Assistance types supported: **Medical**, **Burial**, **Victim of Disaster**, **Special Cases**, and **Persons Affected by High Inflation Rate**. The required documents for each type are seeded by the database schema.
 
@@ -241,6 +241,34 @@ python -m ai_processor.processor --document-id 123     # one specific document
 
 Add `--dry-run` to print IDs and statuses without writing results. Per-launch logs are written to `ai_processor/logs/`.
 
+### AICS AI submission gate
+
+PSWDO only receives requests whose documents passed the AICS AI check:
+
+| AI result | Where the request goes |
+|---|---|
+| Every document valid | **PSWDO**. The applicant is told the expected processing time: about 1 day (urgent), 3 days (senior citizen / PWD medical), 7 days (others) |
+| Blurry, cut off, wrong or edited document | **Back to the applicant** with the document and reason. Re-uploading starts a new check automatically. A photo the AI found only hard to read also goes back to the applicant |
+| AI not sure whether the details match or were changed | **Admin** (AICS AI Screening page): release to PSWDO or ask for a re-upload |
+| AI failed, stalled, or only local OCR ran | Retried automatically with waits of 1, 5, 15 and 30 minutes, then **Admin** with a warning. Never PSWDO |
+
+`tools/ai-gate-sync.php` starts queued checks (at most `AICS_AI_MAX_WORKERS` at once), retries failures and applies decisions. On Railway the container runs it every minute and the worker runs it after each check. On XAMPP, applicant, PSWDO and admin page loads run it; for a busy local install you can also run it on a schedule:
+
+```powershell
+C:\xampp\php\php.exe tools\ai-gate-sync.php            # one pass
+C:\xampp\php\php.exe tools\ai-gate-sync.php --health   # AI health summary
+```
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AICS_AI_MAX_WORKERS` | `2` | AI checks running at the same time |
+| `AICS_AI_WORKER_HEARTBEAT_MINUTES` | `10` | A worker silent this long no longer holds a slot |
+| `AICS_AI_GATE_SCHEDULER` | `1` in the Docker image | Set when a scheduler runs `ai-gate-sync.php`; PSWDO page loads then skip the gate pass |
+| `AICS_AI_GATE_MAX_RETRIES` | `4` | Automatic retries per document before the admin decides |
+| `AICS_AI_GATE_ALERT_MINUTES` | `30` | Waiting time before the admin page warns |
+| `AICS_ETA_URGENT_DAYS` / `AICS_ETA_HIGH_DAYS` / `AICS_ETA_STANDARD_DAYS` | `1` / `3` / `7` | Expected processing time shown to applicants |
+| `AICS_PHP_EXECUTABLE` | (unset) | PHP CLI for the worker to run the gate after each check, e.g. `C:\xampp\php\php.exe` |
+
 The optional ADCD-Net tamper-detection service, calibration, and the full list of settings are covered in [ai_processor/README.md](ai_processor/README.md), [ai_processor/DEPLOYMENT.md](ai_processor/DEPLOYMENT.md), and [ai_processor/tamper_detection/ADCD-NET-OPERATIONS.md](ai_processor/tamper_detection/ADCD-NET-OPERATIONS.md).
 
 ---
@@ -324,6 +352,7 @@ Railway builds the `Dockerfile` automatically. The container uses the same folde
    | `GROQ_API_KEY` | Groq key (landing-page assistant) |
 
 5. **Settings → Networking → Generate Domain.** The domain opens the landing page. Sign in to `/AICS/AICS/ADMIN/login.php` with the default admin and change its password immediately.
+6. **Check AICS AI.** Every start prints a line such as `AICS AI health: operational | key configured | unavailable: none` in the deploy logs (`railway logs`). If it says `key MISSING` or lists unavailable parts, new requests wait for the admin instead of reaching PSWDO.
 
 The optional ADCD-Net tamper model is not deployed (its weights are too large for GitHub); leave `AICS_ADCD_ENABLED` unset.
 
@@ -338,7 +367,8 @@ The optional ADCD-Net tamper model is not deployed (its weights are too large fo
 | OTP / SMS not sent | Check `PHILSMS_API_TOKEN` and your PhilSMS balance |
 | Emails not delivered | Use a Gmail **App Password**, not your normal password, or set `MAIL_DRIVER=simulate` to write emails to `storage/emails/` |
 | AI card says "Local OCR only" | Gemini key missing, rate-limited, or timed out. The review still completes. Check `aics-ai.env` and run the probe |
-| AI review stuck "processing" | Check `AICS_PYTHON_EXECUTABLE` is a full path to `python.exe` and look in `ai_processor/logs/`. Stale jobs time out after `AICS_AI_STALE_MINUTES` (default 30) and can be retried from the PSWDO portal |
+| AI review stuck "processing" | Check `AICS_PYTHON_EXECUTABLE` is a full path to `python.exe` and look in `ai_processor/logs/`. Stale jobs time out after `AICS_AI_STALE_MINUTES` (default 30) and are retried automatically |
+| New requests don't appear in PSWDO | They are still being checked, were sent back to the applicant, or wait for the admin. Open **Admin → AICS AI Screening**; run `php tools/ai-gate-sync.php --health` |
 | PDF uploads fail OCR | Install Poppler and set `AICS_POPPLER_PATH` |
 
 ---
