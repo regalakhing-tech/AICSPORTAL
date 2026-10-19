@@ -11197,4 +11197,15 @@ input.is-id-locked { background: #f1f5f9; color: #334155; cursor: not-allowed; }
   .submit-hero-executive .page-sub { font-size: 13px; line-height: 1.5; }
   .intake-progress-senior { display: none; }
   .stepper-senior.app-scroll-region .step-label { display: none; }
+
+  /* Cooldown notice on the status page: small icon beside the text, tag underneath. */
+  body .status-page .senior-cooldown-banner {
+    flex-direction: row; flex-wrap: wrap; align-items: flex-start;
+    gap: 8px 12px; padding: 12px 14px; border-radius: 14px; border-left-width: 4px; margin-bottom: 16px;
+  }
+  body .status-page .cooldown-icon-badge { width: 32px; height: 32px; border-radius: 10px; font-size: 15px; }
+  body .status-page .cooldown-copy { flex: 1 1 calc(100% - 44px); }
+  body .status-page .cooldown-title { font-size: 14px; margin-bottom: 2px; }
+  body .status-page .cooldown-detail { font-size: 12.5px; line-height: 1.45; }
+  body .status-page .cooldown-tag { margin-left: 44px; padding: 4px 10px; font-size: 11.5px; }
 }

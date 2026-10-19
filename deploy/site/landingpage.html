@@ -113,6 +113,7 @@
   .nav-actions {
     display: flex; align-items: center; gap: 10px;
   }
+  .nav-actions .btn { white-space: nowrap; }
   .btn-ask-aics {
     display: inline-flex; align-items: center; gap: 7px;
     padding: 9px 15px; border-radius: var(--radius-full); font-size: 12.5px; font-weight: 700;
@@ -824,6 +825,10 @@
     .map-density-legend small { font-size: 10px; }
   }
   @media (max-width: 480px) {
+    /* Keep logo, Sign In button and menu on one row on small phones */
+    .logo img { height: 34px; }
+    .nav-actions { gap: 8px; }
+    .nav-actions .btn { padding: 9px 13px; font-size: 13px; gap: 6px; }
     .phones-wrap { transform: scale(0.56); }
     .hero-art { height: 280px; }
     #antique-map { height: 630px; }
@@ -831,6 +836,10 @@
     .map-floating-controls .btn-map-control i { font-size: 12px; }
     .map-choropleth-legend { bottom: 220px; }
     .map-density-legend { left: 10px; right: auto; width: min(290px, calc(100% - 20px)); }
+  }
+  @media (max-width: 360px) {
+    .logo img { height: 30px; }
+    .nav-actions .btn i { display: none; }
   }
 </style>
 </head>
@@ -841,7 +850,7 @@
   <div class="container nav-inner">
     <div class="nav-brand-group">
       <a href="#" class="logo" aria-label="AICS Antique Portal Home">
-        <img src="asset/logo.png" alt="AICS | PSWDO Antique Seal" style="height: 42px; width: auto; object-fit: contain;">
+        <img src="asset/logo.png" alt="AICS | PSWDO Antique Seal">
       </a>
     </div>
 

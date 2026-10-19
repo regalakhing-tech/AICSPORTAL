@@ -705,6 +705,8 @@ a {
 .content-wrap {
   padding: 18px;
   display: grid;
+  /* minmax(0, 1fr): wide tables scroll inside .table-wrap instead of widening the page on phones */
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 
