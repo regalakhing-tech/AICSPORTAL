@@ -72,20 +72,20 @@ function aics_smart_priority_assess(array $beneficiaryCategories, string $assist
                                     array $documents, callable $analyze): array
 {
     if (!aics_smart_priority_qualifies($beneficiaryCategories, $assistanceCode)) {
-        return ['indicator' => 'STANDARD', 'basis' => 'Smart Priority applies to Medical Assistance only.'];
+        return ['indicator' => 'STANDARD', 'basis' => 'Smart Priority applies to Medical Assistance only.', 'final' => true];
     }
     $baseline = aics_smart_priority_baseline($beneficiaryCategories);
     $group = $baseline === 'HIGH' ? 'Senior/PWD Medical Assistance' : 'Medical Assistance';
     foreach ($documents as $document) {
         if (is_array($document) && ($document['unavailable'] ?? false) === true &&
             aics_smart_priority_medical_document_type((string) ($document['document_type'] ?? '')) !== null) {
-            return ['indicator' => $baseline, 'basis' => 'A medical supporting document is unavailable for complete priority analysis.'];
+            return ['indicator' => $baseline, 'basis' => 'A medical supporting document is unavailable for complete priority analysis.', 'final' => true];
         }
     }
     $medicalDocuments = array_values(array_filter($documents, static fn ($document): bool =>
         is_array($document) && aics_smart_priority_medical_document_type((string) ($document['document_type'] ?? '')) !== null));
     if ($medicalDocuments === []) {
-        return ['indicator' => $baseline, 'basis' => $group . '; no current urgent trigger detected by priority analysis.'];
+        return ['indicator' => $baseline, 'basis' => $group . '; no current urgent trigger detected by priority analysis.', 'final' => true];
     }
     try {
         $result = $analyze($medicalDocuments);
@@ -94,13 +94,13 @@ function aics_smart_priority_assess(array $beneficiaryCategories, string $assist
     }
     if (is_array($result) && ($result['urgent'] ?? null) === true) {
         return ['indicator' => 'URGENT', 'basis' => 'Gemini priority analysis found sufficient current medical urgency. ' .
-            aics_smart_priority_result_explanation($result)];
+            aics_smart_priority_result_explanation($result), 'final' => true];
     }
     if (is_array($result) && ($result['urgent'] ?? null) === false) {
         return ['indicator' => $baseline, 'basis' => $group . '; no sufficient current urgency evidence. ' .
-            aics_smart_priority_result_explanation($result)];
+            aics_smart_priority_result_explanation($result), 'final' => true];
     }
-    return ['indicator' => $baseline, 'basis' => 'Smart Priority medical analysis was unavailable; defaulted to ' . $baseline . '.'];
+    return ['indicator' => $baseline, 'basis' => 'Smart Priority medical analysis was unavailable; defaulted to ' . $baseline . '.', 'final' => false];
 }
 
 /** Values for the existing priority columns; no new schema or workflow state. */

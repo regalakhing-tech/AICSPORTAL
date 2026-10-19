@@ -208,5 +208,11 @@ function aics_ensure_urgency_indicator_columns(mysqli $connection): void
         $table = (string) $row['TABLE_NAME'];
         $connection->query("ALTER TABLE `{$table}` MODIFY COLUMN urgency_indicator VARCHAR(32) DEFAULT NULL");
     }
+    // Saved AICS AI urgency findings: PSWDO pages read these instead of re-checking.
+    $saved = $connection->query("SELECT COUNT(*) AS total FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'aics_requests' AND COLUMN_NAME IN ('urgency_basis', 'urgency_analyzed_at')");
+    if ((int) ($saved?->fetch_assoc()['total'] ?? 0) < 2) {
+        $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS urgency_basis VARCHAR(700) DEFAULT NULL AFTER urgency_indicator");
+        $connection->query("ALTER TABLE aics_requests ADD COLUMN IF NOT EXISTS urgency_analyzed_at DATETIME DEFAULT NULL AFTER urgency_basis");
+    }
     $checked[$key] = true;
 }

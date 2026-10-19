@@ -392,6 +392,8 @@ ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `assistance_type_other` VAR
 ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `family_composition_json` JSON DEFAULT NULL AFTER `assistance_type_other`;
 ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `urgency_response` VARCHAR(3) DEFAULT NULL AFTER `assistance_types_json`;
 ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `urgency_indicator` VARCHAR(32) DEFAULT NULL AFTER `urgency_response`;
+ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `urgency_basis` VARCHAR(700) DEFAULT NULL AFTER `urgency_indicator`;
+ALTER TABLE `aics_requests` ADD COLUMN IF NOT EXISTS `urgency_analyzed_at` DATETIME DEFAULT NULL AFTER `urgency_basis`;
 ALTER TABLE `aics_request_document_reviews` ADD COLUMN IF NOT EXISTS `review_status` ENUM('pending','checked','needs_reupload','invalid') NOT NULL DEFAULT 'pending' AFTER `is_checked`;
 ALTER TABLE `aics_request_document_reviews` ADD COLUMN IF NOT EXISTS `notified_at` TIMESTAMP NULL DEFAULT NULL AFTER `reviewed_at`;
 

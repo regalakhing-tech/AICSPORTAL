@@ -1521,9 +1521,60 @@ function pswdo_required_documents_by_assistance(mysqli $connection): array
 }
 
 /**
- * Page loads pass $allowAnalysis = false: Smart Priority then uses the cached
- * AICS AI analysis only and never waits for AI; while an analysis is pending the
- * stored urgency is kept. tools/smart-priority-refresh.php runs the analysis.
+ * The AICS AI urgency findings saved for a request. 'analyzed' is true once a
+ * finished analysis was saved; page loads then use it and never re-check.
+ *
+ * @return array{indicator:string,basis:string,analyzed:bool}
+ */
+function pswdo_saved_urgency(mysqli $connection, int $requestId): array
+{
+    $stmt = $connection->prepare('SELECT urgency_indicator, urgency_basis, urgency_analyzed_at FROM aics_requests WHERE id = ? LIMIT 1');
+    $row = [];
+    if ($stmt) {
+        $stmt->bind_param('i', $requestId);
+        $stmt->execute();
+        $row = $stmt->get_result()?->fetch_assoc() ?: [];
+        $stmt->close();
+    }
+    $indicator = strtoupper(trim((string) ($row['urgency_indicator'] ?? '')));
+    if (!in_array($indicator, ['URGENT', 'HIGH', 'STANDARD'], true)) $indicator = '';
+    $basis = trim((string) ($row['urgency_basis'] ?? ''));
+    return ['indicator' => $indicator, 'basis' => $basis, 'analyzed' => $indicator !== '' && $basis !== '' && ($row['urgency_analyzed_at'] ?? null) !== null];
+}
+
+/** Why a request is URGENT, HIGH or STANDARD, in words PSWDO staff can act on. */
+function pswdo_priority_reason(string $indicator, array $categories, string $assistanceCode, string $basis, bool $waiting): string
+{
+    if (strtolower(trim($assistanceCode)) !== 'medical') return 'Standard: Smart Priority applies to Medical Assistance only.';
+    $who = in_array('senior_citizen', $categories, true) ? 'a Senior Citizen' : (in_array('pwd', $categories, true) ? 'a PWD' : 'a Senior Citizen or PWD');
+    $detail = trim((string) preg_replace([
+        '/^Gemini priority analysis found sufficient current medical urgency\.\s*/i',
+        '/^(Senior\/PWD )?Medical Assistance; no sufficient current urgency evidence\.\s*/i',
+    ], '', $basis));
+    $reason = match ($indicator) {
+        'URGENT' => $waiting ? 'Urgent: an earlier check found a current medical need.' : 'Urgent: AICS AI found a current medical need in the medical documents.',
+        'HIGH' => 'High: the beneficiary is ' . $who . ' requesting Medical Assistance.',
+        default => 'Standard: Medical Assistance for a beneficiary who is not a Senior Citizen or PWD.',
+    };
+    if ($waiting) {
+        $reason .= ' AICS AI is still checking the medical documents for urgency; its findings will be saved here.';
+    } elseif ($indicator === 'URGENT') {
+        $reason .= $detail !== '' ? ' ' . $detail : '';
+    } elseif (stripos($detail, 'no current urgent trigger detected') !== false) {
+        $reason .= ' No medical certificate or abstract was uploaded to check for urgency.';
+    } elseif (stripos($detail, 'document is unavailable') !== false) {
+        $reason .= ' A medical document could not be opened for the urgency check.';
+    } else {
+        $reason .= ' AICS AI found no current medical urgency.' . ($detail !== '' ? ' ' . $detail : '');
+    }
+    return $reason;
+}
+
+/**
+ * Page loads pass $allowAnalysis = false: saved AICS AI findings are used as they
+ * are; a request with none uses a cached analysis (and saves it) or waits for
+ * tools/smart-priority-refresh.php, which runs the analysis. A failed analysis
+ * never replaces saved findings.
  *
  * @param array<string, mixed> $request
  */
@@ -1545,23 +1596,41 @@ function pswdo_refresh_request_scoring(mysqli $connection, array $request, ?int 
     $priority = pswdo_calculate_application_priority($request);
     $categories = json_decode((string) ($request['client_categories_json'] ?? '[]'), true);
     $categories = is_array($categories) ? array_map(static fn($value): string => strtolower(trim((string) $value)), $categories) : [];
-    $urgency = aics_smart_priority_analysis_enabled()
-        ? aics_smart_priority_for_request($connection, $requestId, $categories, (string) ($request['assistance_code'] ?? ''), $allowAnalysis)
-        : aics_medical_urgency_from_document_reviews($connection, $requestId, (string) ($request['assistance_code'] ?? ''));
-    if (!empty($urgency['pending'])) {
-        $storedStmt = $connection->prepare('SELECT urgency_indicator FROM aics_requests WHERE id = ? LIMIT 1');
-        $storedStmt->bind_param('i', $requestId);
-        $storedStmt->execute();
-        $stored = strtoupper(trim((string) ($storedStmt->get_result()?->fetch_row()[0] ?? '')));
-        $storedStmt->close();
-        if (in_array($stored, ['URGENT', 'HIGH', 'STANDARD'], true)) $urgency['indicator'] = $stored;
-        $urgency['basis'] = 'AICS AI medical urgency analysis is in progress.';
+    $assistanceCode = (string) ($request['assistance_code'] ?? '');
+    $analysisEnabled = aics_smart_priority_analysis_enabled();
+    $saved = $analysisEnabled ? pswdo_saved_urgency($connection, $requestId) : ['indicator' => '', 'basis' => '', 'analyzed' => false];
+    $waiting = false;
+    $save = false;
+    if ($saved['analyzed'] && !$allowAnalysis) {
+        $urgency = ['indicator' => $saved['indicator'], 'basis' => $saved['basis']];
+    } else {
+        $urgency = $analysisEnabled
+            ? aics_smart_priority_for_request($connection, $requestId, $categories, $assistanceCode, $allowAnalysis)
+            : aics_medical_urgency_from_document_reviews($connection, $requestId, $assistanceCode);
+        if (!$analysisEnabled) {
+            // Document-review urgency is recomputed from the database each time.
+        } elseif (empty($urgency['pending']) && ($urgency['final'] ?? false) === true) {
+            $save = true;
+        } elseif ($saved['analyzed']) {
+            $urgency = ['indicator' => $saved['indicator'], 'basis' => $saved['basis']];
+        } else {
+            // Not analysed yet (or the analysis failed): keep the stored indicator so it never flips.
+            if ($saved['indicator'] !== '') $urgency['indicator'] = $saved['indicator'];
+            $waiting = true;
+        }
     }
-    if (aics_smart_priority_analysis_enabled()) $priority = aics_smart_priority_storage_values($urgency['indicator']);
+    if ($analysisEnabled) $priority = aics_smart_priority_storage_values($urgency['indicator']);
     $categoryBasis = in_array('senior_citizen', $categories, true) ? 'Senior Citizen' : (in_array('pwd', $categories, true) ? 'PWD' : 'Other beneficiary category');
-    $basis = $categoryBasis . ' | ' . pswdo_assistance_label((string) ($request['assistance_code'] ?? '')) . ' | ' . $urgency['basis'];
-    $requestUpdate = $connection->prepare('UPDATE aics_requests SET urgency_indicator = ? WHERE id = ? LIMIT 1');
-    if ($requestUpdate) { $requestUpdate->bind_param('si', $urgency['indicator'], $requestId); $requestUpdate->execute(); $requestUpdate->close(); }
+    $reason = $analysisEnabled ? pswdo_priority_reason($urgency['indicator'], $categories, $assistanceCode, $urgency['basis'], $waiting) : $urgency['basis'];
+    $basis = mb_strimwidth($categoryBasis . ' | ' . pswdo_assistance_label($assistanceCode) . ' | ' . $reason, 0, 700, '…');
+    if ($save) {
+        $urgencyBasis = mb_strimwidth((string) $urgency['basis'], 0, 700, '…');
+        $requestUpdate = $connection->prepare('UPDATE aics_requests SET urgency_indicator = ?, urgency_basis = ?, urgency_analyzed_at = NOW() WHERE id = ? LIMIT 1');
+        if ($requestUpdate) { $requestUpdate->bind_param('ssi', $urgency['indicator'], $urgencyBasis, $requestId); $requestUpdate->execute(); $requestUpdate->close(); }
+    } else {
+        $requestUpdate = $connection->prepare('UPDATE aics_requests SET urgency_indicator = ? WHERE id = ? LIMIT 1');
+        if ($requestUpdate) { $requestUpdate->bind_param('si', $urgency['indicator'], $requestId); $requestUpdate->execute(); $requestUpdate->close(); }
+    }
     $priStmt = $connection->prepare('INSERT INTO aics_request_prioritization (request_id, urgency_score, urgency_indicator, vulnerability_score, readiness_score, risk_penalty, priority_score, priority_level, priority_basis, updated_by_account_id) VALUES (?, 0, ?, 0, 0, 0, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE urgency_score = 0, urgency_indicator = VALUES(urgency_indicator), vulnerability_score = 0, readiness_score = 0, risk_penalty = 0, priority_score = VALUES(priority_score), priority_level = VALUES(priority_level), priority_basis = VALUES(priority_basis), updated_by_account_id = VALUES(updated_by_account_id), updated_at = CURRENT_TIMESTAMP');
     $priStmt->bind_param('isissi', $requestId, $urgency['indicator'], $priority['score'], $priority['label'], $basis, $updatedByAccountId);
     $priStmt->execute();
@@ -1587,6 +1656,33 @@ function pswdo_refresh_smart_priorities(mysqli $connection): void
         $row['assistance_code'] = $assistance;
         pswdo_refresh_request_scoring($connection, $row, null);
     }
+}
+
+/**
+ * Medical requests PSWDO can see whose AICS AI urgency findings were never saved,
+ * or whose documents changed after the saved analysis. Newest first.
+ *
+ * @return list<array<string, mixed>>
+ */
+function pswdo_fetch_requests_needing_urgency_analysis(mysqli $connection, int $limit): array
+{
+    $result = $connection->query("SELECT r.id, r.reference_no, r.client_categories_json, r.assistance_types_json, at.assistance_code
+        FROM aics_requests r
+        LEFT JOIN (SELECT request_id, MIN(assistance_type_id) AS assistance_type_id FROM aics_request_assistance GROUP BY request_id) ra ON ra.request_id = r.id
+        LEFT JOIN aics_assistance_types at ON at.id = ra.assistance_type_id
+        WHERE " . aics_ai_gate_visible_sql('r') . " AND " . aics_ai_gate_active_sql('r') . "
+          AND LOWER(TRIM(r.request_status)) NOT IN ('released', 'not approved', 'not_approved', 'rejected', 'denied', 'completed', 'closed', 'cancelled')
+          AND (r.urgency_analyzed_at IS NULL OR r.urgency_analyzed_at < (SELECT MAX(d.uploaded_at) FROM aics_request_documents d WHERE d.request_id = r.id))
+        ORDER BY r.id DESC");
+    $rows = [];
+    while (count($rows) < $limit && ($row = $result?->fetch_assoc())) {
+        $assistance = trim((string) ($row['assistance_code'] ?? ''));
+        if ($assistance === '') $assistance = pswdo_extract_first_assistance_from_json((string) ($row['assistance_types_json'] ?? '[]'));
+        if ($assistance !== 'medical') continue;
+        $row['assistance_code'] = $assistance;
+        $rows[] = $row;
+    }
+    return $rows;
 }
 
 function pswdo_normalize_name_for_match(string $name): string
