@@ -6638,24 +6638,6 @@ body.is-embedded .request-details-body {
   white-space: nowrap;
 }
 
-.ai-health-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  align-self: center;
-  padding: 7px 11px;
-  border: 1px solid #cbd5e1;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 750;
-  white-space: nowrap;
-}
-
-.ai-health-operational { color: #166534; background: #dcfce7; border-color: #86efac; }
-.ai-health-degraded { color: #92400e; background: #fef3c7; border-color: #fcd34d; }
-.ai-health-unavailable { color: #b91c1c; background: #fee2e2; border-color: #fca5a5; }
-.ai-health-checking { color: #075985; background: #e0f2fe; border-color: #7dd3fc; }
-
 .ai-verification-cell {
   display: flex;
   flex-direction: column;

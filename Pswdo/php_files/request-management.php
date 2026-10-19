@@ -100,7 +100,7 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
     </style>
   <?php endif; ?>
 </head>
-<body data-reopen-request-id="<?= $reopenRequestId > 0 ? $reopenRequestId : '' ?>" data-reopen-ai-document-id="<?= $reopenAiDocumentId > 0 ? $reopenAiDocumentId : '' ?>" data-ai-status-url="<?= pswdo_h($paths['php_files_base_url'] . '/ai-review-status.php') ?>" data-ai-request-status-url="<?= pswdo_h($paths['php_files_base_url'] . '/ai-request-status.php') ?>" data-ai-ensure-url="<?= pswdo_h($paths['php_files_base_url'] . '/ai-ensure-current.php') ?>" data-ai-ensure-request-url="<?= pswdo_h($paths['php_files_base_url'] . '/ai-ensure-request-current.php') ?>" data-ai-csrf-token="<?= pswdo_h($csrfToken) ?>" data-ai-health-url="<?= pswdo_h($paths['php_files_base_url'] . '/ai-health.php') ?>" data-ai-live-status-v2="1" data-clear-legacy-ai-notice="<?= $legacyAiReprocessNotice ? '1' : '0' ?>" class="<?= $isEmbedded ? 'is-embedded' : '' ?>">
+<body data-reopen-request-id="<?= $reopenRequestId > 0 ? $reopenRequestId : '' ?>" data-reopen-ai-document-id="<?= $reopenAiDocumentId > 0 ? $reopenAiDocumentId : '' ?>" data-ai-status-url="<?= pswdo_h($paths['php_files_base_url'] . '/ai-review-status.php') ?>" data-ai-request-status-url="<?= pswdo_h($paths['php_files_base_url'] . '/ai-request-status.php') ?>" data-ai-ensure-url="<?= pswdo_h($paths['php_files_base_url'] . '/ai-ensure-current.php') ?>" data-ai-ensure-request-url="<?= pswdo_h($paths['php_files_base_url'] . '/ai-ensure-request-current.php') ?>" data-ai-csrf-token="<?= pswdo_h($csrfToken) ?>" data-ai-live-status-v2="1" data-clear-legacy-ai-notice="<?= $legacyAiReprocessNotice ? '1' : '0' ?>" class="<?= $isEmbedded ? 'is-embedded' : '' ?>">
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
@@ -142,9 +142,6 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
         <section class="panel-card page-header-card">
           <div class="page-header-main">
             <h1><i class="fas fa-folder-open"></i> Applicant Requests Table</h1>
-          </div>
-          <div class="ai-health-indicator ai-health-unavailable" id="ai-health-indicator" role="status" aria-live="polite" aria-busy="false">
-            <i class="fas fa-circle" aria-hidden="true"></i><span>AI Verification Status Unavailable</span>
           </div>
         </section>
 

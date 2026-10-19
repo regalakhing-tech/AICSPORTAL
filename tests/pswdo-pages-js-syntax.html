@@ -2,13 +2,12 @@
 <html lang="en">
 <meta charset="utf-8">
 <title>PSWDO bundle browser syntax harness</title>
-<body data-ai-health-url="http://127.0.0.1:1/ai-health.php">
+<body>
 <button type="button" id="toggle-btn">Menu</button>
 <button type="button" id="close-btn">Close</button>
 <aside id="sidebar"></aside>
 <div id="overlay"></div>
 <main id="main-content"></main>
-<div id="ai-health-indicator">AI Verification Status Unavailable</div>
 <script>
 window.__pswdoBundleErrors = [];
 window.__aicsRequestRefreshEvents = [];
@@ -101,7 +100,6 @@ setTimeout(function () {
   document.body.setAttribute("data-pswdo-bundle-errors", JSON.stringify(window.__pswdoBundleErrors));
   document.body.setAttribute("data-pswdo-sidebar-open", String(document.getElementById("sidebar").classList.contains("open")));
   document.body.setAttribute("data-pswdo-overlay-active", String(document.getElementById("overlay").classList.contains("active")));
-  document.body.setAttribute("data-pswdo-health-unavailable", String(document.getElementById("ai-health-indicator").textContent.indexOf("Status Unavailable") !== -1));
   document.body.setAttribute("data-pswdo-primary-request-handler", String(window.__aicsRequestModalHandlerAvailable === true));
   document.body.setAttribute("data-pswdo-request-modal-open", String(document.getElementById("request-details-modal") && document.getElementById("request-details-modal").classList.contains("open")));
   document.body.setAttribute("data-pswdo-review-details-open", String(document.querySelector("#request-details-modal .ai-details-panel") && document.querySelector("#request-details-modal .ai-details-panel").open));

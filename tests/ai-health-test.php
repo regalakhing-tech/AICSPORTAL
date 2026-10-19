@@ -26,8 +26,10 @@ if ($previousAdcdEnabled === false) putenv('AICS_ADCD_ENABLED'); else putenv('AI
 if ($previousExternalAiEnabled === false) putenv('AICS_EXTERNAL_AI_ENABLED'); else putenv('AICS_EXTERNAL_AI_ENABLED=' . $previousExternalAiEnabled);
 $launcher = file_get_contents(__DIR__ . '/../includes/document-ai-reviews.php');
 health_assert(is_string($launcher) && str_contains($launcher, "'launch-' . \$documentId") && !str_contains($launcher, "'processor.log';"), 'Concurrent worker dispatch must not redirect through a shared processor log.');
-$healthScript = file_get_contents(__DIR__ . '/../Pswdo/js files/pswdo-pages.js');
-health_assert(is_string($healthScript) && str_contains($healthScript, 'AI Verification &mdash;'), 'AI health badge must use encoding-safe separator markup.');
+// AI health is checked in the background only (deploy log); PSWDO pages show no badge.
+$pswdoFrontend = (string) file_get_contents(__DIR__ . '/../Pswdo/js files/pswdo-pages.js') . (string) file_get_contents(__DIR__ . '/../Pswdo/js files/ai-request-poller.js')
+    . (string) file_get_contents(__DIR__ . '/../Pswdo/php_files/request-management.php') . (string) file_get_contents(__DIR__ . '/../Pswdo/css files/pswdo-pages.css');
+health_assert(!str_contains($pswdoFrontend, 'ai-health-indicator') && !str_contains($pswdoFrontend, 'data-ai-health-url') && !str_contains($pswdoFrontend, 'AI Verification &mdash;'), 'PSWDO pages must not show an AI health badge.');
 $workerWrapper = file_get_contents(__DIR__ . '/../ai_processor/run-ai-worker.bat');
 health_assert(is_string($workerWrapper) && str_contains($workerWrapper, 'if "%AICS_ADCD_ENABLED%"=="" set "AICS_ADCD_ENABLED=0"'), 'Worker wrapper must default optional ADCD to disabled.');
 echo "AI health test passed.\n";

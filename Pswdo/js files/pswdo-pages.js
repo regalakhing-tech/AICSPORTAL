@@ -1,8 +1,7 @@
 // TEMPORARY: Request Management runtime diagnostics. Remove after an
 // authenticated-browser trace identifies and verifies the targeted fix.
 (() => {
-  const isRequestManagement = document.getElementById("request-details-modal") instanceof HTMLElement
-    || document.getElementById("ai-health-indicator") instanceof HTMLElement;
+  const isRequestManagement = document.getElementById("request-details-modal") instanceof HTMLElement;
   if (!isRequestManagement) return;
 
   const debug = (...args) => console.info("[RM DEBUG]", ...args);
@@ -397,59 +396,6 @@
       mainContent.classList.remove("expanded");
     }
   });
-})();
-
-(() => {
-  const root = document.body;
-  const endpoint = root instanceof HTMLBodyElement ? (root.getAttribute("data-ai-health-url") || "").trim() : "";
-  const indicator = document.getElementById("ai-health-indicator");
-  if (endpoint === "" || !(indicator instanceof HTMLElement)) return;
-  const debug = typeof window.__aicsRequestManagementDebug === "function"
-    ? window.__aicsRequestManagementDebug
-    : null;
-  const labels = { operational: "Operational", degraded: "Degraded", unavailable: "Unavailable" };
-  let healthRequestInFlight = false;
-  function setChecking(checking) {
-    indicator.setAttribute("aria-busy", String(checking));
-    if (!checking) return;
-    indicator.className = "ai-health-indicator ai-health-checking";
-    indicator.innerHTML = '<i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i><span>Checking AI...</span>';
-  }
-  function render(status, text) {
-    const safeStatus = labels[status] ? status : "unavailable";
-    debug?.("health render", safeStatus);
-    indicator.className = `ai-health-indicator ai-health-${safeStatus}`;
-    indicator.innerHTML = `<i class="fas fa-circle" aria-hidden="true"></i><span>AI Verification &mdash; ${text || labels[safeStatus]}</span>`;
-  }
-  async function refresh() {
-    if (healthRequestInFlight) return;
-    healthRequestInFlight = true;
-    let timeout = null;
-    try {
-      debug?.("health check start");
-      setChecking(true);
-      const controller = new AbortController();
-      timeout = window.setTimeout(() => {
-        debug?.("health abort", "timeout");
-        controller.abort();
-      }, 8000);
-      const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store", signal: controller.signal, headers: { Accept: "application/json" } });
-      debug?.("health response", response.status);
-      const payload = await response.json();
-      if (!response.ok || !payload || payload.ok !== true) throw new Error("Health response unavailable");
-      render(String(payload.status || "unavailable").toLowerCase());
-    } catch (error) {
-      debug?.("health error", error instanceof Error ? error.message : "Unknown error");
-      render("unavailable", "Status Unavailable");
-    } finally {
-      if (timeout !== null) window.clearTimeout(timeout);
-      healthRequestInFlight = false;
-      setChecking(false);
-      debug?.("health finally");
-    }
-  }
-  refresh();
-  window.setInterval(refresh, 45000);
 })();
 
 (() => {

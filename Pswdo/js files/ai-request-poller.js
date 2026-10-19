@@ -205,17 +205,6 @@
       if (fill instanceof HTMLElement) fill.style.setProperty('--ai-progress', view.progress + '%');
     }
     row.dataset.aiActiveDocuments = String(Math.max(0, Number(payload.queued || 0) + Number(payload.active || 0)));
-
-    const activeRows = Array.from(document.querySelectorAll('[data-ai-request-row].is-ai-scanning'));
-    const activeDocuments = activeRows.reduce(function (total, activeRow) {
-      return total + Math.max(0, Number(activeRow.dataset.aiActiveDocuments || 0));
-    }, 0);
-    const indicator = document.getElementById('ai-health-indicator');
-    if (indicator instanceof HTMLElement && activeDocuments > 0) {
-      indicator.className = 'ai-health-indicator ai-health-checking';
-      indicator.setAttribute('aria-busy', 'true');
-      indicator.innerHTML = '<i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i><span>Scanning ' + activeDocuments + ' document' + (activeDocuments === 1 ? '' : 's') + '</span>';
-    }
   }
 
   function bootstrap() {
