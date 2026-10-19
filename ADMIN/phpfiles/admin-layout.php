@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/admin-common.php';
+require_once __DIR__ . '/../../includes/ai-submission-gate.php';
 
 /**
  * @param array<string, string> $paths
@@ -13,9 +14,19 @@ function admin_render_page_start(
     string $initials,
     array $paths
 ): void {
+    // Requests waiting for an admin decision or stuck at AICS AI, shown on the menu.
+    $aiAttention = 0;
+    try {
+        $badgeConnection = aics_db_connect();
+        $aiAttention = aics_ai_gate_attention_count($badgeConnection);
+        $badgeConnection->close();
+    } catch (Throwable) {
+        $aiAttention = 0;
+    }
     $nav = [
         'overview' => ['icon' => 'fa-chart-line', 'label' => 'Overview', 'href' => $paths['dashboard_url'] . '?page=overview'],
         'users' => ['icon' => 'fa-users-gear', 'label' => 'User Management', 'href' => $paths['dashboard_url'] . '?page=users'],
+        'ai' => ['icon' => 'fa-robot', 'label' => 'AICS AI Screening', 'href' => $paths['dashboard_url'] . '?page=ai', 'badge' => $aiAttention],
         'logs' => ['icon' => 'fa-shield-halved', 'label' => 'Security Logs', 'href' => $paths['dashboard_url'] . '?page=logs'],
         'backup' => ['icon' => 'fa-database', 'label' => 'Backup & Maintenance', 'href' => $paths['dashboard_url'] . '?page=backup'],
     ];
@@ -50,6 +61,9 @@ function admin_render_page_start(
           <a class="nav-link<?= $activePage === $key ? ' active' : '' ?>" href="<?= admin_h($item['href']) ?>">
             <i class="fas <?= admin_h($item['icon']) ?>"></i>
             <?= admin_h($item['label']) ?>
+            <?php if ((int) ($item['badge'] ?? 0) > 0): ?>
+              <span class="nav-badge" title="Requests needing attention"><?= (int) $item['badge'] ?></span>
+            <?php endif; ?>
           </a>
         <?php endforeach; ?>
       </nav>

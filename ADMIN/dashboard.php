@@ -4,6 +4,7 @@ declare(strict_types=1);
 $routes = [
     'overview' => 'overview-dashboard.php',
     'users' => 'user-management.php',
+    'ai' => 'ai-screening.php',
     'logs' => 'security-logs.php',
     'backup' => 'backup-maintenance.php',
 ];

@@ -271,7 +271,10 @@ function aics_ai_gate_document_detail(array $doc): string
     $reason = trim((string) ($verdict['reason'] ?? ''));
     if ($reason === '' && is_array($doc['findings']['reasons'] ?? null)) $reason = trim((string) ($doc['findings']['reasons'][0] ?? ''));
     if (($verdict['source'] ?? '') === 'local') $headline = 'AICS AI did not run (local OCR only)' . ($headline !== '' ? ' — ' . $headline : '');
-    if ($headline === '' && $reason === '') $reason = trim((string) ($doc['last_error_message'] ?? '')) ?: 'Status: ' . (string) ($doc['status'] ?? '');
+    if ($headline === '' && $reason === '') {
+        $reason = trim((string) ($doc['last_error_message'] ?? ''))
+            ?: (($doc['status'] ?? '') === 'failed' ? 'AICS AI could not check this document.' : 'Status: ' . (string) ($doc['status'] ?? ''));
+    }
     return mb_strimwidth(trim($headline . ($headline !== '' && $reason !== '' ? ': ' : '') . $reason), 0, 500, '…');
 }
 
@@ -641,4 +644,61 @@ function aics_ai_gate_applicant_items(mysqli $connection, int $requestId): array
         $items[] = ['label' => aics_document_requirement_label((string) ($doc['document_type'] ?? '')), 'reason' => aics_ai_gate_document_reason($status)];
     }
     return $items;
+}
+
+/** Minutes a request may wait for AICS AI before the admin is alerted. */
+function aics_ai_gate_alert_minutes(): int
+{
+    return aics_ai_gate_env_int('AICS_AI_GATE_ALERT_MINUTES', 30);
+}
+
+/** Requests needing the admin: admin review, plus checks waiting past the alert time. */
+function aics_ai_gate_attention_count(mysqli $connection): int
+{
+    aics_ai_gate_ensure_schema($connection);
+    $minutes = aics_ai_gate_alert_minutes();
+    $stmt = $connection->prepare("SELECT COUNT(*) AS total FROM aics_requests WHERE ai_gate_status = 'admin_review' OR (ai_gate_status = 'pending' AND COALESCE(ai_gate_updated_at, created_at) < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL ? MINUTE))");
+    if (!$stmt) return 0;
+    $stmt->bind_param('i', $minutes);
+    $stmt->execute();
+    $total = (int) ($stmt->get_result()?->fetch_assoc()['total'] ?? 0);
+    $stmt->close();
+    return $total;
+}
+
+/** @return list<array<string,mixed>> Requests in one gate state, longest waiting first. */
+function aics_ai_gate_requests_in_state(mysqli $connection, string $state, int $limit = 100): array
+{
+    aics_ai_gate_ensure_schema($connection);
+    $stmt = $connection->prepare('SELECT id, reference_no, beneficiary_complete_name, ai_gate_reason, TIMESTAMPDIFF(MINUTE, COALESCE(ai_gate_updated_at, created_at), CURRENT_TIMESTAMP) AS minutes_waiting FROM aics_requests WHERE ai_gate_status = ? ORDER BY COALESCE(ai_gate_updated_at, created_at), id LIMIT ?');
+    if (!$stmt) return [];
+    $stmt->bind_param('si', $state, $limit);
+    $stmt->execute();
+    $rows = $stmt->get_result()?->fetch_all(MYSQLI_ASSOC) ?: [];
+    $stmt->close();
+    return $rows;
+}
+
+/**
+ * The 7-day admin log grouped by request, most recently active first.
+ *
+ * @return list<array{request_id:int, reference_no:string, ai_gate_status:string, ai_gate_reason:?string, events:list<array<string,mixed>>}>
+ */
+function aics_ai_gate_recent_events(mysqli $connection, int $limitRequests = 100): array
+{
+    aics_ai_gate_ensure_schema($connection);
+    $result = $connection->query('SELECT e.id, e.request_id, e.event_type, e.document_type, e.verdict_status, e.detail, e.actor_account_id, e.created_at, r.reference_no, r.ai_gate_status, r.ai_gate_reason
+        FROM aics_ai_gate_events e INNER JOIN aics_requests r ON r.id = e.request_id
+        WHERE e.created_at >= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 7 DAY)
+        ORDER BY e.created_at DESC, e.id DESC LIMIT 2000');
+    $groups = [];
+    foreach ($result ? $result->fetch_all(MYSQLI_ASSOC) : [] as $row) {
+        $id = (int) $row['request_id'];
+        if (!isset($groups[$id])) {
+            if (count($groups) >= $limitRequests) continue;
+            $groups[$id] = ['request_id' => $id, 'reference_no' => (string) $row['reference_no'], 'ai_gate_status' => (string) $row['ai_gate_status'], 'ai_gate_reason' => $row['ai_gate_reason'], 'events' => []];
+        }
+        $groups[$id]['events'][] = $row;
+    }
+    return array_values($groups);
 }

@@ -58,6 +58,10 @@ gate_assert(stripos($hold . $urgent, 'gemini') === false, 'branding');
 gate_assert(aics_ai_gate_visible_sql('rq') === "rq.ai_gate_status = 'released'", 'visibility fragment');
 gate_assert(aics_ai_gate_visible_sql() === "r.ai_gate_status = 'released'", 'default alias');
 
+gate_assert(aics_ai_gate_document_detail(['status' => 'failed', 'findings' => [], 'last_error_message' => '']) === 'AICS AI could not check this document.', 'failed check without a message explains itself');
+gate_assert(aics_ai_gate_document_detail(['status' => 'failed', 'findings' => [], 'last_error_message' => 'Worker crashed.']) === 'Worker crashed.', 'failed check keeps its message');
+gate_assert(str_starts_with(aics_ai_gate_document_detail(['status' => 'likely_valid', 'findings' => ['verdict' => ['source' => 'local', 'headline' => 'Looks valid']]]), 'AICS AI did not run (local OCR only)'), 'local-only results are labelled');
+
 $keyNames = ['AICS_GEMINI_API_KEY', 'AICS_GEMINI_IMAGE_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY'];
 foreach ($keyNames as $name) putenv($name);
 $envFile = tempnam(sys_get_temp_dir(), 'aics-env');
