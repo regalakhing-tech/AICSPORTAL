@@ -109,7 +109,8 @@ foreach (['id="signup-step-id"', 'name="id_front"', 'name="id_back"', 'id="btn-s
 // Order: 1 Your details -> 2 Valid ID -> 3 Security.
 $details = strpos($page, 'id="signup-step-1"'); $idStep = strpos($page, 'id="signup-step-id"'); $security = strpos($page, 'id="signup-step-2"');
 signup_id_assert($details !== false && $idStep !== false && $security !== false && $details < $idStep && $idStep < $security, 'Sign-up steps must be details, then ID, then security.');
-signup_id_assert(preg_match('/login\.css\?v=[a-z0-9-]+-v\d+/', $page) === 1 && preg_match('/login\.js\?v=[a-z0-9-]+-v\d+/', $page) === 1, 'Sign-up assets need a version so browsers do not use cached files.');
+// The version follows the file's last change, so a changed file is never served from cache.
+signup_id_assert(str_contains($page, "login.css?v=<?= (int) @filemtime(__DIR__ . '/css files/login.css') ?>") && str_contains($page, "login.js?v=<?= (int) @filemtime(__DIR__ . '/js files/login.js') ?>"), 'Sign-up assets need a version so browsers do not use cached files.');
 signup_id_assert(str_contains($endpoint, "'check'") && str_contains($endpoint, 'aics_id_scan_match('), 'The ID step must re-check edited details against the ID.');
 $script = (string) file_get_contents(__DIR__ . '/../Applicants/js files/login.js');
 signup_id_assert(str_contains($script, "setSignupStep('id')") && str_contains($script, 'Use the details on my ID'), 'The ID step flow is not wired in the script.');
