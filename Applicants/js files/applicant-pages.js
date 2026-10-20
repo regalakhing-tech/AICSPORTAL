@@ -1,3 +1,14 @@
+/** Shown once when the server says the sign-in has ended (long idle time, or signed out in another tab). */
+function showAicsSignedOutNotice() {
+  if (document.getElementById("aics-signed-out-notice")) return;
+  const notice = document.createElement("div");
+  notice.id = "aics-signed-out-notice";
+  notice.className = "aics-signed-out-notice";
+  notice.setAttribute("role", "alert");
+  notice.innerHTML = '<i class="fas fa-user-clock" aria-hidden="true"></i><div><strong>You were signed out.</strong><span>Your answers on this page are kept on this device. Sign in again to continue where you left off.</span></div><a class="aics-signed-out-action" href="../login.html">Sign in again</a>';
+  document.body.appendChild(notice);
+}
+
 const toggleBtn = document.getElementById("toggle-btn");
 let closeBtn = document.getElementById("close-btn");
 const sidebar = document.getElementById("sidebar");
@@ -93,6 +104,7 @@ if (aicsNotificationTriggers.length) {
   const refreshAicsNotificationBadge = async () => {
     try {
       const response = await fetch('notifications-state.php', { cache: 'no-store' });
+      if (response.status === 401) { showAicsSignedOutNotice(); return; }
       const payload = await response.json();
       if (!response.ok || !payload || payload.ok !== true) return;
       renderBadge(payload.unread_count);
@@ -602,7 +614,6 @@ const AICS_CPCS_DOCUMENT = {id:"coe_mswdo",label:"Certificate of Person in Crisi
 const AICS_REQUIREMENTS = {
   ...(window.AICS_DOCUMENT_REQUIREMENTS || {}),
   special_cases: [{id:"valid_id",label:"Valid Identification Card",required:true},{id:"report_police_med",label:"Police Report OR Medical Report",required:true},AICS_CPCS_DOCUMENT],
-  educational_basic: [{id:"valid_id",label:"Valid Identification Card",required:true},{id:"school_assessment",label:"School Assessment Form",required:true},{id:"registration_form",label:"Registration Form",required:true},AICS_CPCS_DOCUMENT],
   disaster_victims: [{id:"valid_id",label:"Valid Identification Card",required:true},{id:"damaged_house_photo",label:"Photo of Damaged Property",required:true}],
 };
 
@@ -798,6 +809,17 @@ function renderApplicantIdUploads(container) {
     const thumb = field.querySelector(".applicant-id-upload-thumb");
     const name = field.querySelector(".applicant-id-upload-name");
     name.textContent = existingInfo ? String(existingInfo.file_name || existingInfo.original_name || "Saved photo") : "";
+    if (thumb instanceof HTMLImageElement && previewUrl) {
+      thumb.addEventListener("error", () => {
+        // A refused photo usually means the sign-in ended: say so instead of showing a broken image.
+        fetch(previewUrl, { method: "HEAD", cache: "no-store" })
+          .then((response) => { if (response.status === 401) showAicsSignedOutNotice(); })
+          .catch(() => {});
+        tile.classList.remove("has-photo");
+        thumb.classList.add("hidden");
+        name.textContent = "Saved photo could not load. Refresh the page to see it.";
+      }, { once: true });
+    }
     let objectUrl = null;
     input.addEventListener("change", () => {
       const file = input.files?.[0];
@@ -1370,6 +1392,10 @@ function initApplicantIntakeForm() {
     if (!quiet) setFeedback("Saving...");
     try {
       const response = await fetch(draftSaveUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ draft_id: draftState.id || null, version: draftState.version, current_step: Math.min(3, step), data: draftFormData() }) });
+      if (response.status === 401) {
+        showAicsSignedOutNotice();
+        throw new Error("You were signed out. Sign in again to keep saving your answers.");
+      }
       const payload = await response.json();
       if (!response.ok || !payload.ok) throw new Error(payload.message || "Unable to save draft.");
       draftState.id = String(payload.draft.id || ""); draftState.version = Number(payload.draft.version || 0);

@@ -18,7 +18,21 @@ Student Type: New Student Section: Orchid Semester: 1 Track: Academic Strand: ST
 Subjects Enrolled School Registrar Enrollment Date'''
 
 
+SCHOOL_ID = '''SAMPLE NATIONAL HIGH SCHOOL
+STUDENT ID
+Name: TEST LEARNER 003
+Student No. 2026-00123 LRN 123456789012
+School Year 2026-2027 Grade 9'''
+
+
 class PhilippineRegistrationFormValidationTests(unittest.TestCase):
+    def test_school_id_is_accepted_in_the_education_slot(self):
+        result = classify_document(SCHOOL_ID, 'registration_form')
+        self.assertEqual(result['decision'], 'match')
+        self.assertEqual(result['detected_type'], 'registration_form')
+        self.assertEqual(result['document_subtype'], 'school_id')
+        self.assertEqual(result['display_type'], 'School ID')
+
     def match(self, text):
         result = classify_document(text, 'registration_form')
         self.assertEqual(result['decision'], 'match')

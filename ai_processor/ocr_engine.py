@@ -116,7 +116,7 @@ def resolve_roi_profile(expected_type: str, classification: dict) -> str | None:
         return subtype
     if detected == 'school_assessment' and subtype in ('school_assessment', 'enrollment_assessment', 'senior_high_school_assessment'):
         return 'school_assessment'
-    if detected == 'registration_form' and subtype in ('deped_basic_education_enrollment_form', 'private_school_registration_form', 'enrollment_form'):
+    if detected == 'registration_form' and subtype in ('deped_basic_education_enrollment_form', 'private_school_registration_form', 'enrollment_form', 'school_id'):
         return 'registration_form'
     if detected == 'mdrrmo_cert' and subtype in ('damage_certification', 'house_damage_certification'):
         return 'drrm_damage_certification'

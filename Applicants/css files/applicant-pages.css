@@ -11415,3 +11415,60 @@ body .status-page .ai-gate-notice.is-eta > i { color: #059669; }
 .choice-card span i {
   flex-shrink: 0;
 }
+
+/* ---------- Signed-out notice ---------- */
+.aics-signed-out-notice {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  z-index: 3000;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 24px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #fdba74;
+  border-radius: 14px;
+  background: #fff7ed;
+  color: #7c2d12;
+  box-shadow: 0 12px 30px -12px rgba(15, 23, 42, 0.35);
+}
+
+.aics-signed-out-notice > i {
+  flex-shrink: 0;
+  font-size: 20px;
+  color: #c2410c;
+}
+
+.aics-signed-out-notice strong {
+  display: block;
+}
+
+.aics-signed-out-notice span {
+  display: block;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.aics-signed-out-action {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #0369a1;
+  color: #ffffff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (max-width: 520px) {
+  .aics-signed-out-notice {
+    flex-wrap: wrap;
+  }
+
+  .aics-signed-out-action {
+    width: 100%;
+    text-align: center;
+  }
+}

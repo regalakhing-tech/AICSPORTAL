@@ -695,7 +695,7 @@ function pswdo_seed_lookup_tables(mysqli $connection): void
         ['report_police_med', 'Police or Medical Report', 100],
         ['eclip_cert', 'Certificate from E-CLIP or JTF-ELCAC', 110],
         ['school_assessment', 'School Assessment Form', 115],
-        ['registration_form', 'Registration Form', 116],
+        ['registration_form', 'School ID or Enrollment Form', 116],
         ['crisis_situation_cert', 'Certificate of Person in Crisis Situation', 117],
         // Backward-compatible aliases from older uploads
         ['medical_certificate', 'Medical Certificate', 120],

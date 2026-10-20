@@ -4,7 +4,8 @@
 set -e
 APP=/var/www/html/AICS/AICS
 DATA=$APP/Applicants/uploads/.private
-mkdir -p "$DATA/backups" "$DATA/emails" "$APP/storage"
+mkdir -p "$DATA/backups" "$DATA/emails" "$DATA/sessions" "$APP/storage"
+chmod 700 "$DATA/sessions"
 ln -sfn "$DATA/backups" "$APP/ADMIN/backups"
 ln -sfn "$DATA/emails" "$APP/storage/emails"
 

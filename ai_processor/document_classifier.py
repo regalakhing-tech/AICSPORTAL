@@ -300,7 +300,11 @@ def _registration_form_result(text):
     student_sheet = _contains_any(text, ('student information sheet', 'student profile'))
     admission = _contains_any(text, ('application for admission', 'admission application', 'admission form', 'entrance application', 'entrance examination'))
     financial = _contains_any(text, ('tuition fee', 'total assessment', 'amount due', 'balance', 'voucher', 'discount'))
+    # A school ID card ("school id" alone is the school's DepEd number printed on forms).
+    id_card = _contains_any(text, ('student id', 'student i d', 'student identification', 'identification card', 'id card', 'student no', 'student number'))
+    lrn = _contains_any(text, ('lrn', 'learner reference number'))
     evidence = {
+        'school_id_card': ['School ID card markers detected'] if id_card else [],
         'school_issuer': (['School information detected'] if school else []) + (['DepEd / public-school marker detected'] if deped else []),
         'registration_marker': ['Registration / enrollment form marker detected'] if marker else [],
         'learner_identity': ['Learner information detected'] if learner else [],
@@ -325,6 +329,8 @@ def _registration_form_result(text):
         else:
             subtype, display = 'enrollment_form', 'Enrollment Form'
         return {'recognized': True, 'subtype': subtype, 'display_type': display, 'score': 16 + int(deped) + int(parent_guardian) + int(office) + int(shs) + int(subject_section), 'evidence': evidence}
+    if id_card and school and not marker and not report_card and not certificate and not financial:
+        return {'recognized': True, 'subtype': 'school_id', 'display_type': 'School ID', 'score': 16 + int(lrn) + int(school_year or grade), 'evidence': evidence}
     if report_card:
         return {'recognized': False, 'subtype': 'report_card', 'display_type': 'Report Card', 'score': 14, 'evidence': evidence, 'distinct_wrong_type': 'academic_record'}
     if financial and school and learner and (school_year or grade):
@@ -428,7 +434,7 @@ def classify_document(text: str, expected_type: str) -> dict:
         labels = {'valid_id': 'Valid ID', 'med_cert': 'Medical Abstract or Medical Certificate',
                   'billing_statement': 'Billing Statement or Prescription', 'death_cert': 'Death Certificate',
                   'funeral_contract': 'Funeral Contract', 'report_police_med': 'Police or Medical Report',
-                  'school_assessment': 'School Assessment Form', 'registration_form': 'Registration Form',
+                  'school_assessment': 'School Assessment Form', 'registration_form': 'School ID or Enrollment Form',
                   'mdrrmo_cert': 'MDRRMO Certification'}
         detected, high, decision, slot_result = partial_other[0], True, 'wrong_slot', 'wrong_document'
         reason = f'The uploaded document appears to be a {labels[detected]}, but this upload slot requires a {labels.get(expected, expected)}.'
@@ -437,7 +443,7 @@ def classify_document(text: str, expected_type: str) -> dict:
     elif expected == 'mdrrmo_cert' and mdrrmo_result.get('related') and not (detected and detected != 'mdrrmo_cert' and high):
         detected, decision, reason, slot_result = 'mdrrmo_cert', 'uncertain', 'The submitted file appears to be a disaster-related document, but the system could not reliably confirm that it is the required MDRRMO/LDRRMO Certification of Damage or Displacement.', 'manual_review'
     elif expected == 'registration_form' and registration_result['recognized']:
-        detected, high, decision, reason, slot_result = 'registration_form', True, 'match', 'Multiple Philippine school-registration evidence groups match the required Registration Form slot.', 'matched'
+        detected, high, decision, reason, slot_result = 'registration_form', True, 'match', 'School ID or enrollment evidence matches the required School ID or Enrollment Form slot.', 'matched'
     elif expected == 'registration_form' and registration_result.get('distinct_wrong_type'):
         detected, high, decision, reason, slot_result = registration_result['distinct_wrong_type'], True, 'wrong_slot', f'The uploaded document appears to be a {registration_result["display_type"]}, which is separate from the required Registration Form.', 'wrong_document'
     elif expected == 'registration_form' and registration_result.get('related') and not (detected and detected != 'registration_form' and high):
@@ -477,9 +483,9 @@ def classify_document(text: str, expected_type: str) -> dict:
     elif detected == expected and high:
         decision, reason, slot_result = 'match', 'Detected document evidence matches the expected upload slot.', 'matched'
     elif detected and detected != expected and high and top - expected_score >= 5:
-        labels = {'valid_id': 'Valid Identification Card', 'med_cert': 'Medical Abstract / Medical Certificate', 'billing_statement': 'Billing Statement / Prescription', 'death_cert': 'Death Certificate', 'funeral_contract': 'Funeral Contract', 'report_police_med': 'Police Report / Medical Report', 'school_assessment': 'School Assessment Form', 'registration_form': 'Registration Form', 'mdrrmo_cert': 'MDRRMO Certification of Damage or Displacement', 'academic_record': 'Academic Assessment Record', 'birth_certificate': 'Birth Certificate'}
+        labels = {'valid_id': 'Valid Identification Card', 'med_cert': 'Medical Abstract / Medical Certificate', 'billing_statement': 'Billing Statement / Prescription', 'death_cert': 'Death Certificate', 'funeral_contract': 'Funeral Contract', 'report_police_med': 'Police Report / Medical Report', 'school_assessment': 'School Assessment Form', 'registration_form': 'School ID or Enrollment Form', 'mdrrmo_cert': 'MDRRMO Certification of Damage or Displacement', 'academic_record': 'Academic Assessment Record', 'birth_certificate': 'Birth Certificate'}
         label = labels[detected] if detected in labels else DOCUMENT_CLASS_RULES[detected][0]
-        expected_label = {'valid_id': 'Valid ID', 'med_cert': 'Medical Abstract or Medical Certificate', 'billing_statement': 'Billing Statement or Prescription', 'death_cert': 'Death Certificate', 'funeral_contract': 'Funeral Contract', 'report_police_med': 'Police Report or Medical Report', 'school_assessment': 'School Assessment Form', 'registration_form': 'Registration Form', 'mdrrmo_cert': 'MDRRMO Certification of Damage or Displacement'}.get(expected, DOCUMENT_CLASS_RULES.get(expected, (expected,))[0])
+        expected_label = {'valid_id': 'Valid ID', 'med_cert': 'Medical Abstract or Medical Certificate', 'billing_statement': 'Billing Statement or Prescription', 'death_cert': 'Death Certificate', 'funeral_contract': 'Funeral Contract', 'report_police_med': 'Police Report or Medical Report', 'school_assessment': 'School Assessment Form', 'registration_form': 'School ID or Enrollment Form', 'mdrrmo_cert': 'MDRRMO Certification of Damage or Displacement'}.get(expected, DOCUMENT_CLASS_RULES.get(expected, (expected,))[0])
         decision, reason, slot_result = 'wrong_slot', f'The uploaded document appears to be a {label}, but this upload slot requires a {expected_label}.', 'wrong_document'
     else:
         decision, reason, slot_result = 'uncertain', 'The document contains insufficient reliable evidence to confidently determine its document type.', 'manual_review'

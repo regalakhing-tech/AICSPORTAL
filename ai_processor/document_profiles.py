@@ -83,8 +83,8 @@ _PROFILES = {
         ('client_name', 'document_date', 'issuing_organization'), ('client_name',),
         'client_name', ('registration form', 'report card')),
     'registration_form': _profile(
-        'registration_form', 'Registration Form',
-        (('registration form', 'enrollment form', 'certificate of registration'),
+        'registration_form', 'School ID or Enrollment Form',
+        (('registration form', 'enrollment form', 'certificate of registration', 'student id', 'student identification'),
          ('school', 'college', 'university'), ('learner', 'student name', 'school year')),
         ('client_name', 'document_date', 'issuing_organization'), ('client_name',),
         'client_name', ('assessment form', 'report card')),
