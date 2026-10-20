@@ -639,6 +639,214 @@
     justify-content: center;
   }
 
+  /* AICS AI notices on Status (e.g. "Replace these documents to continue"):
+     no thick coloured side line, the document cards use the full width,
+     and the text and buttons are smaller. */
+  body.has-app-shell .status-page .ai-gate-notice {
+    gap: 8px 10px;
+    padding: 12px;
+    border-left-width: 1px;
+    border-radius: 14px;
+    font-size: 13px;
+  }
+
+  body.has-app-shell .status-page .ai-gate-hold-banner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+
+  body.has-app-shell .status-page .ai-gate-hold-banner > div {
+    display: contents;
+  }
+
+  body.has-app-shell .status-page .ai-gate-hold-banner > i {
+    margin-top: 0;
+    font-size: 15px;
+  }
+
+  body.has-app-shell .status-page .ai-gate-hold-banner strong {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  body.has-app-shell .status-page .ai-gate-hold-lead,
+  body.has-app-shell .status-page .ai-gate-hold-banner .ai-gate-fix-list {
+    grid-column: 1 / -1;
+  }
+
+  body.has-app-shell .status-page .ai-gate-hold-lead {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+
+  body.has-app-shell .status-page .ai-gate-notice ul.ai-gate-fix-list {
+    margin: 2px 0 0;
+    padding: 0;
+    gap: 8px;
+  }
+
+  body.has-app-shell .status-page .ai-gate-fix {
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  body.has-app-shell .status-page .ai-gate-fix-name {
+    font-size: 13.5px;
+    line-height: 1.35;
+  }
+
+  body.has-app-shell .status-page .ai-gate-fix-text {
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+
+  body.has-app-shell .status-page .ai-gate-fix-form {
+    margin-top: 8px;
+  }
+
+  body.has-app-shell .status-page .ai-gate-fix-button {
+    min-height: 40px;
+    font-size: 13.5px;
+  }
+
+  /* Notification popup: centred on the visible screen, smaller, and never
+     taller than the screen so Mark as Read is always reachable. */
+  body.has-app-shell #notification-message-modal {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    padding: 16px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  body.has-app-shell .notif-modal-card {
+    width: 100%;
+    max-width: 400px;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    margin: 0 auto;
+    border-radius: 20px;
+  }
+
+  body.has-app-shell .notif-modal-header {
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  body.has-app-shell .notif-modal-header-left {
+    gap: 10px;
+    min-width: 0;
+  }
+
+  body.has-app-shell .notif-modal-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    font-size: 15px;
+  }
+
+  body.has-app-shell .notif-modal-eyebrow {
+    font-size: 10.5px;
+  }
+
+  body.has-app-shell .notif-modal-header h3 {
+    font-size: 16px;
+    line-height: 1.3;
+  }
+
+  body.has-app-shell .notif-modal-close {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+  }
+
+  body.has-app-shell .notif-modal-body {
+    padding: 14px 16px 0;
+  }
+
+  body.has-app-shell .notif-modal-meta-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  body.has-app-shell .notif-meta-cell {
+    padding: 8px 10px;
+    border-radius: 10px;
+  }
+
+  /* Stage repeats the popup title, so phones show only reference and date, side by side. */
+  body.has-app-shell .notif-modal-meta-grid .notif-meta-cell:first-child {
+    display: none;
+  }
+
+  body.has-app-shell .notif-modal-meta-grid .notif-meta-cell.full-width {
+    grid-column: auto;
+  }
+
+  body.has-app-shell .notif-meta-cell .meta-label {
+    font-size: 10.5px;
+  }
+
+  body.has-app-shell .notif-meta-cell .meta-val {
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  body.has-app-shell .notif-message-box {
+    padding: 10px 12px;
+  }
+
+  body.has-app-shell .notif-message-box p {
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+
+  body.has-app-shell .notif-fix-item {
+    padding: 10px 12px;
+  }
+
+  body.has-app-shell .notif-fix-lead {
+    margin: 2px 0 8px;
+    font-size: 12.5px;
+  }
+
+  body.has-app-shell .notif-fix-name {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  body.has-app-shell .notif-fix-text {
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+
+  body.has-app-shell .notif-fix-button {
+    width: 100%;
+    min-height: 40px;
+    font-size: 13.5px;
+  }
+
+  body.has-app-shell .notif-modal-actions {
+    position: sticky;
+    bottom: 0;
+    margin: 12px -16px 0;
+    padding: 10px 16px 14px;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+  }
+
+  body.has-app-shell .btn-notif-close {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+
   /* Notifications: icon on the left, text and time on the right. */
   body.has-app-shell .content-area .notice-item-card {
     display: grid;

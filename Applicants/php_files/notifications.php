@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/auth-guard.php';
 require_once __DIR__ . '/app-shell.php';
 require_once __DIR__ . '/auth-common.php';
+require_once __DIR__ . '/../../includes/ai-submission-gate.php';
 
 aics_start_session();
 
@@ -167,10 +168,12 @@ if ($accountId > 0) {
         $sql = <<<SQL
             SELECT
                 n.id,
+                n.request_id,
                 n.notification_stage,
                 n.message_text,
                 n.sent_at,
                 r.reference_no,
+                r.ai_gate_status,
                 CASE WHEN rd.notification_id IS NULL THEN 1 ELSE 0 END AS is_unread
             FROM aics_request_notifications n
             INNER JOIN aics_account_requests ar ON ar.request_id = n.request_id
@@ -212,10 +215,24 @@ if ($accountId > 0) {
                 'sent_at_label' => notif_datetime_label($sentAt),
                 'time_ago' => notif_time_ago($sentAt),
                 'is_unread' => (int) ($row['is_unread'] ?? 0) === 1,
+                'request_id' => (int) ($row['request_id'] ?? 0),
+                'gate_status' => (string) ($row['ai_gate_status'] ?? ''),
+                'gate_items' => [],
             ];
         }
 
         $stmt->close();
+
+        // A "Re-upload needed" notice of a request that is still on hold shows the
+        // documents AICS AI could not accept, so they can be replaced right there.
+        $gateItemsByRequest = [];
+        foreach ($notifications as $index => $item) {
+            if ($item['gate_status'] !== 'held' || $item['stage'] !== aics_ai_gate_stage_title('ai_check_hold') || $item['request_id'] <= 0) {
+                continue;
+            }
+            $gateItemsByRequest[$item['request_id']] ??= aics_ai_gate_applicant_items($connection, $item['request_id']);
+            $notifications[$index]['gate_items'] = $gateItemsByRequest[$item['request_id']];
+        }
     } catch (Throwable $exception) {
         $loadError = 'Unable to load notifications right now. Please refresh the page in a moment.';
     } finally {
@@ -704,10 +721,25 @@ foreach ($notifications as $item) {
   transform: translateX(2px);
 }
 
+/* ---------- Documents AICS AI could not accept (replace from the notification) ---------- */
+.notif-modal-fix { margin-top: 16px; }
+.notif-fix-lead { margin: 4px 0 10px; font-size: 13.5px; color: #64748b; }
+.notif-fix-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.notif-fix-item { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid #fecdd3; border-radius: 12px; background: #fff1f2; }
+.notif-fix-name { font-weight: 700; color: #881337; }
+.notif-fix-text { font-size: 13.5px; line-height: 1.5; color: #4c0519; }
+.notif-fix-form { margin: 6px 0 0; }
+.notif-fix-button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 10px; background: #e11d48; color: #ffffff; font-weight: 700; cursor: pointer; }
+.notif-fix-button:hover { background: #be123c; }
+.notif-fix-button:focus-within { outline: 3px solid #fda4af; outline-offset: 2px; }
+.notif-fix-button input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 /* ---------- Modern Notification Detail Modal ---------- */
 .notif-modal-card {
   max-width: 580px;
   width: 100%;
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
   border-radius: 24px;
   overflow: hidden;
   background: #ffffff;
@@ -790,6 +822,8 @@ foreach ($notifications as $item) {
 
 .notif-modal-body {
   padding: 24px 26px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .notif-modal-meta-grid {
@@ -1073,6 +1107,9 @@ foreach ($notifications as $item) {
                 data-reference-no="<?= notif_h((string) $item['reference_no']) ?>"
                 data-message="<?= notif_h((string) $item['message']) ?>"
                 data-sent-at="<?= notif_h((string) $item['sent_at_label']) ?>"
+                <?php if ($item['gate_items'] !== []): ?>
+                data-gate="<?= notif_h((string) json_encode(['request_id' => $item['request_id'], 'items' => array_map(static fn (array $gateItem): array => ['type' => (string) ($gateItem['type'] ?? ''), 'label' => (string) ($gateItem['label'] ?? 'Document'), 'fix' => (string) ($gateItem['fix'] ?? '')], $item['gate_items'])])) ?>"
+                <?php endif; ?>
               >
                 <div class="notif-item-left">
                   <div class="notif-item-avatar tone-<?= notif_h((string) $item['tone']) ?>">
@@ -1152,6 +1189,12 @@ foreach ($notifications as $item) {
         </div>
       </div>
 
+      <div class="notif-modal-fix" id="notification-modal-fix" hidden>
+        <span class="notif-message-heading"><i class="fas fa-file-arrow-up"></i> Replace these documents</span>
+        <p class="notif-fix-lead">Upload a new file here and AICS AI will check it again right away.</p>
+        <ul class="notif-fix-list" id="notification-modal-fix-list"></ul>
+      </div>
+
       <div class="notif-modal-actions">
         <button type="button" class="btn-notif-close" id="close-notification-modal-footer">
           <i class="fas fa-check"></i> Mark as Read
@@ -1175,6 +1218,61 @@ foreach ($notifications as $item) {
   const reference = document.getElementById("notification-modal-reference");
   const sentAt = document.getElementById("notification-modal-time");
   const message = document.getElementById("notification-modal-message");
+  const fixWrap = document.getElementById("notification-modal-fix");
+  const fixList = document.getElementById("notification-modal-fix-list");
+
+  // Same fields as the replace form on Application Status (documents-upload.php).
+  const renderFixes = (gateJson) => {
+    if (!fixWrap || !fixList) return;
+    let gate = null;
+    try { gate = gateJson ? JSON.parse(gateJson) : null; } catch (error) { gate = null; }
+    const items = gate && Array.isArray(gate.items) ? gate.items : [];
+    fixList.replaceChildren(...items.map((item) => {
+      const row = document.createElement("li");
+      row.className = "notif-fix-item";
+      const name = document.createElement("strong");
+      name.className = "notif-fix-name";
+      name.textContent = item.label || "Document";
+      const text = document.createElement("span");
+      text.className = "notif-fix-text";
+      text.textContent = item.fix || "Take a new, sharp photo in good light that shows the whole page.";
+      const form = document.createElement("form");
+      form.method = "post";
+      form.action = 'documents-upload.php';
+      form.enctype = "multipart/form-data";
+      form.className = "notif-fix-form";
+      [["action_mode", "reupload_single"], ["request_id", String(gate.request_id || "")], ["document_type", item.type || ""]].forEach(([field, value]) => {
+        const hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = field;
+        hidden.value = value;
+        form.append(hidden);
+      });
+      const button = document.createElement("label");
+      button.className = "notif-fix-button";
+      const icon = document.createElement("i");
+      icon.className = "fas fa-upload";
+      icon.setAttribute("aria-hidden", "true");
+      const label = document.createElement("span");
+      label.textContent = "Upload a new file";
+      const file = document.createElement("input");
+      file.type = "file";
+      file.name = "reupload_file";
+      file.accept = ".pdf,.jpg,.jpeg,.png";
+      file.required = true;
+      file.setAttribute("aria-label", `Upload a new ${item.label || "document"}`);
+      file.addEventListener("change", () => {
+        if (!file.files || !file.files.length) return;
+        label.textContent = "Uploading…";
+        form.submit();
+      });
+      button.append(icon, label, file);
+      form.append(button);
+      row.append(name, text, form);
+      return row;
+    }));
+    fixWrap.hidden = items.length === 0;
+  };
 
   const closeModal = () => {
     modal.style.display = "none";
@@ -1189,6 +1287,7 @@ foreach ($notifications as $item) {
     if (reference) reference.textContent = data.referenceNo || "Not available";
     if (sentAt) sentAt.textContent = data.sentAt || "Not available";
     if (message) message.textContent = data.message || "No message details available.";
+    renderFixes(data.gate || "");
     modal.style.display = "flex";
     document.body.classList.add("modal-open");
     const notificationId = Number(data.notificationId || 0);
