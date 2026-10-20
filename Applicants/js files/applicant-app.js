@@ -58,6 +58,20 @@
     submitLink.click();
   });
 
+  // Apply: on phones Previous sits next to Next at the end of the form (both
+  // scroll with the page); on wider screens it goes back to its own place.
+  const backRow = document.getElementById('back-btn-row');
+  const actionRow = document.querySelector('.intake-actions');
+  if (backRow && actionRow) {
+    const home = { parent: backRow.parentNode, next: backRow.nextSibling };
+    const placeBackRow = () => {
+      if (phone.matches) actionRow.insertBefore(backRow, actionRow.querySelector('.intake-next-action'));
+      else home.parent.insertBefore(backRow, home.next);
+    };
+    phone.addEventListener('change', placeBackRow);
+    placeBackRow();
+  }
+
   // Top bar: the AICS mark (a close button on Apply) and a short title that fits a phone.
   const SHORT_TITLES = {
     'overview-dashboard.php': 'Home',

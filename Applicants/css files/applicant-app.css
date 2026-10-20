@@ -467,10 +467,6 @@
     object-fit: contain;
   }
 
-  body.has-app-shell.app-tab-apply .aics-chatbot-launcher {
-    bottom: calc(var(--app-tabbar-height) + var(--app-safe-bottom) + 90px);
-  }
-
   /* ---------- Page content ---------- */
   body.has-app-shell .content-area {
     padding: 14px 14px 24px;
@@ -890,64 +886,64 @@
     white-space: normal;
   }
 
-  /* Apply: Previous and Next stay in a bar at the bottom of the screen.
-     (The page body scrolls itself, so this has to be fixed, not sticky.) */
-  /* Room for the Previous / Next bar so the end of the form is never hidden. */
-  body.has-app-shell.app-tab-apply .content-area {
-    padding-bottom: 120px;
-  }
-
+  /* Apply: Previous and Next sit together at the end of the form and scroll
+     with the page (applicant-app.js moves Previous next to Next on phones). */
   body.has-app-shell.app-tab-apply .submit-hero-executive {
     display: none;
   }
 
-  body.has-app-shell .intake-actions {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: calc(var(--app-tabbar-height) + var(--app-safe-bottom));
-    z-index: 145;
+  body.has-app-shell .step-panel-stack {
+    gap: 14px;
+  }
+
+  /* Sex and beneficiary group have short names: two per row. */
+  body.has-app-shell .intake-shell-senior .choice-grid:not(.assist-choice-full) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.has-app-shell .content-area .intake-actions {
     display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    margin: 0;
-    padding: 10px 16px;
-    background: rgba(255, 255, 255, 0.97);
-    border-top: 1px solid var(--line);
-    box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.07);
+    margin-top: 18px;
+    padding-top: 16px;
   }
 
-  body.has-app-shell .intake-actions .intake-next-action {
-    flex: 1;
-    min-height: 50px;
-    margin: 0;
-    justify-content: center;
-  }
-
-  body.has-app-shell .intake-actions .discard-draft-action {
-    flex: none;
-    padding: 0 10px;
+  body.has-app-shell .content-area .intake-actions > .discard-draft-action {
+    order: -1;
+    flex: 0 0 100%;
+    width: 100%;
+    min-height: 0;
+    padding: 0;
+    text-align: right;
     font-size: 13px;
   }
 
-  body.has-app-shell .intake-back-row:not(.hidden) {
-    position: fixed;
-    left: 16px;
-    bottom: calc(var(--app-tabbar-height) + var(--app-safe-bottom) + 10px);
-    z-index: 146;
+  body.has-app-shell .content-area .intake-actions > .intake-back-row {
+    flex: none;
+    width: auto;
+    min-height: 0;
     margin: 0;
     padding: 0;
+    border: 0;
   }
 
-  body.has-app-shell .intake-back-row:not(.hidden) #prev-step {
-    width: 128px;
+  body.has-app-shell .content-area .intake-actions > .intake-back-row #prev-step {
+    min-width: 0;
     min-height: 50px;
-    padding: 0 12px;
+    padding: 0 16px;
     justify-content: center;
   }
 
-  body.has-app-shell .intake-back-row:not(.hidden) ~ #aics-intake-form .intake-actions {
-    padding-left: 152px;
+  body.has-app-shell .content-area .intake-actions > .intake-next-action {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    min-height: 50px;
+    margin: 0;
+    justify-content: center;
   }
 }
 

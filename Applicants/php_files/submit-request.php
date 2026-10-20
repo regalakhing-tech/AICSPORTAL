@@ -935,28 +935,30 @@ if ($editRequestId > 0) {
                   </div>
                 </div>
 
-                <div class="step-panel-card">
-                  <div class="mini-section-title">Problem Presented</div>
-                  <div class="form-grid">
-                    <div class="field field-full">
-                      <label>Describe the beneficiary's problem / present need <span class="required-star">*</span></label>
-                      <textarea name="problem_presented" rows="7" required placeholder="Explain the beneficiary's current situation, why assistance is needed, medical condition or emergency details, and any urgent concerns."></textarea>
+                <div class="step-panel-stack">
+                  <div class="step-panel-card">
+                    <div class="mini-section-title">Problem Presented</div>
+                    <div class="form-grid">
+                      <div class="field field-full">
+                        <label>Describe the beneficiary's problem / present need <span class="required-star">*</span></label>
+                        <textarea name="problem_presented" rows="7" required placeholder="Explain the beneficiary's current situation, why assistance is needed, medical condition or emergency details, and any urgent concerns."></textarea>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              <div class="section-title section-title-inline">
-                <span>Household Income <span class="required-mark">*</span></span>
-              </div>
-              <div class="family-table-shell">
-                <div class="field family-total-income-field">
-                  <label for="family-total-income">Total Estimated Monthly Family Income <span class="required-star">*</span></label>
-                  <select name="family_total_income" id="family-total-income" required>
-                    <option value="" selected disabled hidden>Select the total for the whole family</option>
-                    <?php foreach (aics_income_options() as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?>
-                  </select>
-                  <small class="field-help">The combined monthly income of everyone in the beneficiary's family or household. Enter one total only, not each member's income.</small>
+                  <div class="step-panel-card">
+                    <div class="mini-section-title"><span>Household Income <span class="required-mark">*</span></span></div>
+                    <div class="form-grid">
+                      <div class="field field-full family-total-income-field">
+                        <label for="family-total-income">Total Estimated Monthly Family Income <span class="required-star">*</span></label>
+                        <select name="family_total_income" id="family-total-income" required>
+                          <option value="" selected disabled hidden>Select the total for the whole family</option>
+                          <?php foreach (aics_income_options() as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?>
+                        </select>
+                        <small class="field-help">The combined monthly income of everyone in the beneficiary's family or household. Enter one total only, not each member's income.</small>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
