@@ -376,7 +376,7 @@ ul {
 }
 
 :is(.page-title, .top-nav-heading, .docs-request-title, .uploaded-file-name, .summary-value, .profile-kv-value) {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 :is(button, [role="button"], .btn, .btn-sm, .btn-senior, .btn-icon, .nav-item):focus-visible,
@@ -690,7 +690,7 @@ body.modal-open {
   .notif-item-copy,
   .notification-popup-item,
   .summary-value {
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     word-break: break-word;
   }
 }
@@ -3340,7 +3340,7 @@ body.account-banned-lockdown .sidebar-overlay {
 #submit-confirm-modal .summary-value {
   font-size: 0.98rem;
   line-height: 1.35;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 #submit-confirm-modal .summary-documents-value {
@@ -3353,7 +3353,7 @@ body.account-banned-lockdown .sidebar-overlay {
   font-size: 0.82rem;
   font-weight: 800;
   line-height: 1.25;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 #submit-confirm-modal .summary-row-documents {
@@ -8123,7 +8123,7 @@ body.profile-id-viewer-open { overflow: hidden; }
   font-size: 15px;
   line-height: 1.35;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .step-panel-docs-full .success-actions .upload-meta {
@@ -11009,7 +11009,7 @@ body.profile-id-viewer-open { overflow: hidden; }
     line-height: 1.1;
     text-align: center;
     white-space: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
 }
 
@@ -11386,4 +11386,32 @@ body .status-page .ai-gate-notice.is-eta > i { color: #059669; }
   body .status-page .ai-gate-fix { grid-template-columns: minmax(0, 1fr); }
   body .status-page .ai-gate-fix-form { grid-column: 1; grid-row: auto; margin-top: 6px; }
   body .status-page .ai-gate-fix-button { width: 100%; justify-content: center; white-space: normal; }
+}
+
+/* ---------- Choice cards fit their panel at any width ---------- */
+/* The column count follows the panel's own width (it may sit in a half-width
+   column), so labels never spill out of their cards; labels wrap instead. */
+@media (min-width: 601px) {
+  .choice-grid,
+  .intake-shell-senior .choice-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  }
+  .choice-grid.two-col,
+  .intake-shell-senior .choice-grid.two-col {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  }
+}
+
+.choice-card {
+  min-width: 0;
+}
+
+.choice-card span {
+  min-width: 0;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+
+.choice-card span i {
+  flex-shrink: 0;
 }
