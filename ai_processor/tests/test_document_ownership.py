@@ -22,7 +22,7 @@ JOB = {
 
 
 def scan(expected, name, readable='pass'):
-    roles = {'valid_id': 'cardholder', 'med_cert': 'patient'}
+    roles = {'valid_id': 'cardholder', 'med_cert': 'patient', 'school_id': 'learner'}
     return {
         'document_type': expected, 'document_title': expected, 'type_confidence': 95,
         'primary_person': {'name': name, 'role': roles[expected], 'birth_date': None,
@@ -82,6 +82,19 @@ class DocumentOwnershipTests(unittest.TestCase):
         }), 'applicant')
         self.assertEqual(same_person['reference_owner'], 'applicant')
         self.assertEqual(verdict('valid_id', 'Juan Dela Cruz', same_person)['status'], 'likely_valid')
+
+    def test_school_id_is_the_learners_card_and_is_accepted_at_submit(self):
+        # Sign-up takes government IDs only; at submit the School ID slot takes the
+        # beneficiary learner's school ID, even when a parent is the applicant.
+        from ai_processor.document_ownership import document_owner, select_reference_context
+        context = get_request_verification_context({**JOB, 'assistance_types_json': '["educational_basic"]'})
+        self.assertEqual(document_owner('school_id', 'applicant'), 'beneficiary')
+        learner = select_reference_context('school_id', context, 'applicant')
+        self.assertEqual(learner['full_name'], 'Maria Dela Cruz')
+        self.assertEqual(verdict('school_id', 'Maria Dela Cruz', learner)['status'], 'likely_valid')
+        parent_card = verdict('school_id', 'Juan Dela Cruz', learner)
+        self.assertEqual(parent_card['status'], 'flagged_inconsistency')
+        self.assertEqual(parent_card['findings']['verdict']['headline'], 'Name does not match the application')
 
     def test_legacy_id_keeps_beneficiary_comparison_and_burial_exception(self):
         from ai_processor.document_ownership import select_reference_context
