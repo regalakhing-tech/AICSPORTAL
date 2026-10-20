@@ -405,32 +405,13 @@
   </div>
 
   <!-- SECTION II: FAMILY COMPOSITION -->
-  <div class="section-heading">II. Family Composition</div>
-
-  <table class="gis-family-table">
-    <thead>
-      <tr>
-        <th style="width:30%">Name</th>
-        <th style="width:8%">Age</th>
-        <th style="width:10%">Sex</th>
-        <th style="width:16%">Relationship</th>
-        <th style="width:18%">Occupation</th>
-        <th style="width:18%">Educational Attainment</th>
-      </tr>
-    </thead>
-    <tbody>
-      <?php for ($i = 0; $i < 8; $i++): ?>
-      <tr>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-      </tr>
-      <?php endfor; ?>
-    </tbody>
-  </table>
+  <div class="section-heading">II. Beneficiary Household</div>
+  <div class="gis-data-grid cols-1">
+    <div class="gis-field">
+      <label>Total Estimated Monthly Family Income</label>
+      <span class="gis-value">&nbsp;</span>
+    </div>
+  </div>
 
   <!-- SECTION III: PROBLEM PRESENTED -->
   <div class="section-heading">III. Problem Presented</div>

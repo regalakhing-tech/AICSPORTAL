@@ -452,10 +452,9 @@ function aics_applicant_relationship_from_post(array $post): string
     return $relationship;
 }
 
-/** The household's one estimated monthly income (all members combined); null when there is no household. */
-function aics_family_total_income_from_post(array $post): ?string
+/** The family's one estimated monthly income (all members combined); always required. */
+function aics_family_total_income_from_post(array $post): string
 {
-    if ((string) ($post['family_members_not_applicable'] ?? '') === '1') return null;
     $income = trim((string) ($post['family_total_income'] ?? ''));
     if (!aics_is_valid_income_value($income)) {
         throw new RuntimeException('Select the total estimated monthly income of the whole household.');

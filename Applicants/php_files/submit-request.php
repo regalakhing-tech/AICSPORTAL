@@ -945,52 +945,16 @@ if ($editRequestId > 0) {
               </div>
 
               <div class="section-title section-title-inline">
-                <span>Beneficiary Household / Family Composition <span class="required-mark">*</span></span>
-                <span class="family-req-note">At least 1 member required</span>
+                <span>Household Income <span class="required-mark">*</span></span>
               </div>
               <div class="family-table-shell">
-                <label class="family-not-applicable-control" for="family-members-not-applicable">
-                  <input type="checkbox" name="family_members_not_applicable" id="family-members-not-applicable" value="1">
-                  <span><strong>Not Applicable</strong><small>I have no family/household member or other applicable person to declare.</small></span>
-                </label>
-                <div id="family-entry-controls">
-                <div class="family-composition-grid" id="family-composition-body">
-                  <div class="family-head">Name</div>
-                  <div class="family-head">Age</div>
-                  <div class="family-head">Relationship to Beneficiary</div>
-                  <div class="family-head">Occupation</div>
-                  <div class="family-head">Educational Attainment</div>
-                  <div class="family-head family-action-head">Action</div>
-                  <input type="text" name="family_name[]" placeholder="Full name (e.g. Maria Dela Cruz)" class="family-row-input">
-                  <input type="number" name="family_age[]" min="0" max="120" placeholder="Age" inputmode="numeric" class="family-row-input numeric-only">
-                  <select name="family_relationship[]" class="family-row-input"><option value="" selected disabled hidden>Relationship</option><option value="Spouse">Spouse</option><option value="Child">Child</option><option value="Parent">Parent</option><option value="Sibling">Sibling</option><option value="Grandparent">Grandparent</option><option value="Grandchild">Grandchild</option><option value="Other Relative">Other Relative</option><option value="Non-relative">Non-relative</option></select>
-                  <div class="family-occupation-wrap">
-                    <select name="family_occupation[]" class="family-row-input family-occupation-select"><option value="" selected disabled hidden>Select occupation</option><?php foreach ($occupationOptions as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
-                    <input type="text" name="family_occupation_other[]" placeholder="Specify occupation" class="family-occupation-other" maxlength="150" hidden>
-                  </div>
-                  <select name="family_education[]" class="family-row-input"><option value="" selected disabled hidden>Select educational attainment</option><?php foreach ($educationOptions as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
-                  <input type="text" name="family_name[]" placeholder="Full name (e.g. Juan Dela Cruz)" class="family-row-input">
-                  <input type="number" name="family_age[]" min="0" max="120" placeholder="Age" inputmode="numeric" class="family-row-input numeric-only">
-                  <select name="family_relationship[]" class="family-row-input"><option value="" selected disabled hidden>Relationship</option><option value="Spouse">Spouse</option><option value="Child">Child</option><option value="Parent">Parent</option><option value="Sibling">Sibling</option><option value="Grandparent">Grandparent</option><option value="Grandchild">Grandchild</option><option value="Other Relative">Other Relative</option><option value="Non-relative">Non-relative</option></select>
-                  <div class="family-occupation-wrap">
-                    <select name="family_occupation[]" class="family-row-input family-occupation-select"><option value="" selected disabled hidden>Select occupation</option><?php foreach ($occupationOptions as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
-                    <input type="text" name="family_occupation_other[]" placeholder="Specify occupation" class="family-occupation-other" maxlength="150" hidden>
-                  </div>
-                  <select name="family_education[]" class="family-row-input"><option value="" selected disabled hidden>Select educational attainment</option><?php foreach ($educationOptions as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
-                </div>
-                <div class="family-add-row-wrap">
-                  <button type="button" class="family-add-btn" id="family-add-row-btn">
-                    <i class="fas fa-plus"></i> Add Member
-                  </button>
-                </div>
                 <div class="field family-total-income-field">
                   <label for="family-total-income">Total Estimated Monthly Family Income <span class="required-star">*</span></label>
                   <select name="family_total_income" id="family-total-income" required>
-                    <option value="" selected disabled hidden>Select the total for the whole household</option>
+                    <option value="" selected disabled hidden>Select the total for the whole family</option>
                     <?php foreach (aics_income_options() as $option): ?><option value="<?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($option, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?>
                   </select>
-                  <small class="field-help">The combined monthly income of all the household members listed above. Enter one total only, not each member's income.</small>
-                </div>
+                  <small class="field-help">The combined monthly income of everyone in the beneficiary's family or household. Enter one total only, not each member's income.</small>
                 </div>
               </div>
             </section>
@@ -1159,7 +1123,6 @@ if ($editRequestId > 0) {
           <section class="confirm-review-section">
             <h4><i class="fas fa-paperclip"></i> Supporting Information</h4>
             <div class="confirm-review-grid">
-              <div class="summary-row summary-row-wide"><span class="summary-label">Family Composition</span><strong class="summary-value" id="modal-confirm-family">-</strong></div>
               <div class="summary-row"><span class="summary-label">Total Estimated Monthly Family Income</span><strong class="summary-value" id="modal-confirm-family-income">-</strong></div>
               <div class="summary-row summary-row-documents"><span class="summary-label">Documents Attached</span><strong class="summary-documents-value" id="modal-confirm-docs">0 documents attached</strong></div>
             </div>

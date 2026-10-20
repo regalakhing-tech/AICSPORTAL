@@ -2378,26 +2378,6 @@ function initApplicantIntakeForm() {
     }
   }
 
-  function validateFamilyComposition() {
-    if (form.querySelector('#family-members-not-applicable')?.checked) return true;
-    const nameInputs = Array.from(
-      form.querySelectorAll('input[name="family_name[]"]'),
-    );
-    const hasAtLeastOne = nameInputs.some((inp) => inp.value.trim() !== "");
-    if (!hasAtLeastOne) {
-      setFeedback(
-        "Family Composition is required — please fill in at least one member's name.",
-        "error",
-      );
-      const shell = form.querySelector(".family-table-shell");
-      if (shell instanceof HTMLElement) {
-        shell.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-      return false;
-    }
-    return true;
-  }
-
   function validateStep(stepIndex) {
     const panel = steps[stepIndex];
     if (!panel) return true;
@@ -2416,11 +2396,6 @@ function initApplicantIntakeForm() {
         field.reportValidity();
         return false;
       }
-    }
-
-    // Step 2 Family Composition Validation
-    if (stepIndex === 2 && !validateFamilyComposition()) {
-      return false;
     }
 
     // Step 3 Custom Validation
@@ -2985,14 +2960,6 @@ function initApplicantIntakeForm() {
       const beneficiaryIncome = form.querySelector('[name="estimated_income"]')?.value.trim() || "-";
       const applicantOccupation = document.getElementById("applicant-occupation")?.value.trim() || "-";
       const applicantIncome = document.getElementById("applicant-estimated-income")?.value.trim() || "-";
-      const familyNames = Array.from(form.querySelectorAll('input[name="family_name[]"]'));
-      const familyRelationships = Array.from(form.querySelectorAll('[name="family_relationship[]"]'));
-      const familySummary = form.querySelector('#family-members-not-applicable')?.checked ? "Not Applicable" : familyNames.map((input, index) => {
-        const name = input.value.trim();
-        if (!name) return "";
-        const relationship = familyRelationships[index]?.value.trim() || "Relationship not provided";
-        return `${name} (${relationship})`;
-      }).filter(Boolean).join("; ") || "No family composition information provided";
       const beneficiaryAddress = [document.getElementById("beneficiary-sitio-purok")?.value, barangaySelect?.value, municipalitySelect?.value, document.getElementById("beneficiary-province")?.value].filter(Boolean).join(", ") || "-";
       const applicantAddress = document.getElementById("applicant-complete-address")?.value.trim() || "-";
       const uploadedDocumentTypes = new Set(Object.keys(window.AICS_DRAFT_DOCUMENTS || {}));
@@ -3024,11 +2991,7 @@ function initApplicantIntakeForm() {
           : (applicantRelationship instanceof HTMLSelectElement && applicantRelationship.value) || "-");
       setModalText("modal-confirm-applicant-occupation", applicantOccupation);
       setModalText("modal-confirm-applicant-income", applicantIncome);
-      setModalText("modal-confirm-family", familySummary);
-      setModalText("modal-confirm-family-income",
-        form.querySelector('#family-members-not-applicable')?.checked
-          ? "Not Applicable"
-          : form.querySelector('[name="family_total_income"]')?.value || "-");
+      setModalText("modal-confirm-family-income", form.querySelector('[name="family_total_income"]')?.value || "-");
       setModalText("modal-confirm-beneficiary-address", beneficiaryAddress);
       setModalText("modal-confirm-applicant-address", applicantAddress);
       setModalText("modal-confirm-docs",

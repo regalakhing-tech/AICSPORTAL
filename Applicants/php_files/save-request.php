@@ -185,7 +185,7 @@ try {
                 problem_presented = ?,
                 client_category_other = ?,
                 assistance_type_other = ?,
-                family_composition_json = ?,
+                family_composition_json = COALESCE(?, family_composition_json),
                 client_categories_json = ?,
                 assistance_types_json = ?,
                 amount = ?,
@@ -207,7 +207,7 @@ try {
         $beneficiaryBirthDate = $payload['beneficiary_birth_date'];
         $applicantBirthDate = $payload['applicant_birth_date'];
         $estimatedIncome = $payload['estimated_income'];
-        $familyCompositionJson = json_encode($payload['family_composition'], JSON_UNESCAPED_UNICODE);
+        $familyCompositionJson = $payload['family_composition'] === [] ? null : json_encode($payload['family_composition'], JSON_UNESCAPED_UNICODE);
         $amount = (string) $payload['amount'];
         $requestIdString = (string) $requestId;
         if ($familyCompositionJson === false) {
@@ -722,9 +722,6 @@ function validate_request_payload(array $post, array $files, bool $isEditMode = 
 
     $familyNotApplicable = (string) ($post['family_members_not_applicable'] ?? '') === '1';
     $familyComposition = normalize_family_composition($post, $familyNotApplicable);
-    if (!$familyNotApplicable && $familyComposition === []) {
-        throw new RuntimeException('Family Composition is required unless Not Applicable is selected.');
-    }
 
     return [
         'date_applied' => normalize_date((string) $post['date_applied'], 'date_applied'),

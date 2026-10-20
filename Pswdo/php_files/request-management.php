@@ -602,10 +602,7 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
             $familyComposition = is_array($request['family_composition'] ?? null) ? $request['family_composition'] : [];
             $familyComposition = array_values(array_filter($familyComposition, static function ($member): bool {
                 if (!is_array($member)) return false;
-                foreach ($member as $value) {
-                    if ($value !== null && trim((string) $value) !== '') return true;
-                }
-                return false;
+                return trim((string) ($member['name'] ?? '')) !== '';
             }));
             // Older requests have an income per member; new ones have one household total.
             $familyHasMemberIncome = array_filter($familyComposition, static fn ($member): bool => is_array($member) && trim((string) ($member['estimated_monthly_income'] ?? '')) !== '') !== [];
@@ -635,12 +632,10 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                 </tbody>
               </table>
             </div>
-            <div class="request-detail-grid">
-              <div class="request-detail-item request-detail-item-income-wide"><span>Total Estimated Monthly Family Income</span><strong><?= pswdo_h($familyTotalIncome !== '' ? $familyTotalIncome : 'Not provided') ?></strong></div>
-            </div>
-          <?php else: ?>
-            <p class="empty-note">No household members added.</p>
           <?php endif; ?>
+          <div class="request-detail-grid">
+            <div class="request-detail-item request-detail-item-income-wide"><span>Total Estimated Monthly Family Income</span><strong><?= pswdo_h($familyTotalIncome !== '' ? $familyTotalIncome : 'Not provided') ?></strong></div>
+          </div>
         </div>
 
         <div class="request-doc-section documents-review-section">

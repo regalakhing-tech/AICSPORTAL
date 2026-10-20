@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
 
-// The household gives one estimated monthly income for the whole family (all
-// members combined), not one per member. It is saved with the request and
-// shown to PSWDO and on the printed GIS.
+// The household section asks only one thing: the estimated monthly income of
+// the whole family (all members combined), always required. Household members
+// are no longer listed. Older requests keep their member lists.
 require_once __DIR__ . '/../Applicants/php_files/auth-common.php';
 
 function family_income_assert(bool $condition, string $message): void
@@ -21,7 +21,7 @@ $refused = static function (array $post): string {
 };
 $income = aics_income_options()[2];
 family_income_assert(aics_family_total_income_from_post(['family_total_income' => $income]) === $income, 'The household total is saved.');
-family_income_assert(aics_family_total_income_from_post(['family_members_not_applicable' => '1']) === null, 'No household: no total.');
+family_income_assert(str_contains($refused(['family_members_not_applicable' => '1']), 'total estimated monthly income'), 'The total is always required.');
 family_income_assert(str_contains($refused([]), 'total estimated monthly income'), 'A household needs its total income.');
 family_income_assert(str_contains($refused(['family_total_income' => '999']), 'total estimated monthly income'), 'Only listed income ranges are accepted.');
 
@@ -31,20 +31,20 @@ $js = (string) file_get_contents($root . '/Applicants/js files/applicant-pages.j
 $save = (string) file_get_contents($root . '/Applicants/php_files/save-request.php');
 $css = (string) file_get_contents($root . '/Applicants/css files/applicant-pages.css');
 
-// Form: no per-member income; one total inside the household controls.
-family_income_assert(!str_contains($submit, 'family_estimated_income[]') && !str_contains($js, '"family_estimated_income[]"'), 'Household members no longer have their own income field.');
-$entry = substr($submit, (int) strpos($submit, '<div id="family-entry-controls">'), 12000);
-family_income_assert(str_contains($entry, 'name="family_total_income"') && str_contains($entry, 'Total Estimated Monthly Family Income'), 'One total income field for the household.');
-family_income_assert(str_contains($entry, 'Enter one total only'), 'The label explains it is the combined income of all members.');
-family_income_assert(str_contains($js, 'index += 5') && !str_contains($js, "'Educational Attainment', 'Estimated Monthly Income'"), 'Household rows have five fields.');
-family_income_assert(str_contains($css, 'grid-template-columns: 1.45fr 0.55fr 1.05fr 1.1fr 1.2fr 0.72fr;'), 'The household grid has one column fewer.');
+// Form: only the household total; no member table and no "Not Applicable".
+family_income_assert(!str_contains($submit, 'family_name[]') && !str_contains($submit, 'family-add-row-btn') && !str_contains($submit, 'family_members_not_applicable'), 'Household members are no longer listed.');
+$household = substr($submit, (int) strpos($submit, '<span>Household Income'), 3000);
+family_income_assert(str_contains($household, 'name="family_total_income" id="family-total-income" required') && str_contains($household, 'Total Estimated Monthly Family Income'), 'One required total income field for the household.');
+family_income_assert(str_contains($household, 'Enter one total only'), 'The label explains it is the combined income of the whole family.');
+family_income_assert(!str_contains($js, 'validateFamilyComposition()') && !str_contains($submit, 'id="modal-confirm-family"'), 'No member check or member summary remains.');
 family_income_assert(str_contains($js, 'assignValue("family_total_income", values.family_total_income);'), 'Editing a request restores the total.');
 family_income_assert(str_contains((string) file_get_contents($root . '/Applicants/php_files/draft-lib.php'), "'family_total_income',"), 'Drafts keep the total.');
 
 // Saving.
 family_income_assert(str_contains($save, "'family_total_income' => aics_family_total_income_from_post(\$post)"), 'Submissions validate the total.');
 family_income_assert(str_contains($save, 'family_total_income = ?'), 'Submissions save the total.');
-family_income_assert(!str_contains($save, 'Select a valid estimated monthly income for each household member.'), 'Members are no longer asked for their own income.');
+family_income_assert(!str_contains($save, 'Select a valid estimated monthly income for each household member.') && !str_contains($save, 'Family Composition is required'), 'Members are no longer required.');
+family_income_assert(str_contains($save, 'family_composition_json = COALESCE(?, family_composition_json)'), 'Editing an older request keeps its member list.');
 family_income_assert(str_contains((string) file_get_contents($root . '/Applicants/php_files/auth-common.php'), 'ADD COLUMN IF NOT EXISTS family_total_income VARCHAR(40)'), 'Older databases get the column.');
 family_income_assert(str_contains((string) file_get_contents($root . '/database/AICSdb.sql'), '`family_total_income` VARCHAR(40)'), 'New databases have the column.');
 

@@ -195,6 +195,8 @@ if ($assistanceTypeOther !== '') {
 
 $familyData = json_decode(trim((string) ($row['family_composition_json'] ?? '[]')), true);
 $familyMembers = is_array($familyData) ? $familyData : [];
+// Older requests list household members; new ones give only the family income.
+$familyMembers = array_values(array_filter($familyMembers, static fn ($member): bool => is_array($member) && trim((string) ($member['name'] ?? '')) !== ''));
 
 $safeRef = $referenceNo !== '' ? preg_replace('/[^A-Za-z0-9._-]/', '_', $referenceNo) : ('request_' . $requestId);
 $isPdfExport = $format === 'pdf';
@@ -244,9 +246,10 @@ if ($format === 'txt') {
             $idx = $i + 1;
             $lines[] = "Member {$idx}: " . trim((string) ($member['name'] ?? '')) . ' | Age ' . trim((string) ($member['age'] ?? '')) . ' | ' . trim((string) ($member['relationship'] ?? '')) . ' | ' . trim((string) ($member['occupation'] ?? '')) . ' | ' . trim((string) ($member['educational_attainment'] ?? '')) . ' | Estimated Monthly Income: ' . export_fill(aics_income_value($member['estimated_monthly_income'] ?? null) ?? '');
         }
-        $lines[] = 'Total Estimated Monthly Family Income: ' . export_fill(aics_income_value($row['family_total_income'] ?? null) ?? '');
         $lines[] = '';
     }
+    $lines[] = 'Total Estimated Monthly Family Income: ' . export_fill(aics_income_value($row['family_total_income'] ?? null) ?? '');
+    $lines[] = '';
     $lines[] = 'Generated: ' . date('Y-m-d H:i:s');
 
     header('Content-Type: text/plain; charset=utf-8');
@@ -743,14 +746,21 @@ function export_fail(string $message, int $statusCode, string $format): void
                 <td><?= export_h(export_fill(aics_income_value($member['estimated_monthly_income'] ?? null) ?? '')) ?></td>
               </tr>
             <?php endforeach; ?>
-            <tr>
-              <td colspan="6" style="text-align: right; font-weight: 700;">Total Estimated Monthly Family Income</td>
-              <td><?= export_h(export_fill(aics_income_value($row['family_total_income'] ?? null) ?? '')) ?></td>
-            </tr>
           </tbody>
         </table>
       </div>
     <?php endif; ?>
+    <h2 class="section-title">Household Income</h2>
+    <div style="padding: 8px 10px;">
+      <table class="family">
+        <tbody>
+          <tr>
+            <td style="width: 50%; font-weight: 700;">Total Estimated Monthly Family Income</td>
+            <td><?= export_h(export_fill(aics_income_value($row['family_total_income'] ?? null) ?? '')) ?></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <div style="padding: 10px 14px; font-size: 10.5px; color: #64748b; border-top: 1px solid var(--line-soft);">
       Generated on <?= export_h(date('F d, Y h:i A')) ?>

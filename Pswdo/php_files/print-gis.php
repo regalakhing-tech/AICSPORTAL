@@ -152,6 +152,8 @@ $contactNo = trim((string) ($row['contact_number'] ?? ''));
 $familyRaw = trim((string) ($row['family_composition_json'] ?? '[]'));
 $familyData = json_decode($familyRaw, true);
 $familyMembers = is_array($familyData) ? $familyData : [];
+// Older requests list household members; new ones give only the family income.
+$familyMembers = array_values(array_filter($familyMembers, static fn ($member): bool => is_array($member) && trim((string) ($member['name'] ?? '')) !== ''));
 
 // Problem presented
 $problem = trim((string) ($row['problem_presented'] ?? ''));
@@ -613,8 +615,9 @@ $isPdfExport = !empty($_GET['format']) && $_GET['format'] === 'pdf';
   <?php endif; ?>
 
   <!-- SECTION II: BENEFICIARY HOUSEHOLD / FAMILY COMPOSITION -->
-  <div class="section-heading">II. Beneficiary Household / Family Composition</div>
+  <div class="section-heading">II. Beneficiary Household</div>
 
+  <?php if ($familyMembers !== []): ?>
   <table class="gis-family-table">
     <thead>
       <tr>
@@ -629,7 +632,7 @@ $isPdfExport = !empty($_GET['format']) && $_GET['format'] === 'pdf';
     </thead>
     <tbody>
       <?php
-        $minRows = max(6, count($familyMembers));
+        $minRows = count($familyMembers);
         for ($i = 0; $i < $minRows; $i++):
           $member = is_array($familyMembers[$i] ?? null) ? $familyMembers[$i] : [];
           $mName  = trim((string) ($member['name'] ?? ''));
@@ -649,12 +652,15 @@ $isPdfExport = !empty($_GET['format']) && $_GET['format'] === 'pdf';
         <td><?= $h($mIncome) ?></td>
       </tr>
       <?php endfor; ?>
-      <tr>
-        <td colspan="6" style="text-align:right;font-weight:700">Total Estimated Monthly Family Income</td>
-        <td><?= $h(aics_income_value($row['family_total_income'] ?? null) ?? '') ?></td>
-      </tr>
     </tbody>
   </table>
+  <?php endif; ?>
+  <div class="gis-data-grid cols-1">
+    <div class="gis-field">
+      <label>Total Estimated Monthly Family Income</label>
+      <span class="gis-value"><?= $h(aics_income_value($row['family_total_income'] ?? null) ?? '') ?></span>
+    </div>
+  </div>
 
   <!-- SECTION III: PROBLEM PRESENTED -->
   <div class="section-heading">III. Problem Presented</div>
