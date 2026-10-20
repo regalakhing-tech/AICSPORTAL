@@ -25,6 +25,8 @@ def scan(path: Path, expected_type: str, beneficiary: dict, number: int) -> dict
     job = {'id': 900000 + number, 'document_id': 900000 + number, 'request_id': 900000, 'file_path': str(path),
            'expected_document_type': expected_type, 'beneficiary_complete_name': beneficiary['full_name'],
            'beneficiary_birth_date': beneficiary['date_of_birth'], 'gender': beneficiary['sex'],
+           # The ID slot is checked against the applicant; this fictional person applies for themself.
+           'applicant_first_name': beneficiary['full_name'], 'applicant_birth_date': beneficiary['date_of_birth'],
            'assistance_types_json': '["medical"]'}
     captured: dict = {}
     with ExitStack() as stack:

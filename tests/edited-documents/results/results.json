@@ -4,32 +4,10 @@
     "edited": false,
     "description": "Unedited phone photo of the certificate.",
     "pass": true,
-    "note": "AI noted the generated test file looks computer-made (allowed for generated fixtures only; no tampering flag)",
-    "status": "needs_staff_review",
-    "headline": "Staff review needed",
-    "reason": "The entire image has a uniform digital texture and font appearance resembling a generated template or digital specimen rather than a natural paper scan.",
-    "source": "gemini",
-    "checks": {
-      "complete": "pass",
-      "consistent": "pass",
-      "readable": "pass",
-      "unaltered": "pass",
-      "untampered": "review"
-    },
-    "signals": [
-      "sample_or_watermark"
-    ],
-    "seconds": 5.0
-  },
-  {
-    "file": "clean-02-flat-scan.png",
-    "edited": false,
-    "description": "Unedited clean scan (black text on white, no camera effects).",
-    "pass": true,
     "note": "no alteration/tampering flags",
     "status": "likely_valid",
     "headline": "Document looks good",
-    "reason": "This document is a Civil Service Medical Certificate issued by Antique Provincial Hospital for patient Juan S. Dela Cruz, signed by Dr. Maria L. Santos. Staff should verify the details against the beneficiary records.",
+    "reason": "This is a Civil Service Commission Medical Certificate issued by Antique Provincial Hospital for patient Juan S. Dela Cruz, signed by Dr. Maria L. Santos.",
     "source": "gemini",
     "checks": {
       "complete": "pass",
@@ -39,7 +17,27 @@
       "untampered": "pass"
     },
     "signals": [],
-    "seconds": 4.3
+    "seconds": 7.9
+  },
+  {
+    "file": "clean-02-flat-scan.png",
+    "edited": false,
+    "description": "Unedited clean scan (black text on white, no camera effects).",
+    "pass": true,
+    "note": "no alteration/tampering flags",
+    "status": "likely_valid",
+    "headline": "Document looks good",
+    "reason": "This is a Civil Service Medical Certificate issued by Antique Provincial Hospital for patient Juan S. Dela Cruz, signed by Dr. Maria L. Santos.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "pass"
+    },
+    "signals": [],
+    "seconds": 6.6
   },
   {
     "file": "clean-03-cool-light-photo.jpg",
@@ -49,7 +47,7 @@
     "note": "no alteration/tampering flags",
     "status": "likely_valid",
     "headline": "Document looks good",
-    "reason": "This is a Civil Service Medical Certificate issued by Antique Provincial Hospital for patient Juan S. Dela Cruz, dated April 16, 2021. Staff should verify that all details match the beneficiary's records.",
+    "reason": "This is a Medical Certificate issued by Antique Provincial Hospital for patient Juan S. Dela Cruz, dated April 16, 2021. Staff should verify the details against the beneficiary records.",
     "source": "gemini",
     "checks": {
       "complete": "pass",
@@ -61,7 +59,7 @@
     "signals": [
       "typography_mismatch"
     ],
-    "seconds": 6.1
+    "seconds": 9.7
   },
   {
     "file": "edit-01-canva-typed-date.png",
@@ -85,7 +83,7 @@
       "digital_text_overlay",
       "name_mismatch_or_internal_conflict"
     ],
-    "seconds": 5.0
+    "seconds": 7.9
   },
   {
     "file": "edit-02-pasted-beneficiary-name.jpg",
@@ -101,15 +99,14 @@
       "complete": "pass",
       "consistent": "fail",
       "readable": "pass",
-      "unaltered": "review",
-      "untampered": "fail"
+      "unaltered": "pass",
+      "untampered": "review"
     },
     "signals": [
       "digital_text_overlay",
-      "name_mismatch_or_internal_conflict",
-      "typography_mismatch"
+      "name_mismatch_or_internal_conflict"
     ],
-    "seconds": 4.9
+    "seconds": 7.7
   },
   {
     "file": "edit-03-cloned-signature.jpg",
@@ -119,53 +116,29 @@
     "note": "caught by: copy_move_region",
     "status": "needs_staff_review",
     "headline": "Staff review needed",
-    "reason": "The document appears to be a digital template or reproduction with uniform computer-generated text and signature styling.",
+    "reason": "Local image forensics marked areas that need inspection.",
     "source": "gemini",
     "checks": {
       "complete": "pass",
       "consistent": "pass",
       "readable": "pass",
-      "unaltered": "pass",
+      "unaltered": "review",
       "untampered": "review"
     },
     "signals": [
-      "copy_move_region",
-      "sample_or_watermark"
+      "copy_move_region"
     ],
-    "seconds": 4.6
+    "seconds": 7.3
   },
   {
     "file": "edit-04-whiteout-retyped-dates.jpg",
     "edited": true,
     "description": "Confinement dates covered with flat white (correction tape) and retyped as 11 - 25 instead of 11 - 15.",
     "pass": true,
-    "note": "caught by: pasted_region_boundary",
-    "status": "flagged_inconsistency",
-    "headline": "Details do not agree",
-    "reason": "The confinement dates (April 11 - 25, 2021) conflict with the illness leave dates (April 11 - 15, 2021) and occur after the document issue date (April 16, 2021).",
-    "source": "gemini",
-    "checks": {
-      "complete": "pass",
-      "consistent": "fail",
-      "readable": "pass",
-      "unaltered": "pass",
-      "untampered": "review"
-    },
-    "signals": [
-      "name_mismatch_or_internal_conflict",
-      "pasted_region_boundary"
-    ],
-    "seconds": 4.8
-  },
-  {
-    "file": "edit-05-spliced-diagnosis.jpg",
-    "edited": true,
-    "description": "Diagnosis line replaced by a cleaner, brighter, heavily compressed patch from another image (splice).",
-    "pass": true,
-    "note": "caught by: pasted_region_boundary",
+    "note": "flagged for review (different signal than expected: background_texture_discontinuity)",
     "status": "needs_staff_review",
     "headline": "Staff review needed",
-    "reason": "The nature of disease entry appears digitally pasted with a solid white background box distinct from the rest of the paper texture.",
+    "reason": "The confinement date text block appears on a distinctly flat white background overlay, suggesting digital text insertion.",
     "source": "gemini",
     "checks": {
       "complete": "pass",
@@ -175,9 +148,31 @@
       "untampered": "review"
     },
     "signals": [
-      "pasted_region_boundary"
+      "background_texture_discontinuity"
     ],
-    "seconds": 4.9
+    "seconds": 7.6
+  },
+  {
+    "file": "edit-05-spliced-diagnosis.jpg",
+    "edited": true,
+    "description": "Diagnosis line replaced by a cleaner, brighter, heavily compressed patch from another image (splice).",
+    "pass": true,
+    "note": "caught by: background_texture_discontinuity",
+    "status": "needs_staff_review",
+    "headline": "Staff review needed",
+    "reason": "The nature of disease line background appears distinctly different in shading and contrast compared to the surrounding paper texture.",
+    "source": "gemini",
+    "checks": {
+      "complete": "pass",
+      "consistent": "pass",
+      "readable": "pass",
+      "unaltered": "pass",
+      "untampered": "review"
+    },
+    "signals": [
+      "background_texture_discontinuity"
+    ],
+    "seconds": 7.7
   },
   {
     "file": "edit-06-sample-watermark.jpg",
@@ -187,7 +182,7 @@
     "note": "caught by: sample_or_watermark",
     "status": "needs_staff_review",
     "headline": "Staff review needed",
-    "reason": "The document contains a prominent red watermark reading 'SAMPLE ON' and a website footer indicating it is a specimen template from an archive.",
+    "reason": "The document displays a prominent red 'SAMPLE ON' watermark across the page and a website footer, indicating it is a template or specimen from an online source.",
     "source": "gemini",
     "checks": {
       "complete": "pass",
@@ -200,7 +195,7 @@
       "sample_or_watermark",
       "typography_mismatch"
     ],
-    "seconds": 4.7
+    "seconds": 7.3
   },
   {
     "file": "edit-07-wrong-document-type.jpg",
@@ -222,7 +217,7 @@
     "signals": [
       "wrong_document"
     ],
-    "seconds": 4.6
+    "seconds": 7.0
   },
   {
     "file": "edit-08-navy-typed-date-hard.jpg",
@@ -232,7 +227,7 @@
     "note": "caught by: date_context_conflict, typography_mismatch",
     "status": "flagged_inconsistency",
     "headline": "Details do not agree",
-    "reason": "The issue date of September 24, 2026 occurs more than five years after the stated confinement period of April 11-15, 2021.",
+    "reason": "The date of issuance is September 24, 2026, which is more than five years after the patient's hospital confinement dates of April 11 - 15, 2021.",
     "source": "gemini",
     "checks": {
       "complete": "pass",
@@ -246,7 +241,7 @@
       "name_mismatch_or_internal_conflict",
       "typography_mismatch"
     ],
-    "seconds": 4.9
+    "seconds": 7.7
   },
   {
     "file": "id-clean-01-national-id.jpg",
@@ -256,7 +251,7 @@
     "note": "no alteration/tampering flags",
     "status": "likely_valid",
     "headline": "Document looks good",
-    "reason": "The uploaded document is a valid Philippine Identification Card belonging to Juan Santos Dela Cruz. All details are clear and consistent.",
+    "reason": "This is a Philippine Identification Card issued for Juan Santos Dela Cruz, matching the applicant's name and valid until March 12, 2029.",
     "source": "gemini",
     "checks": {
       "complete": "pass",
@@ -266,7 +261,7 @@
       "untampered": "pass"
     },
     "signals": [],
-    "seconds": 2.5
+    "seconds": 3.2
   },
   {
     "file": "id-clean-02-drivers-license.jpg",
@@ -276,7 +271,7 @@
     "note": "no alteration/tampering flags",
     "status": "likely_valid",
     "headline": "Document looks good",
-    "reason": "This document is a driver's license issued for Juan Santos Dela Cruz, showing a validity date of March 12, 2028. Staff should verify that the card details match the applicant's records.",
+    "reason": "The uploaded document is a valid driver's license belonging to the applicant Juan Santos Dela Cruz, and it is complete and readable.",
     "source": "gemini",
     "checks": {
       "complete": "pass",
@@ -286,7 +281,7 @@
       "untampered": "pass"
     },
     "signals": [],
-    "seconds": 2.4
+    "seconds": 6.5
   },
   {
     "file": "id-clean-03-umid.jpg",
@@ -296,7 +291,7 @@
     "note": "no alteration/tampering flags",
     "status": "likely_valid",
     "headline": "Document looks good",
-    "reason": "This is a Unified Multi-Purpose ID for Juan Santos Dela Cruz. All details are readable and consistent.",
+    "reason": "This is a Unified Multi-Purpose ID belonging to Juan Santos Dela Cruz. Staff should verify that the cardholder details match the applicant records.",
     "source": "gemini",
     "checks": {
       "complete": "pass",
@@ -306,7 +301,7 @@
       "untampered": "pass"
     },
     "signals": [],
-    "seconds": 2.4
+    "seconds": 7.7
   },
   {
     "file": "id-edit-01-national-name-typed.jpg",
@@ -329,7 +324,7 @@
       "digital_text_overlay",
       "name_mismatch_or_internal_conflict"
     ],
-    "seconds": 3.0
+    "seconds": 8.5
   },
   {
     "file": "id-edit-02-drivers-birthdate-typed.jpg",
@@ -352,7 +347,7 @@
       "digital_text_overlay",
       "ink_or_color_mismatch"
     ],
-    "seconds": 2.4
+    "seconds": 7.6
   },
   {
     "file": "id-edit-03-postal-expiry-typed.png",
@@ -372,19 +367,21 @@
       "untampered": "fail"
     },
     "signals": [
-      "digital_text_overlay"
+      "digital_text_overlay",
+      "sample_or_watermark",
+      "typography_mismatch"
     ],
-    "seconds": 5.4
+    "seconds": 7.2
   },
   {
     "file": "id-edit-04-umid-photo-swapped.jpg",
     "edited": true,
     "description": "UMID portrait replaced with a sharper, brighter, heavily compressed picture pasted from another image.",
     "pass": true,
-    "note": "flagged for review (different signal than expected: sample_or_watermark)",
+    "note": "flagged for review (different signal than expected: typography_mismatch)",
     "status": "needs_staff_review",
     "headline": "Staff review needed",
-    "reason": "The image appears to be a digital graphic or template rather than a photo of a physical card, showing uniform digital fonts and graphic elements.",
+    "reason": "The text fonts, spacing, and sharp text edges against the textured card background suggest digital addition of text details.",
     "source": "gemini",
     "checks": {
       "complete": "pass",
@@ -394,9 +391,9 @@
       "untampered": "review"
     },
     "signals": [
-      "sample_or_watermark"
+      "typography_mismatch"
     ],
-    "seconds": 2.4
+    "seconds": 4.1
   },
   {
     "file": "id-edit-05-someone-elses-id.jpg",
@@ -406,19 +403,18 @@
     "note": "caught by: name_mismatch_or_internal_conflict",
     "status": "flagged_inconsistency",
     "headline": "Name does not match the application",
-    "reason": "The cardholder name on the document is Pedro Manalo Reyes, but the application is for Juan Santos Dela Cruz.",
+    "reason": "The cardholder name on the document is PEDRO MANALO REYES, but the application is for Juan Santos Dela Cruz.",
     "source": "gemini",
     "checks": {
       "complete": "pass",
       "consistent": "fail",
       "readable": "pass",
       "unaltered": "pass",
-      "untampered": "review"
+      "untampered": "pass"
     },
     "signals": [
-      "name_mismatch_or_internal_conflict",
-      "typography_mismatch"
+      "name_mismatch_or_internal_conflict"
     ],
-    "seconds": 2.4
+    "seconds": 4.1
   }
 ]

@@ -72,10 +72,16 @@ def aggregate_tamper_evidence(external_result: dict, chronology: dict,
         and chronology.get('repeated_conflict') is True
         and len(chronology_indicators) >= 2
     )
-    review = strong_chronology or bool(signature_indicators) or chronology_visual or paired_visual or adcd_corroborated or localized_high
+    # A high-confidence copy of camera-noise pixels raised no false alarm on the real
+    # uploads (tests/edited-documents/README.md), so on its own it asks staff to look.
+    local_copied_region = any(item.get('type') == 'copy_move_region' and item.get('confidence_band') == 'high'
+                              for item in local_visual)
+    corroborated = chronology_visual or paired_visual or adcd_corroborated or localized_high
+    review = strong_chronology or bool(signature_indicators) or corroborated or local_copied_region
     review_basis = ('cryptographic_signature_problem' if signature_indicators
                     else 'deterministic_chronology_conflict' if strong_chronology
-                    else ('corroborated_visual_evidence' if review else 'none'))
+                    else 'corroborated_visual_evidence' if corroborated
+                    else ('local_copied_region' if local_copied_region else 'none'))
 
     families = []
     for name, present in (('gemini_visual', bool(gemini)), ('semantic_chronology', bool(chronology_indicators)),

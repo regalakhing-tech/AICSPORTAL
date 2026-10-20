@@ -31,6 +31,11 @@ class PhilippineRegistrationFormValidationTests(unittest.TestCase):
         self.assertEqual(result['decision'], 'match')
         self.assertEqual(result['detected_type'], 'school_id')
 
+    def test_school_id_fields_are_read_without_errors(self):
+        fields = extract_document_fields('school_id', SCHOOL_ID, {})['fields']
+        self.assertEqual(set(fields), {'client_name'})
+        self.assertEqual(fields['client_name']['status'], 'extracted')
+
     def test_school_id_is_not_an_enrollment_form(self):
         result = classify_document(SCHOOL_ID, 'registration_form')
         self.assertEqual(result['decision'], 'wrong_slot')

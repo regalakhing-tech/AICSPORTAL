@@ -150,6 +150,21 @@ class ImageForensicsTests(unittest.TestCase):
         self.assertEqual(result['decision'], 'clear')
         self.assertIn('local_visual', result['providers'])
 
+    def test_one_high_confidence_copied_area_requests_staff_review(self):
+        # Camera-noise copies at high confidence raised no false alarm on the real uploads
+        # (tests/edited-documents/README.md), so one is enough to ask staff to look.
+        indicator = {'type': 'copy_move_region', 'page': 1, 'box_2d': [100, 100, 200, 200],
+                     'confidence_band': 'high', 'reason': 'The same pixels appear in two places.'}
+        local = {'status': 'completed', 'decision': 'review', 'indicators': [indicator], 'family': 'local_visual'}
+        clear = {'status': 'completed', 'decision': 'clear', 'indicators': []}
+        result = aggregate_tamper_evidence({}, clear, clear, {}, local_results=[local])
+        self.assertEqual(result['decision'], 'review')
+        self.assertEqual(result['review_basis'], 'local_copied_region')
+        self.assertEqual(sanitize_combined_finding(result)['review_basis'], 'local_copied_region')
+        repeated = dict(indicator, type='repeated_visual_region')
+        result = aggregate_tamper_evidence({}, clear, clear, {}, local_results=[dict(local, indicators=[repeated])])
+        self.assertEqual(result['decision'], 'clear')
+
     def test_adcd_and_unrelated_local_signal_do_not_force_review(self):
         regional = {'status': 'completed', 'decision': 'review', 'indicators': [
             {'type': 'typography_mismatch', 'page': 1, 'box_2d': [100, 100, 200, 200],

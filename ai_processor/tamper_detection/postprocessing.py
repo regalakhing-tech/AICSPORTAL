@@ -122,7 +122,7 @@ def sanitize_combined_finding(result: object) -> dict:
         'providers': {},
     }
     review_basis = str(result.get('review_basis') or 'none')
-    if review_basis not in {'none', 'deterministic_chronology_conflict', 'corroborated_visual_evidence', 'cryptographic_signature_problem'}:
+    if review_basis not in {'none', 'deterministic_chronology_conflict', 'corroborated_visual_evidence', 'local_copied_region', 'cryptographic_signature_problem'}:
         review_basis = 'none'
     safe['review_basis'] = review_basis
     if decision == 'review' and review_basis == 'cryptographic_signature_problem':

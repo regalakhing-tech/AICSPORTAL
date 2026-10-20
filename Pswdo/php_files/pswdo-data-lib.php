@@ -112,7 +112,7 @@ function pswdo_tamper_analysis_json(string $findingsJson, string $supplementJson
     }
     if ($status !== 'completed') { $base['status'] = 'unknown'; $base['message'] = 'Alteration analysis result is unavailable. Manual document review is required.'; return $base; }
     $decision = strtolower(trim((string) ($raw['decision'] ?? 'clear'))) === 'review' ? 'review' : 'clear';
-    $reviewBasis = in_array(($raw['review_basis'] ?? ''), ['none', 'deterministic_chronology_conflict', 'corroborated_visual_evidence', 'cryptographic_signature_problem'], true)
+    $reviewBasis = in_array(($raw['review_basis'] ?? ''), ['none', 'deterministic_chronology_conflict', 'corroborated_visual_evidence', 'local_copied_region', 'cryptographic_signature_problem'], true)
         ? (string) $raw['review_basis'] : 'none';
     $base['status'] = 'completed';
     $base['decision'] = $decision;
@@ -3701,7 +3701,9 @@ function pswdo_fetch_prescreening_queue(
         COALESCE(NULLIF(r.date_applied, '0000-00-00'), DATE(r.created_at)) ASC,
         r.id ASC
     SQL;
+    // Urgent, then high priority, always first; the chosen sort applies within each level.
     $clientClassificationOrderSql = <<<SQL
+        {$smartPriorityOrderSql} ASC,
         CASE
             WHEN LOWER(COALESCE(r.client_categories_json, '')) LIKE '%pwd%' THEN 0
             WHEN LOWER(COALESCE(r.client_categories_json, '')) LIKE '%senior_citizen%' THEN 1
@@ -3710,6 +3712,7 @@ function pswdo_fetch_prescreening_queue(
         $defaultOrderSql
     SQL;
     $assistanceOrderSql = <<<SQL
+        {$smartPriorityOrderSql} ASC,
         CASE
             WHEN COALESCE(at.assistance_code, '') = 'medical' THEN 0
             WHEN COALESCE(at.assistance_code, '') = 'burial' THEN 1
@@ -3998,6 +4001,8 @@ function pswdo_fetch_workflow_lane_requests(mysqli $connection, string $lane, in
 
     $conditions[] = aics_ai_gate_visible_sql('r');
     $whereSql = count($conditions) > 0 ? ('WHERE ' . implode(' AND ', $conditions)) : '';
+    // Urgent, then high priority, always first in every list.
+    $orderBy = preg_replace('/^ORDER BY\s+/', 'ORDER BY ' . pswdo_smart_priority_order_case_sql('pr') . ' ASC, ', $orderBy) ?? $orderBy;
 
     $sql = <<<SQL
         SELECT
@@ -4039,8 +4044,11 @@ function pswdo_fetch_workflow_lane_requests(mysqli $connection, string $lane, in
         ) req ON req.request_id = r.id
         LEFT JOIN aics_request_documents d ON d.request_id = r.id
         LEFT JOIN aics_request_document_reviews dr ON dr.request_document_id = d.id
+        LEFT JOIN aics_request_prioritization pr ON pr.request_id = r.id
         $whereSql
         GROUP BY
+            pr.urgency_indicator,
+            pr.priority_level,
             r.id,
             r.reference_no,
             r.date_applied,
@@ -4321,7 +4329,10 @@ function pswdo_fetch_release_schedule_queue(
     }
 
     $whereSql = 'WHERE ' . implode(' AND ', $conditions);
+    // Urgent, then high priority, always first; release status and the chosen sort apply within each level.
+    $smartPriorityOrderSql = pswdo_smart_priority_order_case_sql('pr');
     $defaultOrderSql = <<<SQL
+        {$smartPriorityOrderSql} ASC,
         CASE
             WHEN rs.release_status = 'ready_for_release' THEN 0
             WHEN rs.release_status IN ('scheduled', 'rescheduled') THEN 1
@@ -4338,6 +4349,7 @@ function pswdo_fetch_release_schedule_queue(
         r.id DESC
     SQL;
     $clientClassificationOrderSql = <<<SQL
+        {$smartPriorityOrderSql} ASC,
         CASE
             WHEN LOWER(COALESCE(r.client_categories_json, '')) LIKE '%senior_citizen%' THEN 0
             WHEN LOWER(COALESCE(r.client_categories_json, '')) LIKE '%solo_parent%' THEN 1
@@ -4348,6 +4360,7 @@ function pswdo_fetch_release_schedule_queue(
         $defaultOrderSql
     SQL;
     $assistanceOrderSql = <<<SQL
+        {$smartPriorityOrderSql} ASC,
         CASE
             WHEN COALESCE(at.assistance_code, '') = 'medical' THEN 0
             WHEN COALESCE(at.assistance_code, '') = 'burial' THEN 1
@@ -4445,6 +4458,7 @@ function pswdo_fetch_release_schedule_queue(
             ap.last_name,
             pr.priority_rank,
             pr.priority_level,
+            pr.urgency_indicator,
             req.required_total,
             rs.scheduled_date,
             rs.scheduled_time,
