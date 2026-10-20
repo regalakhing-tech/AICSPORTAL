@@ -38,18 +38,22 @@
     margin-left: 0;
     width: 100%;
     min-height: 100vh;
+    padding-top: 59px;
   }
 
-  /* ---------- Top bar ---------- */
+  /* ---------- Top bar ----------
+     Fixed, not sticky: the page body is its own scroll box (overflow-x: hidden),
+     which stops sticky elements from staying at the top. */
   body.has-app-shell .top-nav {
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 140;
     height: 58px;
     min-height: 58px;
     padding: 0 14px;
-    padding-top: env(safe-area-inset-top, 0px);
-    box-sizing: content-box;
+    box-sizing: border-box;
     background: rgba(255, 255, 255, 0.94);
     -webkit-backdrop-filter: saturate(160%) blur(14px);
     backdrop-filter: saturate(160%) blur(14px);
@@ -208,6 +212,14 @@
     font-weight: 700;
   }
 
+  body.has-app-shell .app-tab-apply.is-active::before {
+    display: none;
+  }
+
+  body.has-app-shell .app-tab-apply.is-active .app-tab-fab {
+    background: linear-gradient(140deg, var(--primary), var(--primary-dark));
+  }
+
   body.has-app-shell .app-tab-fab {
     display: grid;
     place-items: center;
@@ -226,15 +238,6 @@
     outline: 3px solid var(--primary-light);
     outline-offset: -3px;
     border-radius: 12px;
-  }
-
-  /* The Apply form is a focused flow: no tab bar, a sticky action bar instead. */
-  body.has-app-shell.app-tab-apply {
-    padding-bottom: 0;
-  }
-
-  body.has-app-shell.app-tab-apply .app-tabbar {
-    display: none;
   }
 
   /* ---------- Account sheet ---------- */
@@ -452,7 +455,7 @@
   }
 
   body.has-app-shell.app-tab-apply .aics-chatbot-launcher {
-    bottom: calc(var(--app-safe-bottom) + 96px);
+    bottom: calc(var(--app-tabbar-height) + var(--app-safe-bottom) + 90px);
   }
 
   /* ---------- Page content ---------- */
@@ -669,7 +672,7 @@
   /* Apply: Previous and Next stay in a bar at the bottom of the screen.
      (The page body scrolls itself, so this has to be fixed, not sticky.) */
   body.has-app-shell.app-tab-apply .content-area {
-    padding-bottom: 104px;
+    padding-bottom: 100px;
   }
 
   body.has-app-shell.app-tab-apply .submit-hero-executive {
@@ -680,13 +683,13 @@
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 0;
+    bottom: calc(var(--app-tabbar-height) + var(--app-safe-bottom));
     z-index: 145;
     display: flex;
     align-items: center;
     gap: 8px;
     margin: 0;
-    padding: 12px 16px calc(12px + var(--app-safe-bottom));
+    padding: 10px 16px;
     background: rgba(255, 255, 255, 0.97);
     border-top: 1px solid var(--line);
     box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.07);
@@ -708,7 +711,7 @@
   body.has-app-shell .intake-back-row:not(.hidden) {
     position: fixed;
     left: 16px;
-    bottom: calc(12px + var(--app-safe-bottom));
+    bottom: calc(var(--app-tabbar-height) + var(--app-safe-bottom) + 10px);
     z-index: 146;
     margin: 0;
     padding: 0;
