@@ -649,15 +649,17 @@ $editSeed = [
     'address' => (string) ($selectedAccount['address'] ?? ''),
 ];
 
+$roleIcons = ['admin' => 'fa-user-shield', 'pswdo' => 'fa-user-tie', 'applicat' => 'fa-user'];
+$statusIcons = ['active' => 'fa-circle-check', 'restricted' => 'fa-circle-minus', 'disabled' => 'fa-circle-pause', 'locked' => 'fa-lock', 'banned' => 'fa-ban'];
+
 admin_render_page_start('AICS ADMIN | User Management', 'users', $displayName, $initials, $paths);
+admin_render_page_head(
+    'fa-users-gear',
+    'User Management',
+    'Add, edit and restrict accounts. Every change is saved in the security log.',
+    '<button type="button" class="btn-solid" data-modal-open="modal-create-user"><i class="fas fa-user-plus" aria-hidden="true"></i> Add user</button>'
+);
 ?>
-  <section class="hero-card compact">
-    <div class="hero-copy">
-      <p class="eyebrow"><i class="fas fa-users-gear"></i> Account Governance</p>
-      <h1>User Management</h1>
-      <p>Create, update, and restrict user accounts with role-based control and complete admin audit logging.</p>
-    </div>
-  </section>
 
   <?php if (is_array($statusMessage)): ?>
     <div class="alert <?= admin_h((string) $statusMessage['type'] === 'success' ? 'alert-success' : 'alert-error') ?> flash-alert">
@@ -672,20 +674,16 @@ admin_render_page_start('AICS ADMIN | User Management', 'users', $displayName, $
     if (is_array($flashPassword)) { unset($_SESSION['admin_flash_password']); }
   ?>
   <?php if (is_array($flashPassword) && isset($flashPassword['password'])): ?>
-    <div style="background:#fffbeb;border:2px solid #d97706;border-radius:10px;padding:14px 18px;margin:0 auto 18px;max-width:760px;box-shadow:0 4px 12px rgba(217,119,6,0.18);">
-      <div style="display:flex;align-items:flex-start;gap:12px;">
-        <i class="fas fa-key" style="font-size:20px;color:#b45309;margin-top:2px;flex-shrink:0;"></i>
-        <div style="flex:1;">
-          <strong style="display:block;color:#78350f;font-size:14px;margin-bottom:4px;">New Password Set &mdash; Copy &amp; Send to User</strong>
-          <div style="font-size:12.5px;color:#92400e;margin-bottom:8px;">
-            Account: <strong><?= admin_h((string) ($flashPassword['email'] ?? '')) ?></strong> &middot; This password is shown only once.
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <code id="flash-pw-value" style="flex:1;background:#ffffff;border:1.5px solid #fde68a;border-radius:6px;padding:8px 12px;font-size:13.5px;font-family:'Consolas',monospace;color:#0f172a;font-weight:700;"><?= admin_h((string) ($flashPassword['password'] ?? '')) ?></code>
-            <button type="button" onclick="(function(){const t=document.getElementById('flash-pw-value').textContent;navigator.clipboard.writeText(t);this.innerHTML='<i class=&quot;fas fa-check&quot;></i> Copied';}).call(this)" style="background:#d97706;color:#ffffff;border:none;border-radius:6px;padding:8px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;">
-              <i class="fas fa-copy"></i> Copy
-            </button>
-          </div>
+    <div class="adm-secret" role="status">
+      <span class="adm-secret-icon"><i class="fas fa-key" aria-hidden="true"></i></span>
+      <div class="adm-secret-body">
+        <strong>New password set. Copy it and send it to the user.</strong>
+        <p>Account: <b><?= admin_h((string) ($flashPassword['email'] ?? '')) ?></b>. This password is shown only once.</p>
+        <div class="adm-secret-row">
+          <code id="flash-pw-value"><?= admin_h((string) ($flashPassword['password'] ?? '')) ?></code>
+          <button type="button" class="btn-solid btn-mini" onclick="(function(){const t=document.getElementById('flash-pw-value').textContent;navigator.clipboard.writeText(t);this.innerHTML='<i class=&quot;fas fa-check&quot;></i> Copied';}).call(this)">
+            <i class="fas fa-copy" aria-hidden="true"></i> Copy
+          </button>
         </div>
       </div>
     </div>
@@ -706,61 +704,53 @@ admin_render_page_start('AICS ADMIN | User Management', 'users', $displayName, $
   <?php endif; ?>
 
   <section class="panel-card user-toolbar-card" id="user-management-root" data-auto-open-modal="<?= admin_h($autoOpenModal) ?>">
-    <div class="users-toolbar">
-      <div class="users-toolbar-copy">
-        <h2><i class="fas fa-address-book"></i> Accounts Directory</h2>
-        <p>Review all accounts, open quick edit modals, and apply role-based filters instantly.</p>
+    <div class="adm-filter-bar">
+      <div class="role-filter-chips" role="group" aria-label="Show accounts">
+        <a class="role-filter-chip<?= $roleFilter === 'all' ? ' active' : '' ?>" href="<?= admin_h(admin_users_filter_href('all', $search)) ?>"<?= $roleFilter === 'all' ? ' aria-current="true"' : '' ?>><i class="fas fa-layer-group" aria-hidden="true"></i> All</a>
+        <a class="role-filter-chip<?= $roleFilter === 'applicat' ? ' active' : '' ?>" href="<?= admin_h(admin_users_filter_href('applicat', $search)) ?>"<?= $roleFilter === 'applicat' ? ' aria-current="true"' : '' ?>><i class="fas fa-user" aria-hidden="true"></i> Applicants</a>
+        <a class="role-filter-chip<?= $roleFilter === 'pswdo' ? ' active' : '' ?>" href="<?= admin_h(admin_users_filter_href('pswdo', $search)) ?>"<?= $roleFilter === 'pswdo' ? ' aria-current="true"' : '' ?>><i class="fas fa-user-tie" aria-hidden="true"></i> PSWDO</a>
       </div>
-      <div class="users-toolbar-actions">
-        <button type="button" class="btn-solid" data-modal-open="modal-create-user">
-          <i class="fas fa-user-plus"></i>
-          Add User
-        </button>
-      </div>
-    </div>
 
-    <div class="role-filter-chips">
-      <a class="role-filter-chip<?= $roleFilter === 'all' ? ' active' : '' ?>" href="<?= admin_h(admin_users_filter_href('all', $search)) ?>">All</a>
-      <a class="role-filter-chip<?= $roleFilter === 'applicat' ? ' active' : '' ?>" href="<?= admin_h(admin_users_filter_href('applicat', $search)) ?>">Applicant</a>
-      <a class="role-filter-chip<?= $roleFilter === 'pswdo' ? ' active' : '' ?>" href="<?= admin_h(admin_users_filter_href('pswdo', $search)) ?>">PSWDO</a>
+      <form method="get" action="../dashboard.php" class="inline-filter user-inline-filter" role="search">
+        <input type="hidden" name="page" value="users">
+        <input type="hidden" name="role" value="<?= admin_h($roleFilter) ?>">
+        <label class="adm-search">
+          <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+          <span class="sr-only">Search accounts</span>
+          <input type="text" name="q" value="<?= admin_h($search) ?>" placeholder="Search by name or email">
+        </label>
+        <button type="submit" class="btn-solid">Search</button>
+        <?php if ($search !== '' || $roleFilter !== 'all'): ?>
+          <a class="btn-outline" href="../dashboard.php?page=users"><i class="fas fa-xmark" aria-hidden="true"></i> Clear</a>
+        <?php endif; ?>
+      </form>
     </div>
-
-    <form method="get" action="../dashboard.php" class="inline-filter user-inline-filter">
-      <input type="hidden" name="page" value="users">
-      <input type="hidden" name="role" value="<?= admin_h($roleFilter) ?>">
-      <input type="text" name="q" value="<?= admin_h($search) ?>" placeholder="Search by name or email">
-      <button type="submit" class="btn-outline"><i class="fas fa-magnifying-glass"></i> Search</button>
-      <a class="btn-outline" href="../dashboard.php?page=users">Reset</a>
-    </form>
   </section>
 
   <section class="panel-card">
-    <div class="directory-meta">
+    <header class="panel-head">
+      <h2><i class="fas fa-address-book" aria-hidden="true"></i> Accounts</h2>
       <div class="directory-meta-group">
-        <span class="pill pill-info"><i class="fas fa-layer-group"></i> <?= (int) $totalAccounts ?> accounts</span>
-        <span class="pill pill-neutral"><i class="fas fa-filter"></i> <?= admin_h($activeRoleLabel) ?></span>
+        <span class="pill pill-info"><i class="fas fa-users" aria-hidden="true"></i> <?= (int) $totalAccounts ?> <?= $totalAccounts === 1 ? 'account' : 'accounts' ?></span>
+        <span class="pill pill-neutral"><i class="fas fa-filter" aria-hidden="true"></i> <?= admin_h($activeRoleLabel) ?></span>
       </div>
-    </div>
+    </header>
 
+    <?php if (count($accounts) === 0): ?>
+      <?php admin_render_empty('fa-user-slash', 'No accounts match this filter', 'Try another role, or clear the search.'); ?>
+    <?php else: ?>
     <div class="table-wrap">
-      <table class="data-table">
+      <table class="data-table adm-user-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Email</th>
+            <th>Account</th>
+            <th>Contact</th>
             <th>Role</th>
             <th>Status</th>
-            <th>Updated</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          <?php if (count($accounts) === 0): ?>
-            <tr>
-              <td colspan="7">No accounts found for this filter.</td>
-            </tr>
-          <?php else: ?>
             <?php foreach ($accounts as $account): ?>
               <?php
                 $rolePillClass = match ((string) $account['role_code']) {
@@ -800,28 +790,49 @@ admin_render_page_start('AICS ADMIN | User Management', 'users', $displayName, $
                     ? $currentStatusCode
                     : $fallbackRestrictCode;
                 $canEditAccount = $currentStatusCode !== 'banned';
+                $placeholder = static fn (string $value): string => in_array(strtolower($value), ['n/a', 'na', 'none', '-'], true) ? '' : $value;
+                $accountEmail = $placeholder(trim((string) $account['email']));
+                $accountPhone = $placeholder(trim((string) $account['contact_number']));
+                $accountRole = (string) $account['role_code'];
               ?>
               <tr>
-                <td>#<?= (int) $account['id'] ?></td>
-                <td><?= admin_h((string) $account['display_name']) ?></td>
-                <td><?= admin_h((string) $account['email']) ?></td>
-                <td><span class="pill <?= admin_h($rolePillClass) ?>"><?= admin_h((string) $account['role_name']) ?></span></td>
-                <td><span class="pill <?= admin_h($statusPillClass) ?>"><?= admin_h((string) $account['status_name']) ?></span></td>
-                <td><?= admin_h(admin_format_datetime((string) $account['updated_at'])) ?></td>
                 <td>
+                  <div class="adm-user-cell">
+                    <span class="adm-user-avatar role-<?= admin_h($accountRole) ?>"><?= admin_h(admin_initials((string) $account['display_name'])) ?></span>
+                    <span class="adm-user-name">
+                      <strong><?= admin_h((string) $account['display_name']) ?></strong>
+                      <small>#<?= (int) $account['id'] ?><?= trim((string) $account['position_title']) !== '' && trim((string) $account['position_title']) !== trim((string) $account['role_name']) ? ', ' . admin_h((string) $account['position_title']) : '' ?></small>
+                      <small><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Updated <?= admin_h(admin_format_datetime((string) $account['updated_at'])) ?></small>
+                    </span>
+                  </div>
+                </td>
+                <td data-label="Contact">
+                  <?php if ($accountEmail !== ''): ?>
+                    <span class="adm-contact"><i class="fas fa-envelope" aria-hidden="true"></i> <?= admin_h($accountEmail) ?></span>
+                  <?php endif; ?>
+                  <?php if ($accountPhone !== ''): ?>
+                    <span class="adm-contact"><i class="fas fa-phone" aria-hidden="true"></i> <?= admin_h($accountPhone) ?></span>
+                  <?php endif; ?>
+                  <?php if ($accountEmail === '' && $accountPhone === ''): ?>
+                    <span class="adm-muted">Not provided</span>
+                  <?php endif; ?>
+                </td>
+                <td data-label="Role"><span class="pill <?= admin_h($rolePillClass) ?>"><i class="fas <?= admin_h($roleIcons[$accountRole] ?? 'fa-user') ?>" aria-hidden="true"></i> <?= admin_h((string) $account['role_name']) ?></span></td>
+                <td data-label="Status"><span class="pill <?= admin_h($statusPillClass) ?>"><i class="fas <?= admin_h($statusIcons[(string) $account['status_code']] ?? 'fa-circle') ?>" aria-hidden="true"></i> <?= admin_h((string) $account['status_name']) ?></span></td>
+                <td data-label="Actions">
                   <div class="table-actions">
                     <?php if ($canEditAccount): ?>
                       <button
                         type="button"
                         class="btn-outline btn-mini js-edit-user-btn"
                         data-account="<?= admin_users_json_attr($editPayload) ?>">
-                        <i class="fas fa-pen-to-square"></i>
+                        <i class="fas fa-pen-to-square" aria-hidden="true"></i>
                         Edit
                       </button>
                     <?php else: ?>
                       <button type="button" class="btn-outline btn-mini" disabled title="Unban account first to edit details.">
-                        <i class="fas fa-lock"></i>
-                        Unban First
+                        <i class="fas fa-lock" aria-hidden="true"></i>
+                        Unban first
                       </button>
                     <?php endif; ?>
                     <?php if ((int) $account['id'] !== $accountId): ?>
@@ -831,7 +842,7 @@ admin_render_page_start('AICS ADMIN | User Management', 'users', $displayName, $
                         <input type="hidden" name="target_account_id" value="<?= (int) $account['id'] ?>">
                         <input type="hidden" name="return_q" value="<?= admin_h($search) ?>">
                         <input type="hidden" name="return_role" value="<?= admin_h($roleFilter) ?>">
-                        <select name="restrict_to" aria-label="Restriction status">
+                        <select name="restrict_to" aria-label="Account status for <?= admin_h((string) $account['display_name']) ?>">
                           <?php foreach ($restrictOptions as $optionCode => $optionLabel): ?>
                             <option value="<?= admin_h($optionCode) ?>"<?= $currentRestrictCode === $optionCode ? ' selected' : '' ?>>
                               <?= admin_h($optionLabel) ?>
@@ -845,10 +856,10 @@ admin_render_page_start('AICS ADMIN | User Management', 'users', $displayName, $
                 </td>
               </tr>
             <?php endforeach; ?>
-          <?php endif; ?>
         </tbody>
       </table>
     </div>
+    <?php endif; ?>
 
     <div class="admin-modal-shell" id="modal-create-user" aria-hidden="true">
       <div class="admin-modal-backdrop" data-modal-close></div>

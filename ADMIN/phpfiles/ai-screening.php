@@ -123,14 +123,12 @@ function ai_screening_wait(int $minutes): string
 }
 
 admin_render_page_start('AICS ADMIN | AICS AI Screening', 'ai', $displayName, $initials, $paths);
+admin_render_page_head(
+    'fa-robot',
+    'AICS AI Screening',
+    'PSWDO only receives requests whose documents passed the AICS AI check. Requests the AI could not confirm or could not check wait here for you.'
+);
 ?>
-  <section class="hero-card compact">
-    <div class="hero-copy">
-      <p class="eyebrow"><i class="fas fa-robot"></i> Document screening</p>
-      <h1>AICS AI Screening</h1>
-      <p>PSWDO only receives requests whose documents passed the AICS AI check. Blurred, edited or wrong documents go back to the applicant automatically. Requests the AI could not confirm or could not check wait here for your decision.</p>
-    </div>
-  </section>
 
   <?php if ($notice !== null): ?>
     <div class="alert <?= $notice[0] === 'success' ? 'alert-success' : 'alert-error' ?> ai-screen-alert">
@@ -161,39 +159,44 @@ admin_render_page_start('AICS ADMIN | AICS AI Screening', 'ai', $displayName, $i
     </div>
   <?php endif; ?>
 
-  <section class="metric-grid">
-    <article class="metric-card"><span>Needs your decision</span><strong><?= count($reviewRequests) ?></strong></article>
-    <article class="metric-card"><span>Being checked</span><strong><?= count($waitingRequests) ?></strong></article>
-    <article class="metric-card"><span>Waiting over <?= $alertMinutes ?> min</span><strong><?= $stuckCount ?></strong></article>
-    <article class="metric-card"><span>AICS AI service</span><strong><?= $serviceProblem ? 'Problem' : 'Working' ?></strong></article>
+  <section class="adm-stat-grid">
+    <?php
+      admin_render_stat('fa-user-check', 'Needs your decision', (string) count($reviewRequests), count($reviewRequests) > 0 ? 'watch' : 'ok', count($reviewRequests) > 0 ? 'Release or ask for a re-upload' : 'Nothing waiting');
+      admin_render_stat('fa-hourglass-half', 'Being checked', (string) count($waitingRequests), 'brand', 'AICS AI is reading the documents');
+      admin_render_stat('fa-clock', 'Waiting over ' . $alertMinutes . ' min', (string) $stuckCount, $stuckCount > 0 ? 'alert' : 'neutral', 'Retried automatically');
+      admin_render_stat($serviceProblem ? 'fa-plug-circle-xmark' : 'fa-plug-circle-check', 'AICS AI service', $serviceProblem ? 'Problem' : 'Working', $serviceProblem ? 'alert' : 'ok', $serviceProblem ? 'New requests are waiting' : 'Checking documents normally');
+    ?>
   </section>
 
   <section class="panel-card">
     <header class="panel-head ai-screen-panel-head">
-      <h2><i class="fas fa-user-check"></i> Needs your decision</h2>
+      <h2><i class="fas fa-user-check" aria-hidden="true"></i> Needs your decision</h2>
       <?php if ($unavailableCount > 0): ?>
         <form method="post" class="ai-screen-inline-form">
           <?= admin_csrf_input() ?>
           <input type="hidden" name="action" value="retry_all">
-          <button type="submit" class="btn-outline btn-mini"><i class="fas fa-rotate"></i> Retry all (<?= $unavailableCount ?>)</button>
+          <button type="submit" class="btn-outline btn-mini"><i class="fas fa-rotate" aria-hidden="true"></i> Retry all (<?= $unavailableCount ?>)</button>
         </form>
       <?php endif; ?>
     </header>
     <?php if ($reviewRequests === []): ?>
-      <p class="ai-screen-empty">Nothing needs your decision right now.</p>
+      <?php admin_render_empty('fa-circle-check', 'Nothing needs your decision right now', 'Requests appear here when AICS AI cannot confirm or cannot check their documents.'); ?>
     <?php else: ?>
       <div class="ai-screen-list">
         <?php foreach ($reviewRequests as $row): ?>
           <article class="ai-screen-card">
             <div class="ai-screen-card-head">
-              <strong><?= admin_h((string) $row['reference_no']) ?></strong>
-              <span class="ai-state-chip state-admin_review"><?= admin_h($reasonLabels[(string) ($row['ai_gate_reason'] ?? '')] ?? 'Needs your decision') ?></span>
+              <span class="ai-screen-ref"><i class="fas fa-file-medical" aria-hidden="true"></i> <strong><?= admin_h((string) $row['reference_no']) ?></strong></span>
+              <span class="ai-state-chip state-admin_review"><i class="fas fa-circle-exclamation" aria-hidden="true"></i> <?= admin_h($reasonLabels[(string) ($row['ai_gate_reason'] ?? '')] ?? 'Needs your decision') ?></span>
             </div>
-            <p class="ai-screen-meta"><?= admin_h((string) ($row['beneficiary_complete_name'] ?? '')) ?> &middot; waiting <?= admin_h(ai_screening_wait((int) $row['minutes_waiting'])) ?></p>
+            <p class="ai-screen-meta">
+              <span><i class="fas fa-user" aria-hidden="true"></i> <?= admin_h((string) ($row['beneficiary_complete_name'] ?? '')) ?></span>
+              <span><i class="fas fa-clock" aria-hidden="true"></i> Waiting <?= admin_h(ai_screening_wait((int) $row['minutes_waiting'])) ?></span>
+            </p>
             <ul class="ai-screen-docs">
               <?php foreach ($row['documents'] as $doc): ?>
                 <li>
-                  <span class="ai-doc-label"><?= admin_h($doc['label']) ?></span>
+                  <span class="ai-doc-label"><i class="fas fa-file-lines" aria-hidden="true"></i> <?= admin_h($doc['label']) ?></span>
                   <span class="ai-doc-status"><?= admin_h($statusLabels[$doc['status']] ?? $doc['status']) ?></span>
                   <span class="ai-doc-detail"><?= admin_h($doc['detail']) ?></span>
                 </li>
@@ -204,20 +207,20 @@ admin_render_page_start('AICS ADMIN | AICS AI Screening', 'ai', $displayName, $i
                 <?= admin_csrf_input() ?>
                 <input type="hidden" name="action" value="release">
                 <input type="hidden" name="request_id" value="<?= (int) $row['id'] ?>">
-                <button type="submit" class="btn-solid btn-mini"><i class="fas fa-paper-plane"></i> Release to PSWDO</button>
+                <button type="submit" class="btn-solid btn-mini"><i class="fas fa-paper-plane" aria-hidden="true"></i> Release to PSWDO</button>
               </form>
               <form method="post">
                 <?= admin_csrf_input() ?>
                 <input type="hidden" name="action" value="reupload">
                 <input type="hidden" name="request_id" value="<?= (int) $row['id'] ?>">
-                <button type="submit" class="btn-outline btn-mini"><i class="fas fa-file-arrow-up"></i> Ask applicant to re-upload</button>
+                <button type="submit" class="btn-outline btn-mini"><i class="fas fa-file-arrow-up" aria-hidden="true"></i> Ask applicant to re-upload</button>
               </form>
               <?php if (($row['ai_gate_reason'] ?? '') === 'ai_unavailable'): ?>
                 <form method="post">
                   <?= admin_csrf_input() ?>
                   <input type="hidden" name="action" value="retry">
                   <input type="hidden" name="request_id" value="<?= (int) $row['id'] ?>">
-                  <button type="submit" class="btn-outline btn-mini"><i class="fas fa-rotate"></i> Retry AICS AI check</button>
+                  <button type="submit" class="btn-outline btn-mini"><i class="fas fa-rotate" aria-hidden="true"></i> Retry AICS AI check</button>
                 </form>
               <?php endif; ?>
             </div>
@@ -228,16 +231,16 @@ admin_render_page_start('AICS ADMIN | AICS AI Screening', 'ai', $displayName, $i
   </section>
 
   <section class="panel-card">
-    <header class="panel-head"><h2><i class="fas fa-hourglass-half"></i> Being checked by AICS AI</h2></header>
+    <header class="panel-head"><h2><i class="fas fa-hourglass-half" aria-hidden="true"></i> Being checked by AICS AI</h2></header>
     <?php if ($waitingRequests === []): ?>
-      <p class="ai-screen-empty">No requests are waiting for AICS AI.</p>
+      <?php admin_render_empty('fa-mug-hot', 'No requests are waiting for AICS AI', 'New submissions show here while their documents are being checked.'); ?>
     <?php else: ?>
       <ul class="ai-screen-waiting">
         <?php foreach ($waitingRequests as $row): ?>
           <li class="<?= (int) $row['minutes_waiting'] >= $alertMinutes ? 'is-late' : '' ?>">
-            <strong><?= admin_h((string) $row['reference_no']) ?></strong>
+            <strong><i class="fas fa-file-medical" aria-hidden="true"></i> <?= admin_h((string) $row['reference_no']) ?></strong>
             <span><?= admin_h((string) ($row['beneficiary_complete_name'] ?? '')) ?></span>
-            <span class="ai-wait"><?= admin_h(ai_screening_wait((int) $row['minutes_waiting'])) ?></span>
+            <span class="ai-wait"><i class="fas fa-clock" aria-hidden="true"></i> <?= admin_h(ai_screening_wait((int) $row['minutes_waiting'])) ?></span>
           </li>
         <?php endforeach; ?>
       </ul>
@@ -246,17 +249,17 @@ admin_render_page_start('AICS ADMIN | AICS AI Screening', 'ai', $displayName, $i
 
   <section class="panel-card">
     <header class="panel-head ai-screen-panel-head">
-      <h2><i class="fas fa-clock-rotate-left"></i> 7-day log</h2>
-      <span class="ai-screen-note">Records older than 7 days are deleted automatically.</span>
+      <h2><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Last 7 days</h2>
+      <span class="ai-screen-note"><i class="fas fa-broom" aria-hidden="true"></i> Records older than 7 days are deleted automatically.</span>
     </header>
     <?php if ($log === []): ?>
-      <p class="ai-screen-empty">No AICS AI activity in the last 7 days.</p>
+      <?php admin_render_empty('fa-clock-rotate-left', 'No AICS AI activity in the last 7 days', 'Each check, retry and decision is listed here for a week.'); ?>
     <?php else: ?>
       <div class="ai-screen-list">
         <?php foreach ($log as $group): ?>
           <article class="ai-screen-card">
             <div class="ai-screen-card-head">
-              <strong><?= admin_h($group['reference_no']) ?></strong>
+              <span class="ai-screen-ref"><i class="fas fa-file-medical" aria-hidden="true"></i> <strong><?= admin_h($group['reference_no']) ?></strong></span>
               <span class="ai-state-chip state-<?= admin_h($group['ai_gate_status']) ?>"><?= admin_h($stateLabels[$group['ai_gate_status']] ?? $group['ai_gate_status']) ?></span>
             </div>
             <ol class="ai-log-events">

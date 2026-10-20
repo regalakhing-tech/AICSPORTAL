@@ -159,15 +159,55 @@ try {
     $loadError = 'Unable to load full security logs right now.';
 }
 
+/** Login result reasons in plain words. */
+function security_reason_label(string $reason): string
+{
+    $reason = strtolower(trim($reason));
+    if (str_starts_with($reason, 'status_')) return 'Account ' . str_replace('_', ' ', substr($reason, 7));
+    return match ($reason) {
+        'success' => 'Signed in',
+        'invalid_credentials' => 'Wrong password or account',
+        'locked' => 'Locked out after too many tries',
+        'inactive_account' => 'Account not active',
+        '' => '-',
+        default => ucfirst(str_replace('_', ' ', $reason)),
+    };
+}
+
+/** "Chrome on Windows" from a browser user-agent string, and whether it is a phone. */
+function security_device(string $userAgent): array
+{
+    $browser = match (true) {
+        str_contains($userAgent, 'Edg/') => 'Edge',
+        str_contains($userAgent, 'OPR/'), str_contains($userAgent, 'Opera') => 'Opera',
+        str_contains($userAgent, 'Firefox/') => 'Firefox',
+        str_contains($userAgent, 'SamsungBrowser') => 'Samsung Internet',
+        str_contains($userAgent, 'Chrome/') => 'Chrome',
+        str_contains($userAgent, 'Safari/') => 'Safari',
+        default => '',
+    };
+    $system = match (true) {
+        str_contains($userAgent, 'Android') => 'Android',
+        str_contains($userAgent, 'iPhone'), str_contains($userAgent, 'iPad') => 'iOS',
+        str_contains($userAgent, 'Windows') => 'Windows',
+        str_contains($userAgent, 'Mac OS') => 'macOS',
+        str_contains($userAgent, 'Linux') => 'Linux',
+        default => '',
+    };
+    $label = trim($browser . ($browser !== '' && $system !== '' ? ' on ' : '') . $system);
+    return ['label' => $label !== '' ? $label : 'Unknown device', 'mobile' => in_array($system, ['Android', 'iOS'], true)];
+}
+
+$portalIcons = ['admin' => 'fa-user-shield', 'pswdo' => 'fa-user-tie', 'applicant' => 'fa-user'];
+$outcomeIcons = ['success' => 'fa-circle-check', 'failure' => 'fa-circle-xmark', 'warning' => 'fa-triangle-exclamation', 'info' => 'fa-circle-info'];
+
 admin_render_page_start('AICS ADMIN | Security Logs', 'logs', $displayName, $initials, $paths);
+admin_render_page_head(
+    'fa-shield-halved',
+    'Security Logs',
+    'Sign-ins from every portal and every change made in the admin area. This page refreshes every 10 seconds.'
+);
 ?>
-  <section class="hero-card compact">
-    <div class="hero-copy">
-      <p class="eyebrow"><i class="fas fa-shield-halved"></i> Accountability</p>
-      <h1>Security & Audit Logs</h1>
-      <p>Track login attempts, unauthorized access, account changes, and backup events with complete security context.</p>
-    </div>
-  </section>
 
   <?php if ($loadError !== ''): ?>
     <div class="alert alert-error">
@@ -176,16 +216,18 @@ admin_render_page_start('AICS ADMIN | Security Logs', 'logs', $displayName, $ini
     </div>
   <?php endif; ?>
 
-  <section class="metric-grid">
-    <article class="metric-card"><span>Successful Logins (24h)</span><strong><?= (int) $summary['success_24h'] ?></strong></article>
-    <article class="metric-card"><span>Failed Logins (24h)</span><strong><?= (int) $summary['failed_24h'] ?></strong></article>
-    <article class="metric-card"><span>Lockouts (24h)</span><strong><?= (int) $summary['lockouts_24h'] ?></strong></article>
-    <article class="metric-card"><span>Unauthorized Access (24h)</span><strong><?= (int) $summary['unauthorized_24h'] ?></strong></article>
-    <article class="metric-card"><span>Backup Failures (Month)</span><strong><?= (int) $summary['backup_failures_month'] ?></strong></article>
+  <section class="adm-stat-grid">
+    <?php
+      admin_render_stat('fa-right-to-bracket', 'Successful sign-ins', (string) (int) $summary['success_24h'], 'ok', 'Last 24 hours');
+      admin_render_stat('fa-circle-xmark', 'Failed sign-ins', (string) (int) $summary['failed_24h'], (int) $summary['failed_24h'] >= 5 ? 'watch' : 'neutral', 'Last 24 hours');
+      admin_render_stat('fa-user-lock', 'Lockouts', (string) (int) $summary['lockouts_24h'], (int) $summary['lockouts_24h'] > 0 ? 'watch' : 'neutral', 'Last 24 hours');
+      admin_render_stat('fa-user-secret', 'Unauthorized access', (string) (int) $summary['unauthorized_24h'], (int) $summary['unauthorized_24h'] > 0 ? 'alert' : 'neutral', 'Last 24 hours');
+      admin_render_stat('fa-database', 'Backup failures', (string) (int) $summary['backup_failures_month'], (int) $summary['backup_failures_month'] > 0 ? 'alert' : 'neutral', 'This month');
+    ?>
   </section>
 
   <?php if ($clearLockoutStatus !== ''): ?>
-    <div class="alert <?= $clearLockoutStatus === 'success' ? 'alert-success' : 'alert-error' ?>" style="margin-bottom:18px;">
+    <div class="alert <?= $clearLockoutStatus === 'success' ? 'alert-success' : 'alert-error' ?>">
       <i class="fas fa-<?= $clearLockoutStatus === 'success' ? 'circle-check' : 'triangle-exclamation' ?>"></i>
       <span><?= admin_h($clearLockoutMessage) ?></span>
     </div>
@@ -193,28 +235,27 @@ admin_render_page_start('AICS ADMIN | Security Logs', 'logs', $displayName, $ini
 
   <section class="panel-card">
     <header class="panel-head">
-      <h2><i class="fas fa-right-to-bracket"></i> Login Attempts (All Portals)</h2>
+      <h2><i class="fas fa-right-to-bracket" aria-hidden="true"></i> Sign-in attempts</h2>
+      <span class="ai-screen-note"><i class="fas fa-globe" aria-hidden="true"></i> All portals</span>
     </header>
+    <?php if (count($loginAttempts) === 0): ?>
+      <?php admin_render_empty('fa-right-to-bracket', 'No sign-in attempts yet', 'Every sign-in to the applicant, PSWDO and admin portals is listed here.'); ?>
+    <?php else: ?>
     <div class="table-wrap">
       <table class="data-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Portal</th>
-            <th>IP Address</th>
             <th>Result</th>
+            <th>Account</th>
+            <th>Portal</th>
             <th>Reason</th>
-            <th>User Agent</th>
+            <th>Device</th>
+            <th>IP address</th>
             <th>Time</th>
             <th>Action</th>
           </tr>
         </thead>
         <tbody>
-          <?php if (count($loginAttempts) === 0): ?>
-            <tr><td colspan="10">No login attempts found.</td></tr>
-          <?php else: ?>
             <?php foreach ($loginAttempts as $attempt): ?>
               <?php
                 $isSuccess = (int) ($attempt['is_success'] ?? 0) === 1;
@@ -222,63 +263,65 @@ admin_render_page_start('AICS ADMIN | Security Logs', 'logs', $displayName, $ini
                 $isLocked = !$isSuccess && in_array($reason, ['locked', 'invalid_credentials', 'inactive_account'], true);
                 $attemptEmail = (string) ($attempt['email'] ?? '');
                 $attemptIp = (string) ($attempt['ip_address'] ?? '');
+                $portal = strtolower(trim((string) ($attempt['login_portal'] ?? '')));
+                $device = security_device((string) ($attempt['user_agent'] ?? ''));
               ?>
               <tr>
-                <td>#<?= (int) ($attempt['id'] ?? 0) ?></td>
-                <td><?= admin_h($attemptEmail) ?></td>
-                <td><?= admin_h((string) ($attempt['role_code'] ?? '-')) ?></td>
-                <td><?= admin_h((string) ($attempt['login_portal'] ?? '-')) ?></td>
-                <td><?= admin_h($attemptIp) ?></td>
-                <td><span class="pill <?= $isSuccess ? 'pill-success' : 'pill-danger' ?>"><?= $isSuccess ? 'Success' : 'Failed' ?></span></td>
-                <td><?= admin_h($reason) ?></td>
-                <td class="small-col"><?= admin_h((string) ($attempt['user_agent'] ?? '')) ?></td>
-                <td><?= admin_h(admin_format_datetime((string) ($attempt['created_at'] ?? ''))) ?></td>
+                <td><span class="pill <?= $isSuccess ? 'pill-success' : 'pill-danger' ?>"><i class="fas <?= $isSuccess ? 'fa-circle-check' : 'fa-circle-xmark' ?>" aria-hidden="true"></i> <?= $isSuccess ? 'Success' : 'Failed' ?></span></td>
+                <td>
+                  <span class="adm-cell-main"><?= admin_h($attemptEmail !== '' ? $attemptEmail : '-') ?></span>
+                  <small class="adm-cell-sub">#<?= (int) ($attempt['id'] ?? 0) ?></small>
+                </td>
+                <td><span class="pill pill-neutral"><i class="fas <?= admin_h($portalIcons[$portal] ?? 'fa-door-open') ?>" aria-hidden="true"></i> <?= admin_h($portal !== '' ? ucfirst($portal) : '-') ?></span></td>
+                <td><?= admin_h(security_reason_label($reason)) ?></td>
+                <td title="<?= admin_h((string) ($attempt['user_agent'] ?? '')) ?>"><span class="adm-contact"><i class="fas <?= $device['mobile'] ? 'fa-mobile-screen' : 'fa-desktop' ?>" aria-hidden="true"></i> <?= admin_h($device['label']) ?></span></td>
+                <td class="adm-nowrap"><?= admin_h($attemptIp) ?></td>
+                <td class="adm-nowrap"><?= admin_h(admin_format_datetime((string) ($attempt['created_at'] ?? ''))) ?></td>
                 <td>
                   <?php if ($isLocked && ($attemptEmail !== '' || $attemptIp !== '')): ?>
-                    <form method="post" action="" style="display:inline;" onsubmit="return confirm('Clear lockout for <?= admin_h($attemptEmail !== '' ? $attemptEmail : $attemptIp) ?>?');">
+                    <form method="post" action="" class="inline-form" onsubmit="return confirm('Clear lockout for <?= admin_h($attemptEmail !== '' ? $attemptEmail : $attemptIp) ?>?');">
                       <?= admin_csrf_input() ?>
                       <input type="hidden" name="action" value="clear_lockout">
                       <input type="hidden" name="target_email" value="<?= admin_h($attemptEmail) ?>">
                       <input type="hidden" name="target_ip" value="<?= admin_h($attemptIp) ?>">
-                      <button type="submit" class="btn-tag" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:600;">
-                        <i class="fas fa-unlock"></i> Clear Lockout
+                      <button type="submit" class="btn-outline btn-mini adm-btn-warn">
+                        <i class="fas fa-unlock" aria-hidden="true"></i> Clear lockout
                       </button>
                     </form>
                   <?php else: ?>
-                    <span style="color:#94a3b8;font-size:11px;">&mdash;</span>
+                    <span class="adm-muted" aria-label="No action">&mdash;</span>
                   <?php endif; ?>
                 </td>
               </tr>
             <?php endforeach; ?>
-          <?php endif; ?>
         </tbody>
       </table>
     </div>
+    <?php endif; ?>
   </section>
 
   <section class="panel-card">
     <header class="panel-head">
-      <h2><i class="fas fa-file-shield"></i> Admin Audit Trail</h2>
+      <h2><i class="fas fa-file-shield" aria-hidden="true"></i> Admin activity</h2>
+      <span class="ai-screen-note"><i class="fas fa-fingerprint" aria-hidden="true"></i> Who changed what, and when</span>
     </header>
+    <?php if (count($auditLogs) === 0): ?>
+      <?php admin_render_empty('fa-file-shield', 'No admin activity recorded yet', 'Account changes, backups and blocked access attempts are listed here.'); ?>
+    <?php else: ?>
     <div class="table-wrap">
       <table class="data-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Event Type</th>
             <th>Outcome</th>
-            <th>Actor</th>
-            <th>Target</th>
-            <th>Message</th>
-            <th>IP</th>
-            <th>Context</th>
+            <th>Event</th>
+            <th>Done by</th>
+            <th>Account affected</th>
+            <th>Details</th>
+            <th>IP address</th>
             <th>Time</th>
           </tr>
         </thead>
         <tbody>
-          <?php if (count($auditLogs) === 0): ?>
-            <tr><td colspan="9">No audit logs recorded.</td></tr>
-          <?php else: ?>
             <?php foreach ($auditLogs as $log): ?>
               <?php
                 $outcome = (string) ($log['outcome'] ?? 'info');
@@ -289,24 +332,24 @@ admin_render_page_start('AICS ADMIN | Security Logs', 'logs', $displayName, $ini
                     default => 'pill-info',
                 };
                 $contextRaw = trim((string) ($log['context_json'] ?? ''));
-                $contextShort = $contextRaw !== '' ? substr($contextRaw, 0, 120) : '-';
               ?>
               <tr>
-                <td>#<?= (int) ($log['id'] ?? 0) ?></td>
-                <td><?= admin_h((string) ($log['event_type'] ?? '')) ?></td>
-                <td><span class="pill <?= admin_h($pillClass) ?>"><?= admin_h(strtoupper($outcome)) ?></span></td>
+                <td><span class="pill <?= admin_h($pillClass) ?>"><i class="fas <?= admin_h($outcomeIcons[$outcome] ?? 'fa-circle-info') ?>" aria-hidden="true"></i> <?= admin_h(ucfirst($outcome)) ?></span></td>
+                <td>
+                  <span class="adm-cell-main"><?= admin_h(ucfirst(str_replace('_', ' ', (string) ($log['event_type'] ?? '')))) ?></span>
+                  <small class="adm-cell-sub">#<?= (int) ($log['id'] ?? 0) ?></small>
+                </td>
                 <td><?= admin_h((string) ($log['actor_email'] ?? '-')) ?></td>
                 <td><?= admin_h((string) ($log['target_email'] ?? '-')) ?></td>
-                <td><?= admin_h((string) ($log['event_message'] ?? '')) ?></td>
-                <td><?= admin_h((string) ($log['ip_address'] ?? '')) ?></td>
-                <td class="small-col"><?= admin_h($contextShort) ?></td>
-                <td><?= admin_h(admin_format_datetime((string) ($log['created_at'] ?? ''))) ?></td>
+                <td<?= $contextRaw !== '' ? ' title="' . admin_h(substr($contextRaw, 0, 600)) . '"' : '' ?>><?= admin_h((string) ($log['event_message'] ?? '')) ?></td>
+                <td class="adm-nowrap"><?= admin_h((string) ($log['ip_address'] ?? '')) ?></td>
+                <td class="adm-nowrap"><?= admin_h(admin_format_datetime((string) ($log['created_at'] ?? ''))) ?></td>
               </tr>
             <?php endforeach; ?>
-          <?php endif; ?>
         </tbody>
       </table>
     </div>
+    <?php endif; ?>
   </section>
   <script>
     (() => {

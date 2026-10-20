@@ -85,6 +85,8 @@ $opsSummary = [
     'backup_month_success' => 0,
     'maintenance_month_total' => 0,
     'maintenance_month_passed' => 0,
+    'last_backup_at' => '',
+    'ai_attention' => 0,
 ];
 
 $loadError = '';
@@ -185,6 +187,10 @@ try {
         $opsSummary['maintenance_month_passed'] = (int) ($maintenanceRow['maintenance_month_passed'] ?? 0);
     }
 
+    $lastBackup = $connection->query("SELECT MAX(completed_at) FROM aics_admin_backup_runs WHERE status = 'success'")?->fetch_row();
+    $opsSummary['last_backup_at'] = (string) ($lastBackup[0] ?? '');
+    $opsSummary['ai_attention'] = aics_ai_gate_attention_count($connection);
+
     $connection->close();
 } catch (Throwable) {
     $loadError = 'Unable to load full dashboard analytics right now.';
@@ -228,29 +234,66 @@ $maintenanceRate = $opsSummary['maintenance_month_total'] > 0
     ? ($opsSummary['maintenance_month_passed'] / $opsSummary['maintenance_month_total']) * 100
     : 0.0;
 
+// What needs the administrator's attention, as plain sentences.
+$plural = static fn (int $count, string $one, string $many): string => $count === 1 ? $one : $many;
+$dashboardUrl = $paths['dashboard_url'];
+$backupDays = null;
+$lastBackupTs = $opsSummary['last_backup_at'] !== '' ? strtotime($opsSummary['last_backup_at']) : false;
+if ($lastBackupTs !== false) {
+    $backupDays = max(0, (int) floor((time() - $lastBackupTs) / 86400));
+}
+$aiAttention = (int) $opsSummary['ai_attention'];
+$failedLogins = (int) $opsSummary['failed_logins_24h'];
+$unauthorized = (int) $opsSummary['unauthorized_24h'];
+$restricted = (int) $opsSummary['restricted_accounts'];
+$maintenanceTotal = (int) $opsSummary['maintenance_month_total'];
+$maintenanceFailed = max(0, $maintenanceTotal - (int) $opsSummary['maintenance_month_passed']);
+
+$statusRows = [];
+$statusRows[] = $aiAttention > 0
+    ? ['tone' => 'watch', 'icon' => 'fa-robot', 'text' => $aiAttention . ' ' . $plural($aiAttention, 'request needs', 'requests need') . ' your decision',
+        'detail' => 'AICS AI could not confirm or could not check their documents.', 'href' => $dashboardUrl . '?page=ai', 'action' => 'Review requests']
+    : ['tone' => 'ok', 'icon' => 'fa-robot', 'text' => 'No requests are waiting for your decision',
+        'detail' => 'AICS AI sends checked requests straight to PSWDO.', 'href' => $dashboardUrl . '?page=ai', 'action' => 'Open AICS AI'];
+if ($unauthorized > 0) {
+    $statusRows[] = ['tone' => 'alert', 'icon' => 'fa-user-secret', 'text' => $unauthorized . ' unauthorized access ' . $plural($unauthorized, 'attempt', 'attempts') . ' in the last 24 hours',
+        'detail' => 'Someone without admin rights tried to open admin pages.', 'href' => $dashboardUrl . '?page=logs', 'action' => 'View security logs'];
+} else {
+    $statusRows[] = ['tone' => $failedLogins >= 5 ? 'watch' : 'ok', 'icon' => 'fa-right-to-bracket',
+        'text' => $failedLogins === 0 ? 'No failed sign-ins in the last 24 hours' : $failedLogins . ' failed ' . $plural($failedLogins, 'sign-in', 'sign-ins') . ' in the last 24 hours',
+        'detail' => $failedLogins >= 5 ? 'Check for repeated attempts on the same account.' : 'No unauthorized access attempts.', 'href' => $dashboardUrl . '?page=logs', 'action' => 'View security logs'];
+}
+$statusRows[] = $restricted > 0
+    ? ['tone' => 'watch', 'icon' => 'fa-user-lock', 'text' => $restricted . ' ' . $plural($restricted, 'account is', 'accounts are') . ' restricted, locked or banned',
+        'detail' => 'Out of ' . (int) $opsSummary['total_accounts'] . ' accounts.', 'href' => $dashboardUrl . '?page=users', 'action' => 'Manage users']
+    : ['tone' => 'ok', 'icon' => 'fa-users', 'text' => 'All ' . (int) $opsSummary['total_accounts'] . ' accounts are active',
+        'detail' => 'No restricted, locked or banned accounts.', 'href' => $dashboardUrl . '?page=users', 'action' => 'Manage users'];
+if ($backupDays === null) {
+    $statusRows[] = ['tone' => 'alert', 'icon' => 'fa-database', 'text' => 'No backup has been made yet',
+        'detail' => 'Run a backup so the records can be restored if something goes wrong.', 'href' => $dashboardUrl . '?page=backup', 'action' => 'Run a backup'];
+} else {
+    $statusRows[] = ['tone' => $backupDays > 7 ? 'watch' : 'ok', 'icon' => 'fa-database',
+        'text' => $backupDays > 7 ? 'Last backup was ' . $backupDays . ' days ago' : 'Last backup: ' . date('M j, Y', (int) $lastBackupTs),
+        'detail' => $backupDays > 7 ? 'A backup at least once a week is recommended.' : ($backupDays === 0 ? 'Made today.' : $backupDays . ' ' . $plural($backupDays, 'day', 'days') . ' ago.'),
+        'href' => $dashboardUrl . '?page=backup', 'action' => $backupDays > 7 ? 'Run a backup' : 'Open backups'];
+}
+if ($maintenanceTotal === 0) {
+    $statusRows[] = ['tone' => 'watch', 'icon' => 'fa-stethoscope', 'text' => 'No maintenance check this month',
+        'detail' => 'Run the checks to confirm the database and logs are healthy.', 'href' => $dashboardUrl . '?page=backup', 'action' => 'Run checks'];
+} elseif ($maintenanceFailed > 0) {
+    $statusRows[] = ['tone' => 'alert', 'icon' => 'fa-stethoscope', 'text' => $maintenanceFailed . ' maintenance ' . $plural($maintenanceFailed, 'check', 'checks') . ' failed this month',
+        'detail' => 'Open the check log to see what failed.', 'href' => $dashboardUrl . '?page=backup', 'action' => 'View checks'];
+} else {
+    $statusRows[] = ['tone' => 'ok', 'icon' => 'fa-stethoscope', 'text' => 'All ' . $maintenanceTotal . ' maintenance ' . $plural($maintenanceTotal, 'check', 'checks') . ' passed this month',
+        'detail' => 'Database, backup folder and logs are healthy.', 'href' => $dashboardUrl . '?page=backup', 'action' => 'Open maintenance'];
+}
+$attentionCount = count(array_filter($statusRows, static fn (array $row): bool => $row['tone'] !== 'ok'));
+$toneIcons = ['ok' => 'fa-circle-check', 'watch' => 'fa-circle-exclamation', 'alert' => 'fa-triangle-exclamation'];
+$toneWords = ['ok' => 'All good', 'watch' => 'Check soon', 'alert' => 'Act now'];
+
 admin_render_page_start('AICS ADMIN | Overview Dashboard', 'overview', $displayName, $initials, $paths);
+admin_render_page_head('fa-chart-line', 'Overview', 'What needs your attention today, and how applications are moving.');
 ?>
-  <section class="hero-card compact">
-    <div class="hero-copy">
-      <p class="eyebrow"><i class="fas fa-gauge-high"></i> Dashboard Analytics</p>
-      <h1>Administrator Dashboard</h1>
-      <p>Track applicant usage, registration volume, request pipeline, and operational security in one unified view.</p>
-    </div>
-    <div class="hero-badges">
-      <div class="hero-badge">
-        <strong><?= (int) ($activityMetrics['registered_applicants'] ?? 0) ?></strong>
-        <span>Registered Today</span>
-      </div>
-      <div class="hero-badge">
-        <strong><?= (int) ($activityMetrics['submitted_requests'] ?? 0) ?></strong>
-        <span>Requests Today</span>
-      </div>
-      <div class="hero-badge">
-        <strong><?= (int) ($activityMetrics['interview_pending'] ?? 0) ?></strong>
-        <span>Interview Pending</span>
-      </div>
-    </div>
-  </section>
 
   <?php if (is_array($statusMessage)): ?>
     <div class="alert <?= admin_h((string) $statusMessage['type'] === 'success' ? 'alert-success' : 'alert-error') ?> flash-alert">
@@ -266,101 +309,72 @@ admin_render_page_start('AICS ADMIN | Overview Dashboard', 'overview', $displayN
     </div>
   <?php endif; ?>
 
+  <section class="adm-board<?= $attentionCount > 0 ? ' has-attention' : '' ?>" aria-labelledby="adm-board-title">
+    <header class="adm-board-head">
+      <span class="adm-board-mark"><i class="fas <?= $attentionCount > 0 ? 'fa-bell' : 'fa-circle-check' ?>" aria-hidden="true"></i></span>
+      <div>
+        <h2 id="adm-board-title"><?= $attentionCount > 0 ? admin_h($attentionCount . ' ' . $plural($attentionCount, 'thing needs', 'things need') . ' your attention') : 'Everything looks good' ?></h2>
+        <p>Checked when this page opened. Refresh the page to check again.</p>
+      </div>
+    </header>
+    <ul class="adm-board-list">
+      <?php foreach ($statusRows as $row): ?>
+        <li class="adm-board-row tone-<?= admin_h($row['tone']) ?>">
+          <span class="adm-board-state" title="<?= admin_h($toneWords[$row['tone']]) ?>"><i class="fas <?= admin_h($toneIcons[$row['tone']]) ?>" aria-hidden="true"></i><span class="sr-only"><?= admin_h($toneWords[$row['tone']]) ?>:</span></span>
+          <span class="adm-board-topic"><i class="fas <?= admin_h($row['icon']) ?>" aria-hidden="true"></i></span>
+          <div class="adm-board-text">
+            <strong><?= admin_h($row['text']) ?></strong>
+            <span><?= admin_h($row['detail']) ?></span>
+          </div>
+          <a class="adm-board-action" href="<?= admin_h($row['href']) ?>"><?= admin_h($row['action']) ?></a>
+        </li>
+      <?php endforeach; ?>
+    </ul>
+  </section>
+
   <section class="panel-card dashboard-tab-wrapper" id="admin-overview-root" data-endpoint="<?= admin_h($realtimeEndpoint) ?>">
-    <div class="dashboard-tab-nav" id="overview-tab-nav">
-      <button type="button" class="dashboard-tab-btn active" data-tab-target="analytics">Live Applicant Analytics</button>
-      <button type="button" class="dashboard-tab-btn" data-tab-target="operations">Operations Snapshot</button>
-      <button type="button" class="dashboard-tab-btn" data-tab-target="governance">Governance Flow Plan</button>
+    <div class="dashboard-tab-nav" id="overview-tab-nav" role="tablist">
+      <button type="button" class="dashboard-tab-btn active" data-tab-target="analytics"><i class="fas fa-chart-column" aria-hidden="true"></i> Applications</button>
+      <button type="button" class="dashboard-tab-btn" data-tab-target="operations"><i class="fas fa-server" aria-hidden="true"></i> Operations</button>
+      <button type="button" class="dashboard-tab-btn" data-tab-target="governance"><i class="fas fa-list-check" aria-hidden="true"></i> Admin routine</button>
     </div>
 
     <div class="dashboard-tab-panels">
       <section class="dashboard-tab-panel active" data-tab-panel="analytics">
         <div class="activity-toolbar">
           <p class="activity-period-label">
-            <span class="activity-last-sync"><span class="live-dot" aria-hidden="true"></span> Live Sync &middot; Updated <strong id="activity-last-sync"><?= admin_h(admin_format_datetime(date('Y-m-d H:i:s'))) ?></strong></span>
+            <span class="activity-last-sync"><span class="live-dot" aria-hidden="true"></span> Live. Updated <strong id="activity-last-sync"><?= admin_h(admin_format_datetime(date('Y-m-d H:i:s'))) ?></strong></span>
           </p>
-          <button type="button" class="btn-solid" id="activity-refresh-btn"><i class="fas fa-rotate"></i> Refresh</button>
+          <button type="button" class="btn-outline btn-mini" id="activity-refresh-btn"><i class="fas fa-rotate" aria-hidden="true"></i> Refresh</button>
         </div>
 
-        <div class="metric-grid activity-metric-grid">
-          <article class="metric-card metric-card-reg">
-            <div class="metric-card-icon"><i class="fas fa-user-plus"></i></div>
-            <div class="metric-card-info">
-              <span>Registered Applicants</span>
-              <strong data-activity-metric="registered_applicants"><?= (int) ($activityMetrics['registered_applicants'] ?? 0) ?></strong>
-            </div>
-          </article>
-          <article class="metric-card metric-card-sub">
-            <div class="metric-card-icon"><i class="fas fa-file-lines"></i></div>
-            <div class="metric-card-info">
-              <span>Submitted Requests</span>
-              <strong data-activity-metric="submitted_requests"><?= (int) ($activityMetrics['submitted_requests'] ?? 0) ?></strong>
-            </div>
-          </article>
-          <article class="metric-card metric-card-pending-rev">
-            <div class="metric-card-icon"><i class="fas fa-inbox"></i></div>
-            <div class="metric-card-info">
-              <span>Pending Review</span>
-              <strong data-activity-metric="pending_review"><?= (int) ($activityMetrics['pending_review'] ?? 0) ?></strong>
-            </div>
-          </article>
-          <article class="metric-card metric-card-interview">
-            <div class="metric-card-icon"><i class="fas fa-clipboard-user"></i></div>
-            <div class="metric-card-info">
-              <span>Interview Pending</span>
-              <strong data-activity-metric="interview_pending"><?= (int) ($activityMetrics['interview_pending'] ?? 0) ?></strong>
-            </div>
-          </article>
-          <article class="metric-card metric-card-under-rev">
-            <div class="metric-card-icon"><i class="fas fa-magnifying-glass"></i></div>
-            <div class="metric-card-info">
-              <span>Under Review</span>
-              <strong data-activity-metric="under_review"><?= (int) ($activityMetrics['under_review'] ?? 0) ?></strong>
-            </div>
-          </article>
-          <article class="metric-card metric-card-total-pending">
-            <div class="metric-card-icon"><i class="fas fa-clock"></i></div>
-            <div class="metric-card-info">
-              <span>Total Pending</span>
-              <strong data-activity-metric="pending_total"><?= (int) ($activityMetrics['pending_total'] ?? 0) ?></strong>
-            </div>
-          </article>
-          <article class="metric-card metric-card-approved">
-            <div class="metric-card-icon"><i class="fas fa-circle-check"></i></div>
-            <div class="metric-card-info">
-              <span>Approved</span>
-              <strong data-activity-metric="approved_total"><?= (int) ($activityMetrics['approved_total'] ?? 0) ?></strong>
-            </div>
-          </article>
-          <article class="metric-card metric-card-not-approved">
-            <div class="metric-card-icon"><i class="fas fa-circle-xmark"></i></div>
-            <div class="metric-card-info">
-              <span>Not Approved</span>
-              <strong data-activity-metric="not_approved_total"><?= (int) ($activityMetrics['not_approved_total'] ?? 0) ?></strong>
-            </div>
-          </article>
-          <article class="metric-card metric-card-released">
-            <div class="metric-card-icon"><i class="fas fa-hand-holding-dollar"></i></div>
-            <div class="metric-card-info">
-              <span>Released</span>
-              <strong data-activity-metric="released_total"><?= (int) ($activityMetrics['released_total'] ?? 0) ?></strong>
-            </div>
-          </article>
+        <div class="adm-stat-grid is-nine">
+          <?php
+            admin_render_stat('fa-user-plus', 'Registered applicants', (string) (int) ($activityMetrics['registered_applicants'] ?? 0), 'brand', 'New applicant accounts', 'data-activity-metric="registered_applicants"');
+            admin_render_stat('fa-file-lines', 'Submitted requests', (string) (int) ($activityMetrics['submitted_requests'] ?? 0), 'brand', 'Applications received', 'data-activity-metric="submitted_requests"');
+            admin_render_stat('fa-inbox', 'Pending review', (string) (int) ($activityMetrics['pending_review'] ?? 0), 'watch', 'Waiting for PSWDO', 'data-activity-metric="pending_review"');
+            admin_render_stat('fa-clipboard-user', 'Interview pending', (string) (int) ($activityMetrics['interview_pending'] ?? 0), 'violet', 'Scheduled for interview', 'data-activity-metric="interview_pending"');
+            admin_render_stat('fa-magnifying-glass', 'Under review', (string) (int) ($activityMetrics['under_review'] ?? 0), 'brand', 'Being checked by PSWDO', 'data-activity-metric="under_review"');
+            admin_render_stat('fa-hourglass-half', 'Total pending', (string) (int) ($activityMetrics['pending_total'] ?? 0), 'watch', 'Not decided yet', 'data-activity-metric="pending_total"');
+            admin_render_stat('fa-circle-check', 'Approved', (string) (int) ($activityMetrics['approved_total'] ?? 0), 'ok', 'Approved for assistance', 'data-activity-metric="approved_total"');
+            admin_render_stat('fa-circle-xmark', 'Not approved', (string) (int) ($activityMetrics['not_approved_total'] ?? 0), 'alert', 'Declined by PSWDO', 'data-activity-metric="not_approved_total"');
+            admin_render_stat('fa-hand-holding-dollar', 'Released', (string) (int) ($activityMetrics['released_total'] ?? 0), 'ok', 'Assistance given out', 'data-activity-metric="released_total"');
+          ?>
         </div>
 
         <article class="panel-card overview-graph-card">
           <header class="panel-head">
             <div class="overview-chart-heading">
-              <span class="overview-chart-icon"><i class="fas fa-chart-simple"></i></span>
+              <span class="overview-chart-icon"><i class="fas fa-chart-simple" aria-hidden="true"></i></span>
               <div>
-                <h2>Application request activity</h2>
+                <h2>Requests submitted</h2>
                 <p>
                   <strong id="dashboard-period-label"><?= admin_h($periodLabel) ?></strong>
                   <span class="overview-period-range" id="dashboard-period-range"><?= admin_h($periodRangeLabel) ?></span>
                 </p>
               </div>
             </div>
-            <div class="overview-period-controls" id="activity-period-controls">
+            <div class="overview-period-controls" id="activity-period-controls" role="group" aria-label="Period">
               <button type="button" class="overview-period-btn<?= $periodCode === 'day' ? ' active' : '' ?>" data-period="day">Day</button>
               <button type="button" class="overview-period-btn<?= $periodCode === 'week' ? ' active' : '' ?>" data-period="week">Week</button>
               <button type="button" class="overview-period-btn<?= $periodCode === 'month' ? ' active' : '' ?>" data-period="month">Month</button>
@@ -409,53 +423,58 @@ admin_render_page_start('AICS ADMIN | Overview Dashboard', 'overview', $displayN
           </div>
 
           <div class="overview-trend-insight">
-            <span class="overview-insight-icon"><i class="fas fa-wand-magic-sparkles"></i></span>
+            <span class="overview-insight-icon"><i class="fas fa-file-circle-check" aria-hidden="true"></i></span>
             <div>
-              <strong>Activity summary</strong>
-              <p><span id="dashboard-trend-total"><?= $trendSubmittedTotal ?></span> requests in the selected period.</p>
+              <strong>In this period</strong>
+              <p><span id="dashboard-trend-total"><?= $trendSubmittedTotal ?></span> requests were submitted.</p>
             </div>
-            <a href="<?= admin_h($paths['dashboard_url']) ?>?page=users">View requests <i class="fas fa-arrow-right"></i></a>
+            <a href="<?= admin_h($paths['dashboard_url']) ?>?page=ai">Open AICS AI Screening</a>
           </div>
         </article>
       </section>
 
       <section class="dashboard-tab-panel" data-tab-panel="operations">
-        <div class="metric-grid">
-          <article class="metric-card"><span>Total Accounts</span><strong><?= (int) $opsSummary['total_accounts'] ?></strong></article>
-          <article class="metric-card"><span>Active Accounts</span><strong><?= (int) $opsSummary['active_accounts'] ?></strong></article>
-          <article class="metric-card"><span>Restricted Accounts</span><strong><?= (int) $opsSummary['restricted_accounts'] ?></strong></article>
-          <article class="metric-card"><span>Total Requests</span><strong><?= (int) $opsSummary['total_requests'] ?></strong></article>
-          <article class="metric-card"><span>Pending Requests</span><strong><?= (int) $opsSummary['pending_requests'] ?></strong></article>
-          <article class="metric-card"><span>Interview Pending</span><strong><?= (int) $opsSummary['interview_pending'] ?></strong></article>
-          <article class="metric-card"><span>Approved Requests</span><strong><?= (int) $opsSummary['approved_requests'] ?></strong></article>
-          <article class="metric-card"><span>Failed Logins (24h)</span><strong><?= (int) $opsSummary['failed_logins_24h'] ?></strong></article>
-          <article class="metric-card"><span>Unauthorized Attempts (24h)</span><strong><?= (int) $opsSummary['unauthorized_24h'] ?></strong></article>
+        <div class="adm-stat-grid is-nine">
+          <?php
+            admin_render_stat('fa-users', 'Total accounts', (string) (int) $opsSummary['total_accounts'], 'brand', 'Applicants, PSWDO and admins');
+            admin_render_stat('fa-user-check', 'Active accounts', (string) (int) $opsSummary['active_accounts'], 'ok', 'Can sign in');
+            admin_render_stat('fa-user-lock', 'Restricted accounts', (string) (int) $opsSummary['restricted_accounts'], $opsSummary['restricted_accounts'] > 0 ? 'watch' : 'neutral', 'Restricted, locked or banned');
+            admin_render_stat('fa-folder-open', 'Total requests', (string) (int) $opsSummary['total_requests'], 'brand', 'All time');
+            admin_render_stat('fa-inbox', 'Pending requests', (string) (int) $opsSummary['pending_requests'], 'watch', 'Waiting for a decision');
+            admin_render_stat('fa-clipboard-user', 'Interview pending', (string) (int) $opsSummary['interview_pending'], 'violet', 'Scheduled for interview');
+            admin_render_stat('fa-circle-check', 'Approved requests', (string) (int) $opsSummary['approved_requests'], 'ok', 'Approved, scheduled or released');
+            admin_render_stat('fa-right-to-bracket', 'Failed sign-ins', (string) (int) $opsSummary['failed_logins_24h'], $opsSummary['failed_logins_24h'] >= 5 ? 'watch' : 'neutral', 'Last 24 hours');
+            admin_render_stat('fa-user-secret', 'Unauthorized attempts', (string) (int) $opsSummary['unauthorized_24h'], $opsSummary['unauthorized_24h'] > 0 ? 'alert' : 'neutral', 'Last 24 hours');
+          ?>
         </div>
 
         <section class="panel-grid two-col">
           <article class="panel-card">
             <header class="panel-head">
-              <h2><i class="fas fa-bullseye"></i> Success Criteria</h2>
+              <h2><i class="fas fa-bullseye" aria-hidden="true"></i> Targets</h2>
             </header>
             <div class="criteria-list">
               <div class="criteria-item">
+                <span class="adm-row-icon"><i class="fas fa-floppy-disk" aria-hidden="true"></i></span>
                 <div>
-                  <strong>Backup Success Rate</strong>
-                  <p>Target: at least 99% successful scheduled backups per month.</p>
+                  <strong>Backup success rate</strong>
+                  <p>Target: at least 99% of backups succeed each month.</p>
                 </div>
                 <span class="pill <?= $backupRate >= 99 ? 'pill-success' : 'pill-warning' ?>"><?= number_format($backupRate, 1) ?>%</span>
               </div>
               <div class="criteria-item">
+                <span class="adm-row-icon"><i class="fas fa-stethoscope" aria-hidden="true"></i></span>
                 <div>
-                  <strong>Maintenance Pass Rate</strong>
-                  <p>Target: at least 99.5% pass rate on routine service checks.</p>
+                  <strong>Maintenance pass rate</strong>
+                  <p>Target: at least 99.5% of routine checks pass.</p>
                 </div>
                 <span class="pill <?= $maintenanceRate >= 99.5 ? 'pill-success' : 'pill-warning' ?>"><?= $opsSummary['maintenance_month_total'] > 0 ? number_format($maintenanceRate, 1) . '%' : 'No data' ?></span>
               </div>
               <div class="criteria-item">
+                <span class="adm-row-icon"><i class="fas fa-bell" aria-hidden="true"></i></span>
                 <div>
-                  <strong>Audit Alert Burden</strong>
-                  <p>Goal: keep failed login and unauthorized events as low as possible.</p>
+                  <strong>Security alerts</strong>
+                  <p>Goal: keep failed sign-ins and unauthorized attempts low.</p>
                 </div>
                 <span class="pill <?= (($opsSummary['failed_logins_24h'] + $opsSummary['unauthorized_24h']) <= 5) ? 'pill-success' : 'pill-danger' ?>">
                   <?= (int) ($opsSummary['failed_logins_24h'] + $opsSummary['unauthorized_24h']) ?> alerts
@@ -466,27 +485,30 @@ admin_render_page_start('AICS ADMIN | Overview Dashboard', 'overview', $displayN
 
           <article class="panel-card">
             <header class="panel-head">
-              <h2><i class="fas fa-shield"></i> Security Pulse</h2>
+              <h2><i class="fas fa-shield" aria-hidden="true"></i> Security this month</h2>
             </header>
             <div class="list-stack">
               <div class="list-item">
+                <span class="adm-row-icon"><i class="fas fa-database" aria-hidden="true"></i></span>
                 <div>
-                  <strong>Backup Jobs This Month</strong>
-                  <p>Successful runs versus all scheduled backup executions.</p>
+                  <strong>Backups</strong>
+                  <p>Successful backups out of all backups run.</p>
                 </div>
                 <span class="pill pill-info"><?= (int) $opsSummary['backup_month_success'] ?>/<?= (int) $opsSummary['backup_month_total'] ?></span>
               </div>
               <div class="list-item">
+                <span class="adm-row-icon"><i class="fas fa-heart-pulse" aria-hidden="true"></i></span>
                 <div>
-                  <strong>Maintenance Checks This Month</strong>
-                  <p>Passed checks versus total maintenance checks.</p>
+                  <strong>Maintenance checks</strong>
+                  <p>Passed checks out of all checks run.</p>
                 </div>
                 <span class="pill pill-info"><?= (int) $opsSummary['maintenance_month_passed'] ?>/<?= (int) $opsSummary['maintenance_month_total'] ?></span>
               </div>
               <div class="list-item">
+                <span class="adm-row-icon"><i class="fas fa-user-secret" aria-hidden="true"></i></span>
                 <div>
-                  <strong>Unauthorized Attempts (24h)</strong>
-                  <p>All admin-route access attempts from non-admin identities.</p>
+                  <strong>Unauthorized attempts (24 hours)</strong>
+                  <p>Tries to open admin pages without admin rights.</p>
                 </div>
                 <span class="pill <?= $opsSummary['unauthorized_24h'] > 0 ? 'pill-danger' : 'pill-success' ?>"><?= (int) $opsSummary['unauthorized_24h'] ?></span>
               </div>
@@ -498,72 +520,68 @@ admin_render_page_start('AICS ADMIN | Overview Dashboard', 'overview', $displayN
       <section class="dashboard-tab-panel" data-tab-panel="governance">
         <article class="panel-card">
           <header class="panel-head">
-            <h2><i class="fas fa-list-check"></i> System Administrator Flow Plan</h2>
+            <h2><i class="fas fa-list-check" aria-hidden="true"></i> Administrator routine</h2>
           </header>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Step</th>
-                  <th>Action</th>
-                  <th>Frequency</th>
-                  <th>Success Criteria</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php if (count($flowSteps) === 0): ?>
+          <?php if (count($flowSteps) === 0): ?>
+            <?php admin_render_empty('fa-list-check', 'No routine steps yet', 'Steps appear here once the routine is set up.'); ?>
+          <?php else: ?>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
                   <tr>
-                    <td colspan="4">No flow plan rows found yet.</td>
+                    <th>Step</th>
+                    <th>Action</th>
+                    <th>How often</th>
+                    <th>Done when</th>
                   </tr>
-                <?php else: ?>
+                </thead>
+                <tbody>
                   <?php foreach ($flowSteps as $flow): ?>
                     <tr>
-                      <td><?= (int) $flow['step'] ?></td>
-                      <td><?= admin_h((string) $flow['action']) ?></td>
-                      <td><?= admin_h((string) $flow['frequency']) ?></td>
+                      <td><span class="adm-step"><?= (int) $flow['step'] ?></span></td>
+                      <td><strong><?= admin_h((string) $flow['action']) ?></strong></td>
+                      <td><span class="pill pill-neutral"><i class="fas fa-repeat" aria-hidden="true"></i> <?= admin_h((string) $flow['frequency']) ?></span></td>
                       <td><?= admin_h((string) $flow['criteria']) ?></td>
                     </tr>
                   <?php endforeach; ?>
-                <?php endif; ?>
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
+          <?php endif; ?>
         </article>
 
         <article class="panel-card">
           <header class="panel-head">
-            <h2><i class="fas fa-route"></i> Exception Flows</h2>
+            <h2><i class="fas fa-route" aria-hidden="true"></i> When something goes wrong</h2>
           </header>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Exception</th>
-                  <th>Trigger</th>
-                  <th>Response Flow</th>
-                  <th>Frequency</th>
-                  <th>Success Criteria</th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php if (count($exceptionFlows) === 0): ?>
+          <?php if (count($exceptionFlows) === 0): ?>
+            <?php admin_render_empty('fa-route', 'No problem responses yet', 'Responses for common problems appear here once they are set up.'); ?>
+          <?php else: ?>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
                   <tr>
-                    <td colspan="5">No exception-flow rows found yet.</td>
+                    <th>Problem</th>
+                    <th>Noticed by</th>
+                    <th>What to do</th>
+                    <th>How often</th>
+                    <th>Done when</th>
                   </tr>
-                <?php else: ?>
+                </thead>
+                <tbody>
                   <?php foreach ($exceptionFlows as $flow): ?>
                     <tr>
-                      <td><?= admin_h((string) $flow['exception']) ?></td>
+                      <td><strong><?= admin_h((string) $flow['exception']) ?></strong></td>
                       <td><?= admin_h((string) $flow['trigger']) ?></td>
                       <td><?= admin_h((string) $flow['response']) ?></td>
                       <td><?= admin_h((string) $flow['frequency']) ?></td>
                       <td><?= admin_h((string) $flow['criteria']) ?></td>
                     </tr>
                   <?php endforeach; ?>
-                <?php endif; ?>
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
+          <?php endif; ?>
         </article>
       </section>
     </div>

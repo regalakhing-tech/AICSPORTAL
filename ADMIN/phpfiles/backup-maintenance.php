@@ -195,15 +195,16 @@ $maintenanceRate = $summary['maintenance_month_total'] > 0
     ? ($summary['maintenance_month_pass'] / $summary['maintenance_month_total']) * 100
     : 0.0;
 
+$backupTypeLabels = ['incremental' => 'Daily incremental', 'full' => 'Weekly full', 'archive' => 'Monthly archive'];
+$runStatusIcons = ['success' => 'fa-circle-check', 'failed' => 'fa-circle-xmark'];
+
 admin_render_page_start('AICS ADMIN | Backup & Maintenance', 'backup', $displayName, $initials, $paths);
+admin_render_page_head(
+    'fa-database',
+    'Backup & Maintenance',
+    'Save a copy of the database, check that the system is healthy, and download past backups.'
+);
 ?>
-  <section class="hero-card compact">
-    <div class="hero-copy">
-      <p class="eyebrow"><i class="fas fa-database"></i> Resilience Controls</p>
-      <h1>Backup & Maintenance</h1>
-      <p>Run secure backup jobs, validate system health, and monitor backup integrity from a single maintenance console.</p>
-    </div>
-  </section>
 
   <?php if (is_array($statusMessage)): ?>
     <div class="alert <?= admin_h((string) $statusMessage['type'] === 'success' ? 'alert-success' : 'alert-error') ?> flash-alert">
@@ -227,75 +228,84 @@ admin_render_page_start('AICS ADMIN | Backup & Maintenance', 'backup', $displayN
   <?php endif; ?>
 
   <section class="panel-grid two-col">
-    <article class="panel-card">
-      <header class="panel-head">
-        <h2><i class="fas fa-floppy-disk"></i> Run Backup</h2>
-      </header>
-      <form action="" method="post" class="form-grid">
-        <?= admin_csrf_input() ?>
-        <input type="hidden" name="action" value="run_backup">
-        <label>Backup Type
-          <select name="backup_type" required>
-            <option value="incremental">Daily Incremental</option>
-            <option value="full">Weekly Full</option>
-            <option value="archive">Monthly Archive</option>
-          </select>
-        </label>
-        <button type="submit" class="btn-solid js-confirm" data-confirm="Start database backup now?">
-          <i class="fas fa-play"></i>
-          Start Backup
-        </button>
-      </form>
+    <article class="panel-card adm-action-card">
+      <span class="adm-action-icon tone-brand"><i class="fas fa-floppy-disk" aria-hidden="true"></i></span>
+      <div class="adm-action-body">
+        <h2>Back up the database</h2>
+        <p>Saves applicants, requests and settings to a file you can download and restore.</p>
+        <form action="" method="post" class="adm-action-form">
+          <?= admin_csrf_input() ?>
+          <input type="hidden" name="action" value="run_backup">
+          <label class="adm-field">
+            <span>Backup type</span>
+            <select name="backup_type" required>
+              <option value="incremental">Daily incremental</option>
+              <option value="full">Weekly full</option>
+              <option value="archive">Monthly archive</option>
+            </select>
+          </label>
+          <button type="submit" class="btn-solid js-confirm" data-confirm="Start database backup now?">
+            <i class="fas fa-play" aria-hidden="true"></i>
+            Start backup
+          </button>
+        </form>
+      </div>
     </article>
 
-    <article class="panel-card">
-      <header class="panel-head">
-        <h2><i class="fas fa-stethoscope"></i> Run Maintenance Checks</h2>
-      </header>
-      <form action="" method="post" class="form-grid">
-        <?= admin_csrf_input() ?>
-        <input type="hidden" name="action" value="run_maintenance">
-        <p class="empty-note">Runs database connectivity, backup directory, and logging schema checks.</p>
-        <button type="submit" class="btn-outline js-confirm" data-confirm="Run maintenance checks now?">
-          <i class="fas fa-screwdriver-wrench"></i>
-          Run Checks
-        </button>
-      </form>
+    <article class="panel-card adm-action-card">
+      <span class="adm-action-icon tone-ok"><i class="fas fa-stethoscope" aria-hidden="true"></i></span>
+      <div class="adm-action-body">
+        <h2>Run maintenance checks</h2>
+        <p>Checks the database connection, the backup folder and the security log tables.</p>
+        <ul class="adm-check-list">
+          <li><i class="fas fa-plug" aria-hidden="true"></i> Database connection</li>
+          <li><i class="fas fa-folder-open" aria-hidden="true"></i> Backup folder</li>
+          <li><i class="fas fa-table-list" aria-hidden="true"></i> Log tables</li>
+        </ul>
+        <form action="" method="post" class="adm-action-form">
+          <?= admin_csrf_input() ?>
+          <input type="hidden" name="action" value="run_maintenance">
+          <button type="submit" class="btn-outline js-confirm" data-confirm="Run maintenance checks now?">
+            <i class="fas fa-screwdriver-wrench" aria-hidden="true"></i>
+            Run checks
+          </button>
+        </form>
+      </div>
     </article>
   </section>
 
-  <section class="metric-grid">
-    <article class="metric-card"><span>Monthly Backup Runs</span><strong><?= (int) $summary['backup_month_total'] ?></strong></article>
-    <article class="metric-card"><span>Backup Success Rate</span><strong><?= number_format($backupRate, 1) ?>%</strong></article>
-    <article class="metric-card"><span>Backup Failures</span><strong><?= (int) $summary['backup_month_failed'] ?></strong></article>
-    <article class="metric-card"><span>Maintenance Checks</span><strong><?= (int) $summary['maintenance_month_total'] ?></strong></article>
-    <article class="metric-card"><span>Maintenance Pass Rate</span><strong><?= $summary['maintenance_month_total'] > 0 ? number_format($maintenanceRate, 1) . '%' : 'No data' ?></strong></article>
+  <section class="adm-stat-grid">
+    <?php
+      admin_render_stat('fa-floppy-disk', 'Backups this month', (string) (int) $summary['backup_month_total'], 'brand', 'All backup runs');
+      admin_render_stat('fa-chart-pie', 'Backup success rate', $summary['backup_month_total'] > 0 ? number_format($backupRate, 1) . '%' : 'No data', $summary['backup_month_total'] > 0 ? ($backupRate < 99 ? 'watch' : 'ok') : 'neutral', 'Target: 99% or higher');
+      admin_render_stat('fa-circle-xmark', 'Backup failures', (string) (int) $summary['backup_month_failed'], (int) $summary['backup_month_failed'] > 0 ? 'alert' : 'neutral', 'This month');
+      admin_render_stat('fa-stethoscope', 'Maintenance checks', (string) (int) $summary['maintenance_month_total'], (int) $summary['maintenance_month_total'] === 0 ? 'watch' : 'brand', 'This month');
+      admin_render_stat('fa-heart-pulse', 'Checks passed', $summary['maintenance_month_total'] > 0 ? number_format($maintenanceRate, 1) . '%' : 'No data', $summary['maintenance_month_total'] > 0 && $maintenanceRate < 99.5 ? 'alert' : ($summary['maintenance_month_total'] > 0 ? 'ok' : 'neutral'), 'Target: 99.5% or higher');
+    ?>
   </section>
 
   <section class="panel-card">
     <header class="panel-head">
-      <h2><i class="fas fa-clock-rotate-left"></i> Backup History</h2>
+      <h2><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> Backup history</h2>
     </header>
+    <?php if (count($backupRuns) === 0): ?>
+      <?php admin_render_empty('fa-floppy-disk', 'No backups yet', 'Start a backup above. Each one appears here with a download button.'); ?>
+    <?php else: ?>
     <div class="table-wrap">
       <table class="data-table">
         <thead>
           <tr>
-            <th>Run ID</th>
-            <th>Type</th>
             <th>Status</th>
+            <th>Type</th>
             <th>File</th>
             <th>Size</th>
-            <th>Checksum</th>
-            <th>Initiated By</th>
+            <th>Started by</th>
             <th>Started</th>
-            <th>Completed</th>
+            <th>Finished</th>
             <th>Action</th>
           </tr>
         </thead>
         <tbody>
-          <?php if (count($backupRuns) === 0): ?>
-            <tr><td colspan="10">No backup runs yet.</td></tr>
-          <?php else: ?>
             <?php foreach ($backupRuns as $run): ?>
               <?php
                 $status = (string) ($run['status'] ?? 'running');
@@ -307,52 +317,53 @@ admin_render_page_start('AICS ADMIN | Backup & Maintenance', 'backup', $displayN
                 $fileSize = (int) ($run['file_size'] ?? 0);
                 $sizeLabel = $fileSize > 0 ? number_format($fileSize / 1024, 2) . ' KB' : '-';
                 $checksum = trim((string) ($run['checksum_sha256'] ?? ''));
+                $backupType = (string) ($run['backup_type'] ?? '');
               ?>
               <tr>
-                <td>#<?= (int) ($run['id'] ?? 0) ?></td>
-                <td><?= admin_h(strtoupper((string) ($run['backup_type'] ?? ''))) ?></td>
-                <td><span class="pill <?= admin_h($statusClass) ?>"><?= admin_h(strtoupper($status)) ?></span></td>
-                <td><?= admin_h((string) ($run['file_name'] ?? '-')) ?></td>
-                <td><?= admin_h($sizeLabel) ?></td>
-                <td class="small-col"><?= admin_h($checksum !== '' ? substr($checksum, 0, 22) . '...' : '-') ?></td>
+                <td><span class="pill <?= admin_h($statusClass) ?>"><i class="fas <?= admin_h($runStatusIcons[$status] ?? 'fa-spinner') ?>" aria-hidden="true"></i> <?= admin_h(ucfirst($status)) ?></span></td>
+                <td><?= admin_h($backupTypeLabels[$backupType] ?? ucfirst($backupType)) ?></td>
+                <td<?= $checksum !== '' ? ' title="SHA-256 checksum: ' . admin_h($checksum) . '"' : '' ?>>
+                  <span class="adm-cell-main adm-file"><i class="fas fa-file-zipper" aria-hidden="true"></i> <?= admin_h((string) ($run['file_name'] ?? '-')) ?></span>
+                  <small class="adm-cell-sub">#<?= (int) ($run['id'] ?? 0) ?><?= $checksum !== '' ? ', checksum ' . admin_h(substr($checksum, 0, 12)) : '' ?></small>
+                </td>
+                <td class="adm-nowrap"><?= admin_h($sizeLabel) ?></td>
                 <td><?= admin_h((string) ($run['initiated_by_email'] ?? '-')) ?></td>
-                <td><?= admin_h(admin_format_datetime((string) ($run['started_at'] ?? ''))) ?></td>
-                <td><?= admin_h(admin_format_datetime((string) ($run['completed_at'] ?? ''))) ?></td>
+                <td class="adm-nowrap"><?= admin_h(admin_format_datetime((string) ($run['started_at'] ?? ''))) ?></td>
+                <td class="adm-nowrap"><?= admin_h(admin_format_datetime((string) ($run['completed_at'] ?? ''))) ?></td>
                 <td>
                   <?php if ($status === 'success'): ?>
-                    <a class="btn-outline btn-mini" href="<?= admin_h($paths['download_backup_url']) ?>?id=<?= (int) ($run['id'] ?? 0) ?>">Download</a>
+                    <a class="btn-outline btn-mini" href="<?= admin_h($paths['download_backup_url']) ?>?id=<?= (int) ($run['id'] ?? 0) ?>"><i class="fas fa-download" aria-hidden="true"></i> Download</a>
                   <?php else: ?>
                     <span class="small-col"><?= admin_h((string) ($run['error_message'] ?? '-')) ?></span>
                   <?php endif; ?>
                 </td>
               </tr>
             <?php endforeach; ?>
-          <?php endif; ?>
         </tbody>
       </table>
     </div>
+    <?php endif; ?>
   </section>
 
   <section class="panel-card">
     <header class="panel-head">
-      <h2><i class="fas fa-heart-pulse"></i> Maintenance Check Logs</h2>
+      <h2><i class="fas fa-heart-pulse" aria-hidden="true"></i> Maintenance check log</h2>
     </header>
+    <?php if (count($maintenanceLogs) === 0): ?>
+      <?php admin_render_empty('fa-stethoscope', 'No maintenance checks yet', 'Run the checks above. Each result appears here.'); ?>
+    <?php else: ?>
     <div class="table-wrap">
       <table class="data-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Check Type</th>
-            <th>Status</th>
+            <th>Result</th>
+            <th>Check</th>
             <th>Details</th>
-            <th>Performed By</th>
-            <th>Timestamp</th>
+            <th>Run by</th>
+            <th>Time</th>
           </tr>
         </thead>
         <tbody>
-          <?php if (count($maintenanceLogs) === 0): ?>
-            <tr><td colspan="6">No maintenance checks recorded.</td></tr>
-          <?php else: ?>
             <?php foreach ($maintenanceLogs as $check): ?>
               <?php
                 $status = (string) ($check['check_status'] ?? 'fail');
@@ -360,18 +371,20 @@ admin_render_page_start('AICS ADMIN | Backup & Maintenance', 'backup', $displayN
                 $details = trim((string) ($check['details_json'] ?? ''));
               ?>
               <tr>
-                <td>#<?= (int) ($check['id'] ?? 0) ?></td>
-                <td><?= admin_h((string) ($check['check_type'] ?? '')) ?></td>
-                <td><span class="pill <?= admin_h($statusClass) ?>"><?= admin_h(strtoupper($status)) ?></span></td>
-                <td class="small-col"><?= admin_h($details !== '' ? substr($details, 0, 140) : '-') ?></td>
+                <td><span class="pill <?= admin_h($statusClass) ?>"><i class="fas <?= $status === 'pass' ? 'fa-circle-check' : 'fa-circle-xmark' ?>" aria-hidden="true"></i> <?= $status === 'pass' ? 'Passed' : 'Failed' ?></span></td>
+                <td>
+                  <span class="adm-cell-main"><?= admin_h(ucfirst(str_replace('_', ' ', (string) ($check['check_type'] ?? '')))) ?></span>
+                  <small class="adm-cell-sub">#<?= (int) ($check['id'] ?? 0) ?></small>
+                </td>
+                <td class="small-col"<?= $details !== '' ? ' title="' . admin_h(substr($details, 0, 600)) . '"' : '' ?>><?= admin_h($details !== '' ? substr($details, 0, 140) : '-') ?></td>
                 <td><?= admin_h((string) ($check['performed_by_email'] ?? '-')) ?></td>
-                <td><?= admin_h(admin_format_datetime((string) ($check['created_at'] ?? ''))) ?></td>
+                <td class="adm-nowrap"><?= admin_h(admin_format_datetime((string) ($check['created_at'] ?? ''))) ?></td>
               </tr>
             <?php endforeach; ?>
-          <?php endif; ?>
         </tbody>
       </table>
     </div>
+    <?php endif; ?>
   </section>
 <?php
 admin_render_page_end($paths);
