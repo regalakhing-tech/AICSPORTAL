@@ -17,7 +17,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     />
-    <link rel="stylesheet" href="css files/login.css?v=accepted-ids-v1" />
+    <link rel="stylesheet" href="css files/login.css?v=<?= (int) @filemtime(__DIR__ . '/css files/login.css') ?>" />
   </head>
   <body>
     <div class="login-page-container">
@@ -741,7 +741,7 @@
     <div id="toast-container" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
 
     <script src="../asset/digits-only.js"></script>
-    <script src="js files/login.js?v=signup-terms-v2"></script>
-    <script src="js files/password-reset.js?v=1"></script>
+    <script src="js files/login.js?v=<?= (int) @filemtime(__DIR__ . '/js files/login.js') ?>"></script>
+    <script src="js files/password-reset.js?v=<?= (int) @filemtime(__DIR__ . '/js files/password-reset.js') ?>"></script>
   </body>
 </html>

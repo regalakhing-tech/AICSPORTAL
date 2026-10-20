@@ -8,7 +8,7 @@ $chatAssets = $chatBase . '/../../chatbot';
 $chatLogo = $chatBase . '/../../../asset/logocp.png';
 $chatEscape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 ?>
-<link rel="stylesheet" href="<?= $chatEscape($chatAssets) ?>/chatbot.css?v=20260920-help">
+<link rel="stylesheet" href="<?= $chatEscape($chatAssets) ?>/chatbot.css?v=<?= (int) @filemtime(__DIR__ . '/chatbot.css') ?>">
 <div id="aics-chatbot-backdrop" class="aics-chatbot-backdrop" hidden></div>
 <section id="aics-chatbot-panel" class="aics-chatbot-panel" role="dialog" aria-labelledby="aics-chatbot-title" hidden
  data-mode="applicant" data-endpoint="<?= $chatEscape($chatBase) ?>/chat-assistant.php"
@@ -42,4 +42,4 @@ $chatEscape = static fn(string $value): string => htmlspecialchars($value, ENT_Q
 <button id="aics-chatbot-launcher" class="aics-chatbot-launcher" type="button" aria-expanded="false" aria-controls="aics-chatbot-panel">
  <img class="aics-chatbot-launcher-logo" src="<?= $chatEscape($chatLogo) ?>" alt="" aria-hidden="true"><span class="aics-chatbot-launcher-copy"><span>Ask AICS</span><span class="aics-chatbot-online">Guide online</span></span>
 </button>
-<script src="<?= $chatEscape($chatAssets) ?>/chatbot.js?v=20260920-help" defer></script>
+<script src="<?= $chatEscape($chatAssets) ?>/chatbot.js?v=<?= (int) @filemtime(__DIR__ . '/chatbot.js') ?>" defer></script>

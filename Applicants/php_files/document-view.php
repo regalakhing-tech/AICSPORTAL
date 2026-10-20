@@ -35,7 +35,8 @@ try {
     }
     $root = __DIR__ . '/../uploads/' . basename((string) $document['reference_no']);
     $file = $root . DIRECTORY_SEPARATOR . basename((string) $document['stored_name']);
-    aics_serve_document_file($file, $root, aics_document_requirement_label((string) $document['document_type']));
+    // A replaced document gets a new id and address, so this one never changes: keep it for a sign-in session.
+    aics_serve_document_file($file, $root, aics_document_requirement_label((string) $document['document_type']), 14400);
 } catch (Throwable $exception) {
     error_log('Applicant submitted document preview failed.');
     http_response_code(500);

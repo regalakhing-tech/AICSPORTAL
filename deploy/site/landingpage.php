@@ -1,3 +1,12 @@
+<?php
+// Asset versions follow the file's last change, so browsers can keep them cached
+// and still get a changed file right away.
+function aics_landing_version(string $relativePath, string $fallback): string
+{
+    $time = @filemtime(__DIR__ . '/' . $relativePath);
+    return $time ? (string) $time : $fallback;
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,7 +20,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" href="assets/vendor/maplibre-gl/maplibre-gl.css">
-<link rel="stylesheet" href="AICS/chatbot/chatbot.css?v=20260919-clean">
+<link rel="stylesheet" href="AICS/chatbot/chatbot.css?v=<?= aics_landing_version('AICS/chatbot/chatbot.css', '20260919-clean') ?>">
 
 <style>
   :root {
@@ -2032,8 +2041,8 @@
 </script>
 
 <!-- Existing Preserved Maps & Chatbot Module Scripts -->
-<script type="module" src="assets/js/public-antique-map.js?v=20261008-2"></script>
-<script src="AICS/chatbot/chatbot.js?v=20260919-clean" defer></script>
+<script type="module" src="assets/js/public-antique-map.js?v=<?= aics_landing_version('assets/js/public-antique-map.js', '20261008-2') ?>"></script>
+<script src="AICS/chatbot/chatbot.js?v=<?= aics_landing_version('AICS/chatbot/chatbot.js', '20260919-clean') ?>" defer></script>
 
 </body>
 </html>

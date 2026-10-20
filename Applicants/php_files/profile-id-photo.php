@@ -32,7 +32,8 @@ try {
         http_response_code(404);
         exit('ID photo not found.');
     }
-    aics_serve_document_file($file, aics_id_account_dir($accountId), 'Sign-up ID ' . ucfirst($side));
+    // Same address after a new ID scan, so the browser checks for a change every time.
+    aics_serve_document_file($file, aics_id_account_dir($accountId), 'Sign-up ID ' . ucfirst($side), 0);
 } catch (Throwable $exception) {
     error_log('Applicant ID photo preview failed.');
     http_response_code(500);

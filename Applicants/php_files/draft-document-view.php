@@ -38,7 +38,7 @@ try {
 
     $draftRoot = aics_draft_upload_root();
     $file = $draftRoot . DIRECTORY_SEPARATOR . basename((string) $document['draft_id']) . DIRECTORY_SEPARATOR . basename((string) $document['stored_name']);
-    aics_serve_document_file($file, $draftRoot, aics_document_requirement_label((string) $document['document_type']));
+    aics_serve_document_file($file, $draftRoot, aics_document_requirement_label((string) $document['document_type']), 0);
 } catch (Throwable $exception) {
     error_log('Applicant draft preview failed.');
     http_response_code(500);

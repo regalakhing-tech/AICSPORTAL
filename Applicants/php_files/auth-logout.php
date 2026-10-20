@@ -13,4 +13,7 @@ if (ini_get('session.use_cookies')) {
 
 session_destroy();
 
+// Remove documents and pages this browser kept while signed in (shared computers).
+header('Clear-Site-Data: "cache"');
+
 aics_redirect_with_message('../login.php', 'logged_out');
