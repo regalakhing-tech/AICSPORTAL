@@ -102,7 +102,7 @@ foreach (['aics_id_run_check(', 'aics_id_rate_limited(', "'image/jpeg'", 'MAX_ID
     signup_id_assert(str_contains($endpoint, $needle), "signup-id-scan.php is missing $needle.");
 }
 signup_id_assert(!str_contains($endpoint, 'id_number'), 'The scan endpoint must not handle ID numbers.');
-$page = (string) file_get_contents(__DIR__ . '/../Applicants/login.html');
+$page = (string) file_get_contents(__DIR__ . '/../Applicants/login.php');
 foreach (['id="signup-step-id"', 'name="id_front"', 'name="id_back"', 'id="btn-scan-id"', 'capture="environment"'] as $needle) {
     signup_id_assert(str_contains($page, $needle), "Sign-up page is missing $needle.");
 }

@@ -463,7 +463,7 @@ $alert = $messages[$authCode] ?? null;
   <main class="auth-container">
     <section class="auth-card">
       <div class="card-brand">
-        <a href="../../landingpage.html" title="Return to Portal Home">
+        <a href="../../landingpage.php" title="Return to Portal Home">
           <img src="<?= admin_h($paths['logo_url']) ?>" alt="AICS Portal - Administrator Console Logo" class="brand-logo-img" />
         </a>
       </div>

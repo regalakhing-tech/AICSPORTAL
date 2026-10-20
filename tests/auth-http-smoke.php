@@ -96,7 +96,7 @@ try {
     echo 'signup.status=' . $signup['status'] . PHP_EOL;
     echo 'signup.location=' . $signup['location'] . PHP_EOL;
     auth_http_assert(
-        $signup['status'] === 302 && str_contains($signup['location'], 'login.html') && str_contains($signup['location'], 'signup_success'),
+        $signup['status'] === 302 && str_contains($signup['location'], 'login.php') && str_contains($signup['location'], 'signup_success'),
         'Phone-only signup did not redirect to the applicant login page.'
     );
 

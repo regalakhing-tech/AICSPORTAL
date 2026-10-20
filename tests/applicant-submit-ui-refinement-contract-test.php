@@ -6,7 +6,7 @@ function ui_refinement_assert(bool $condition, string $message): void
     if (!$condition) throw new RuntimeException($message);
 }
 
-$login = file_get_contents(__DIR__ . '/../Applicants/login.html');
+$login = file_get_contents(__DIR__ . '/../Applicants/login.php');
 $loginCss = file_get_contents(__DIR__ . '/../Applicants/css files/login.css');
 $loginJs = file_get_contents(__DIR__ . '/../Applicants/js files/login.js');
 $submit = file_get_contents(__DIR__ . '/../Applicants/php_files/submit-request.php');

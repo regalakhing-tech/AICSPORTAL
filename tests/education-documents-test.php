@@ -23,7 +23,7 @@ education_assert(str_contains($pswdo, "['school_id', 'School ID'") && str_contai
 education_assert(str_contains((string) file_get_contents($root . '/includes/document-ai-reviews.php'), "'school_id'"), 'AICS AI checks School IDs.');
 $catalog = (string) file_get_contents($root . '/ai_processor/gemini_scanner/catalog.py');
 education_assert(str_contains($catalog, "'school_id': {") && str_contains($catalog, "'label': 'School ID'") && str_contains($catalog, "'label': 'Enrollment Form'"), 'AICS AI knows both documents.');
-$landing = (string) file_get_contents($root . '/deploy/site/landingpage.html');
+$landing = (string) file_get_contents($root . '/deploy/site/landingpage.php');
 education_assert(str_contains($landing, '<strong>School ID:</strong>') && str_contains($landing, '<strong>Enrollment Form:</strong>'), 'The landing page lists both documents.');
 
 // PSWDO reads the required documents from the database: retired ones must go.

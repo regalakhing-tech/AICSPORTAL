@@ -1,7 +1,12 @@
-# Always revalidate the static pages (login / sign-up) so a changed form reaches
+# Always revalidate the login / sign-up page so a changed form reaches
 # applicants right away instead of a stale cached copy.
 <IfModule mod_headers.c>
-  <FilesMatch "\.html$">
+  <Files "login.php">
     Header set Cache-Control "no-cache"
-  </FilesMatch>
+  </Files>
+</IfModule>
+
+# The login page moved from login.html to login.php; old links still work.
+<IfModule mod_alias.c>
+  RedirectMatch 301 ^(.*)/Applicants/login\.html$ $1/Applicants/login.php
 </IfModule>

@@ -5,7 +5,7 @@ require_once __DIR__ . '/auth-common.php';
 require_once __DIR__ . '/../../includes/applicant-id-verification.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    aics_redirect_with_message('../login.html', 'invalid_method', 'register');
+    aics_redirect_with_message('../login.php', 'invalid_method', 'register');
 }
 
 $firstName = aics_validate_person_name(isset($_POST['first_name']) ? (string) $_POST['first_name'] : null);
@@ -20,35 +20,35 @@ $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
 $attemptId = aics_normalize_signup_attempt_id((string) ($_POST['signup_attempt_id'] ?? ''));
 
 if ($firstName === null || $middleName === null || $lastName === null) {
-    aics_redirect_with_message('../login.html', 'invalid_name', 'register');
+    aics_redirect_with_message('../login.php', 'invalid_name', 'register');
 }
 if ($contactNumber === null || $password === '' || $birthdateRaw === '' || $attemptId === null) {
-    aics_redirect_with_message('../login.html', 'missing_fields', 'register');
+    aics_redirect_with_message('../login.php', 'missing_fields', 'register');
 }
 if ($emailRaw !== '' && $email === null) {
-    aics_redirect_with_message('../login.html', 'invalid_email', 'register');
+    aics_redirect_with_message('../login.php', 'invalid_email', 'register');
 }
 
 $dob = DateTime::createFromFormat('Y-m-d', $birthdateRaw);
 if (!$dob || $dob->format('Y-m-d') !== $birthdateRaw) {
-    aics_redirect_with_message('../login.html', 'invalid_birthdate', 'register');
+    aics_redirect_with_message('../login.php', 'invalid_birthdate', 'register');
 }
 
 $today = new DateTime('today');
 if ($dob > $today) {
-    aics_redirect_with_message('../login.html', 'invalid_birthdate', 'register');
+    aics_redirect_with_message('../login.php', 'invalid_birthdate', 'register');
 }
 
 $age = (int) $dob->diff($today)->y;
 if ($age < 18) {
-    aics_redirect_with_message('../login.html', 'underage', 'register');
+    aics_redirect_with_message('../login.php', 'underage', 'register');
 }
 
 if (aics_password_policy_error($password) !== null) {
-    aics_redirect_with_message('../login.html', 'weak_password', 'register');
+    aics_redirect_with_message('../login.php', 'weak_password', 'register');
 }
 if ($password !== $confirmPassword) {
-    aics_redirect_with_message('../login.html', 'password_mismatch', 'register');
+    aics_redirect_with_message('../login.php', 'password_mismatch', 'register');
 }
 
 aics_start_session();
@@ -61,10 +61,10 @@ if ($otpAttempt !== null) {
     $now = time();
 
     if ($now > $otpExpiry) {
-        aics_redirect_with_message('../login.html', 'otp_expired', 'register');
+        aics_redirect_with_message('../login.php', 'otp_expired', 'register');
     }
     if ($submittedOtp === '' || $submittedOtp !== $expectedOtp) {
-        aics_redirect_with_message('../login.html', 'invalid_otp', 'register');
+        aics_redirect_with_message('../login.php', 'invalid_otp', 'register');
     }
 }
 
@@ -72,18 +72,18 @@ if ($otpAttempt !== null) {
 $idScan = is_array($_SESSION['aics_signup_id'][$attemptId] ?? null) ? $_SESSION['aics_signup_id'][$attemptId] : null;
 $idResult = is_array($idScan['result'] ?? null) ? $idScan['result'] : null;
 if ($idResult === null) {
-    aics_redirect_with_message('../login.html', 'id_required', 'register');
+    aics_redirect_with_message('../login.php', 'id_required', 'register');
 }
 // Verification is automatic: only an ID AICS AI read successfully, with the
 // same name and birth date, can create an account.
 if (!aics_id_result_is_verified($idResult)) {
-    aics_redirect_with_message('../login.html', 'id_not_verified', 'register');
+    aics_redirect_with_message('../login.php', 'id_not_verified', 'register');
 }
 if (!aics_id_names_match($idResult, $firstName, $middleName, $lastName)['match']) {
-    aics_redirect_with_message('../login.html', 'id_name_mismatch', 'register');
+    aics_redirect_with_message('../login.php', 'id_name_mismatch', 'register');
 }
 if (!aics_id_birthdates_match(is_string($idResult['birth_date'] ?? null) ? $idResult['birth_date'] : null, $birthdateRaw)) {
-    aics_redirect_with_message('../login.html', 'id_birthdate_mismatch', 'register');
+    aics_redirect_with_message('../login.php', 'id_birthdate_mismatch', 'register');
 }
 
 $connection = null;
@@ -94,7 +94,7 @@ try {
 
     if (aics_mobile_number_in_use($connection, $contactNumber)) {
         $connection->rollback();
-        aics_redirect_with_message('../login.html', 'phone_exists', 'register');
+        aics_redirect_with_message('../login.php', 'phone_exists', 'register');
     }
 
     if ($email !== null) {
@@ -104,7 +104,7 @@ try {
         if (($emailCheck->get_result()?->num_rows ?? 0) > 0) {
             $emailCheck->close();
             $connection->rollback();
-            aics_redirect_with_message('../login.html', 'email_exists', 'register');
+            aics_redirect_with_message('../login.php', 'email_exists', 'register');
         }
         $emailCheck->close();
     }
@@ -133,7 +133,7 @@ try {
     $connection->close();
     aics_signup_otp_forget_attempt($_SESSION, $attemptId);
     unset($_SESSION['aics_signup_id'][$attemptId]);
-    aics_redirect_with_message('../login.html', 'signup_success');
+    aics_redirect_with_message('../login.php', 'signup_success');
 } catch (Throwable $exception) {
     if ($connection instanceof mysqli) {
         @$connection->rollback();
@@ -142,11 +142,11 @@ try {
     if ($exception instanceof mysqli_sql_exception && $exception->getCode() === 1062) {
         $constraint = strtolower($exception->getMessage());
         if (str_contains($constraint, 'contact_number')) {
-            aics_redirect_with_message('../login.html', 'phone_exists', 'register');
+            aics_redirect_with_message('../login.php', 'phone_exists', 'register');
         }
         if (str_contains($constraint, 'email')) {
-            aics_redirect_with_message('../login.html', 'email_exists', 'register');
+            aics_redirect_with_message('../login.php', 'email_exists', 'register');
         }
     }
-    aics_redirect_with_message('../login.html', 'signup_failed', 'register');
+    aics_redirect_with_message('../login.php', 'signup_failed', 'register');
 }

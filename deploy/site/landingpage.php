@@ -880,7 +880,7 @@
 
     <!-- Nav Action Buttons -->
     <div class="nav-actions">
-      <a href="AICS/Applicants/login.html" class="btn btn-primary">
+      <a href="AICS/Applicants/login.php" class="btn btn-primary">
         <span class="nav-cta-full">Sign In / Apply</span><span class="nav-cta-short">Sign In</span> <i class="fas fa-arrow-right"></i>
       </a>
       <button class="mobile-toggle" id="mobile-menu-toggle" aria-label="Toggle navigation menu">
@@ -908,7 +908,7 @@
       </p>
 
       <div class="hero-cta">
-        <a href="AICS/Applicants/login.html" class="btn btn-primary">
+        <a href="AICS/Applicants/login.php" class="btn btn-primary">
           <span>Apply Online Now</span> <i class="fas fa-arrow-right"></i>
         </a>
         <a href="#assistance-types" class="btn btn-outline">
@@ -974,8 +974,8 @@
               <img src="asset/logocp.png" alt="AICS App Icon" style="width: 68px; height: 68px; border-radius: 18px; box-shadow: 0 10px 25px rgba(2,132,199,0.3); margin-bottom: 14px; object-fit: cover;">
               <h4>AICS Antique</h4>
               <p>Assistance to Individuals in Crisis Situation — PSWDO Provincial Government of Antique</p>
-              <button class="btn-sm" onclick="window.location.href='AICS/Applicants/login.html'">Sign In</button>
-              <button class="btn-sm out" onclick="window.location.href='AICS/Applicants/login.html'">Register Account</button>
+              <button class="btn-sm" onclick="window.location.href='AICS/Applicants/login.php'">Sign In</button>
+              <button class="btn-sm out" onclick="window.location.href='AICS/Applicants/login.php'">Register Account</button>
             </div>
           </div>
         </div>
@@ -1073,7 +1073,7 @@
                 <span><strong>Coverage:</strong> Hospital bills, diagnostic tests, medications, and dialysis.</span>
               </div>
             </div>
-            <a href="AICS/Applicants/login.html" class="btn btn-primary">
+            <a href="AICS/Applicants/login.php" class="btn btn-primary">
               <i class="fas fa-file-signature"></i> Apply for Medical Aid
             </a>
           </div>
@@ -1119,7 +1119,7 @@
                 <span><strong>Coverage:</strong> Casket, mortuary services, and burial expenses.</span>
               </div>
             </div>
-            <a href="AICS/Applicants/login.html" class="btn btn-primary">
+            <a href="AICS/Applicants/login.php" class="btn btn-primary">
               <i class="fas fa-file-signature"></i> Apply for Burial Aid
             </a>
           </div>
@@ -1165,7 +1165,7 @@
                 <span><strong>Coverage:</strong> Temporary shelter, emergency transportation, and crisis sustenance.</span>
               </div>
             </div>
-            <a href="AICS/Applicants/login.html" class="btn btn-primary">
+            <a href="AICS/Applicants/login.php" class="btn btn-primary">
               <i class="fas fa-file-signature"></i> Apply for Special Cases
             </a>
           </div>
@@ -1207,7 +1207,7 @@
                 <span><strong>Coverage:</strong> Tuition fees, books, school supplies, uniforms, and student allowances.</span>
               </div>
             </div>
-            <a href="AICS/Applicants/login.html" class="btn btn-primary">
+            <a href="AICS/Applicants/login.php" class="btn btn-primary">
               <i class="fas fa-file-signature"></i> Apply for Educational Aid
             </a>
           </div>
@@ -1253,7 +1253,7 @@
                 <span><strong>Coverage:</strong> Shelter repair assistance, food packs, and basic relief essentials.</span>
               </div>
             </div>
-            <a href="AICS/Applicants/login.html" class="btn btn-primary">
+            <a href="AICS/Applicants/login.php" class="btn btn-primary">
               <i class="fas fa-file-signature"></i> Apply for Disaster Relief
             </a>
           </div>
@@ -1299,7 +1299,7 @@
                 <span><strong>Coverage:</strong> Emergency grocery aid, essential food commodities, and household sustenance.</span>
               </div>
             </div>
-            <a href="AICS/Applicants/login.html" class="btn btn-primary">
+            <a href="AICS/Applicants/login.php" class="btn btn-primary">
               <i class="fas fa-file-signature"></i> Apply for Inflation Relief
             </a>
           </div>
@@ -1382,7 +1382,7 @@
               <li><i class="fas fa-check-circle"></i> Safe, encrypted storage for your personal data</li>
               <li><i class="fas fa-check-circle"></i> Check your application status anytime online</li>
             </ul>
-            <a href="AICS/Applicants/login.html" class="btn btn-primary">Start Online Application</a>
+            <a href="AICS/Applicants/login.php" class="btn btn-primary">Start Online Application</a>
           </div>
           <div class="step-visual-preview">
             <div class="step-preview-icon"><i class="fas fa-cloud-arrow-up"></i></div>
@@ -1432,7 +1432,7 @@
               <li><i class="fas fa-check-circle"></i> Review notes visible directly on your screen</li>
               <li><i class="fas fa-check-circle"></i> Fair and transparent assessment workflow</li>
             </ul>
-            <a href="AICS/Applicants/login.html" class="btn btn-outline">Track Your Application</a>
+            <a href="AICS/Applicants/login.php" class="btn btn-outline">Track Your Application</a>
           </div>
           <div class="step-visual-preview">
             <div class="step-preview-icon"><i class="fas fa-ranking-star"></i></div>
@@ -1457,7 +1457,7 @@
               <li><i class="fas fa-check-circle"></i> Payout centers arranged close to your town</li>
               <li><i class="fas fa-check-circle"></i> Fast and verified cash assistance release</li>
             </ul>
-            <a href="AICS/Applicants/login.html" class="btn btn-primary">Check Your Status</a>
+            <a href="AICS/Applicants/login.php" class="btn btn-primary">Check Your Status</a>
           </div>
           <div class="step-visual-preview">
             <div class="step-preview-icon"><i class="fas fa-money-bill-wave"></i></div>
@@ -1606,7 +1606,7 @@
             <div class="icon"><i class="fas fa-user-check"></i></div>
             <strong>Ready to apply?</strong>
             <p class="role-aside-desc">Create your free account or sign in to start your application right now.</p>
-            <a href="AICS/Applicants/login.html" class="btn btn-primary" style="width: 100%; color: #ffffff !important;">
+            <a href="AICS/Applicants/login.php" class="btn btn-primary" style="width: 100%; color: #ffffff !important;">
               Start Application <i class="fas fa-arrow-right"></i>
             </a>
           </div>
@@ -1633,7 +1633,7 @@
             <div class="icon"><i class="fas fa-magnifying-glass"></i></div>
             <strong>Already applied?</strong>
             <p class="role-aside-desc">Log in anytime to check your progress or upload updated documents.</p>
-            <a href="AICS/Applicants/login.html" class="btn btn-primary" style="width: 100%; color: #ffffff !important;">
+            <a href="AICS/Applicants/login.php" class="btn btn-primary" style="width: 100%; color: #ffffff !important;">
               Track Your Status <i class="fas fa-arrow-right"></i>
             </a>
           </div>
@@ -1791,7 +1791,7 @@
         Skip the long queues and travel expenses. Create your free account and apply online in minutes.
       </p>
       <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;">
-        <a href="AICS/Applicants/login.html" class="btn btn-white">
+        <a href="AICS/Applicants/login.php" class="btn btn-white">
           <i class="fas fa-arrow-right-to-bracket"></i> Register / Sign In Now
         </a>
         <button type="button" class="btn btn-outline" style="color: #fff; border-color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.1);" onclick="document.getElementById('aics-chatbot-launcher').click()">
@@ -1830,7 +1830,7 @@
 
       <div class="foot-col">
         <h5>Portals</h5>
-        <a href="AICS/Applicants/login.html">Applicant Portal</a>
+        <a href="AICS/Applicants/login.php">Applicant Portal</a>
         <a href="AICS/Pswdo/login.php">PSWDO Staff Portal</a>
         <a href="AICS/ADMIN/login.php">Administrator Console</a>
         <a href="#faq">Applicant FAQs</a>

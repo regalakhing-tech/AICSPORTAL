@@ -8,7 +8,7 @@ function chatbot_ui_assert(bool $condition, string $label): void
     }
 }
 
-$landingPath = dirname(__DIR__, 2) . '/landingpage.html';
+$landingPath = dirname(__DIR__, 2) . '/landingpage.php';
 $cssPath = __DIR__ . '/../chatbot/chatbot.css';
 $jsPath = __DIR__ . '/../chatbot/chatbot.js';
 

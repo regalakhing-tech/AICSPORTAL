@@ -27,7 +27,7 @@ It runs locally on **XAMPP** (Apache + PHP + MySQL), with an optional **Python w
 
 | Portal | Login page | Who uses it | What they can do |
 |---|---|---|---|
-| **Applicant** | `Applicants/login.html` | Members of the public | Sign up with phone OTP (email optional), complete a profile, file an AICS request, upload requirements, track status (including AICS AI re-upload requests and the expected processing time), read notifications, cancel or edit pending requests, chat with the AICS Guide |
+| **Applicant** | `Applicants/login.php` | Members of the public | Sign up with phone OTP (email optional), complete a profile, file an AICS request, upload requirements, track status (including AICS AI re-upload requests and the expected processing time), read notifications, cancel or edit pending requests, chat with the AICS Guide |
 | **PSWDO** | `Pswdo/login.php` | PSWDO personnel | Only requests that passed the AICS AI check. Pre-screening queue, request management, AI document verdicts, duplicate/repeat-claim checks, smart prioritization (urgent medical cases, PWD / senior citizen), status decisions, release scheduling, printable reports and GIS forms, map analytics, SMS notices |
 | **Admin** | `ADMIN/login.php` | System administrators | Create and manage staff accounts, account status (active / disabled / locked / banned), AICS AI Screening (requests the AI could not confirm or check, AI service alerts, 7-day log), security and audit logs, overview dashboard, database backups and maintenance |
 
@@ -66,10 +66,10 @@ This repository is expected to live at **`C:\xampp\htdocs\AICS\AICS`**. The publ
 
 ```
 C:\xampp\htdocs\AICS\
-├── landingpage.html            Public landing page (links into AICS/…)
+├── landingpage.php            Public landing page (links into AICS/…)
 ├── assets\vendor\maplibre-gl\  Map library used by the landing page
 └── AICS\                       ← this repository
-    ├── Applicants\             Applicant portal (login.html, dashboard.php, php_files\, uploads\)
+    ├── Applicants\             Applicant portal (login.php, dashboard.php, php_files\, uploads\)
     ├── Pswdo\                  PSWDO staff portal
     ├── ADMIN\                  Admin portal (+ backups\)
     ├── chatbot\                Landing-page guide and in-portal applicant assistant
@@ -104,7 +104,7 @@ cd AICS
 git clone https://github.com/regalakhing-tech/AICSPORTAL.git AICS
 ```
 
-Copy `landingpage.html` and `assets\` into `C:\xampp\htdocs\AICS\` if you want the public landing page. The portals work without it.
+Copy `landingpage.php` and `assets\` into `C:\xampp\htdocs\AICS\` if you want the public landing page. The portals work without it.
 
 ### 3. Start Apache and MySQL
 
@@ -124,8 +124,8 @@ The script creates `AICSdb` and is **safe to re-run**. It uses `CREATE TABLE IF 
 
 | Page | URL |
 |---|---|
-| Landing page | http://localhost/AICS/landingpage.html |
-| Applicant portal | http://localhost/AICS/AICS/Applicants/login.html |
+| Landing page | http://localhost/AICS/landingpage.php |
+| Applicant portal | http://localhost/AICS/AICS/Applicants/login.php |
 | PSWDO portal | http://localhost/AICS/AICS/Pswdo/login.php |
 | Admin portal | http://localhost/AICS/AICS/ADMIN/login.php |
 
@@ -328,7 +328,7 @@ The `tests\` folder contains many more regression tests named by area (`applican
 
 ## Deploying to Railway
 
-Railway builds the `Dockerfile` automatically. The container uses the same folder layout as XAMPP: the landing page at `/AICS/` (copied from `deploy/site/`) and the app at `/AICS/AICS/`. If you change `landingpage.html`, `asset\` or `assets\` in the outer folder, copy them into `deploy\site\` too.
+Railway builds the `Dockerfile` automatically. The container uses the same folder layout as XAMPP: the landing page at `/AICS/` (copied from `deploy/site/`) and the app at `/AICS/AICS/`. If you change `landingpage.php`, `asset\` or `assets\` in the outer folder, copy them into `deploy\site\` too.
 
 1. **New Project → Deploy from GitHub repo →** this repository.
 2. **Add MariaDB** (not MySQL: the schema uses MariaDB-only syntax). Turn on its public networking, then import the schema from your PC:

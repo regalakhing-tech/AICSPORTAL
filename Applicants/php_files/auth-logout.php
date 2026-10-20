@@ -13,4 +13,4 @@ if (ini_get('session.use_cookies')) {
 
 session_destroy();
 
-aics_redirect_with_message('../login.html', 'logged_out');
+aics_redirect_with_message('../login.php', 'logged_out');

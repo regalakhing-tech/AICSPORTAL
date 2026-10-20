@@ -111,7 +111,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
     <?php if ($success): ?>
         <p class="notice success">Key saved. The AICS chatbot is ready for a live test.</p>
-        <a class="button" href="../../landingpage.html#ask-aics">Open AICS Guide</a>
+        <a class="button" href="../../landingpage.php#ask-aics">Open AICS Guide</a>
     <?php else: ?>
         <?php if ($error !== ''): ?>
             <p class="notice error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p>

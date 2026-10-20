@@ -4,20 +4,20 @@ declare(strict_types=1);
 require_once __DIR__ . '/auth-common.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    aics_redirect_with_message('../login.html', 'invalid_method');
+    aics_redirect_with_message('../login.php', 'invalid_method');
 }
 
 $identifierRaw = trim((string) ($_POST['login_identifier'] ?? ($_POST['email'] ?? '')));
 $password = (string)($_POST['password'] ?? '');
 
 if ($identifierRaw === '' || $password === '') {
-    aics_redirect_with_message('../login.html', 'missing_fields');
+    aics_redirect_with_message('../login.php', 'missing_fields');
 }
 
 $email = aics_normalize_email_address($identifierRaw);
 $phone = $email === null ? aics_normalize_mobile_number($identifierRaw) : null;
 if ($email === null && $phone === null) {
-    aics_redirect_with_message('../login.html', 'invalid_credentials');
+    aics_redirect_with_message('../login.php', 'invalid_credentials');
 }
 
 try {
@@ -48,14 +48,14 @@ try {
     if (!$account || !password_verify($password, (string) $account['password_hash'])) {
         aics_record_login_attempt($connection, $identifierRaw, false, 'invalid_credentials', 'applicat', 'applicant');
         $connection->close();
-        aics_redirect_with_message('../login.html', 'invalid_credentials');
+        aics_redirect_with_message('../login.php', 'invalid_credentials');
     }
 
     $statusCode = strtolower(trim((string) ($account['status_code'] ?? 'active')));
     if ($statusCode !== 'active') {
         aics_record_login_attempt($connection, $identifierRaw, false, 'status_' . $statusCode, 'applicat', 'applicant');
         $connection->close();
-        aics_redirect_with_message('../login.html', aics_account_status_auth_code($statusCode));
+        aics_redirect_with_message('../login.php', aics_account_status_auth_code($statusCode));
     }
 
     $displayName = trim((string)($account['display_name'] ?? 'Applicant'));
@@ -82,8 +82,8 @@ try {
 } catch (Throwable $exception) {
     $message = strtolower(trim($exception->getMessage()));
     if (str_contains($message, 'database connection failed')) {
-        aics_redirect_with_message('../login.html', 'database_unavailable');
+        aics_redirect_with_message('../login.php', 'database_unavailable');
     }
 
-    aics_redirect_with_message('../login.html', 'login_failed');
+    aics_redirect_with_message('../login.php', 'login_failed');
 }

@@ -5,7 +5,7 @@ function showAicsSignedOutNotice() {
   notice.id = "aics-signed-out-notice";
   notice.className = "aics-signed-out-notice";
   notice.setAttribute("role", "alert");
-  notice.innerHTML = '<i class="fas fa-user-clock" aria-hidden="true"></i><div><strong>You were signed out.</strong><span>Your answers on this page are kept on this device. Sign in again to continue where you left off.</span></div><a class="aics-signed-out-action" href="../login.html">Sign in again</a>';
+  notice.innerHTML = '<i class="fas fa-user-clock" aria-hidden="true"></i><div><strong>You were signed out.</strong><span>Your answers on this page are kept on this device. Sign in again to continue where you left off.</span></div><a class="aics-signed-out-action" href="../login.php">Sign in again</a>';
   document.body.appendChild(notice);
 }
 

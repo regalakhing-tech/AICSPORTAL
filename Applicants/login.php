@@ -28,7 +28,7 @@
              ============================================== -->
         <section class="hero-panel" aria-label="AICS Antique Portal Branding">
           <!-- Back Link -->
-          <a href="../../landingpage.html" class="hero-back-btn" aria-label="Back to Homepage">
+          <a href="../../landingpage.php" class="hero-back-btn" aria-label="Back to Homepage">
             <i class="fas fa-arrow-left" aria-hidden="true"></i>
             <span>Back</span>
           </a>
@@ -79,7 +79,7 @@
 
             <!-- Card Brand Logo -->
             <div class="card-logo-header">
-              <a href="../../landingpage.html" class="card-logo-link" aria-label="AICS Portal Home">
+              <a href="../../landingpage.php" class="card-logo-link" aria-label="AICS Portal Home">
                 <img
                   src="../asset/Logo.png"
                   alt="Aics Portal PSWDO - Antique"
@@ -191,7 +191,7 @@
                   <span>Back</span>
                 </button>
                 <div class="signup-logo-wrap">
-                  <a href="../../landingpage.html" aria-label="AICS Portal Home">
+                  <a href="../../landingpage.php" aria-label="AICS Portal Home">
                     <img
                       src="../asset/Logo.png"
                       alt="Aics Portal PSWDO - Antique"

@@ -527,7 +527,7 @@ $authMessage = $messages[$authCode] ?? null;
   <main class="auth-container">
     <section class="auth-card">
       <div class="card-brand">
-        <a href="../../landingpage.html" title="Return to Portal Home">
+        <a href="../../landingpage.php" title="Return to Portal Home">
           <img src="../asset/Logo.png" alt="Aics Portal - PSWDO Antique Logo" class="brand-logo-img" />
         </a>
       </div>

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 $page = new DOMDocument();
-@$page->loadHTMLFile(__DIR__ . '/../Applicants/login.html');
+@$page->loadHTMLFile(__DIR__ . '/../Applicants/login.php');
 $xpath = new DOMXPath($page);
 
 function one(DOMXPath $xpath, string $id): DOMElement

@@ -21,7 +21,7 @@ foreach ($pages as $page) {
     phone_layout_assert(!str_contains($html, 'manifest'), "{$page} is not an installable web app.");
 }
 
-$login = (string) file_get_contents("{$root}/Applicants/login.html");
+$login = (string) file_get_contents("{$root}/Applicants/login.php");
 phone_layout_assert(!str_contains($login, 'applicant-app'), 'The login page is unchanged.');
 
 // Every layout rule is inside the phone media query; outside it the added

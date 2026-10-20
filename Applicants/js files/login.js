@@ -1075,7 +1075,7 @@ function normalizePhpRoutes() {
   const loginSubmit = document.getElementById('login-access-form');
   const registerSubmit = document.getElementById('register-access-form');
   const normalizedPath = window.location.pathname.replace(/\\/g, '/');
-  const projectMatch = normalizedPath.match(/\/([^/]+)\/AICS\/Applicants\/login\.html$/i);
+  const projectMatch = normalizedPath.match(/\/([^/]+)\/AICS\/Applicants\/login\.php$/i);
   const projectFolder = projectMatch ? projectMatch[1] : 'SIA102';
   const baseUrl = `http://localhost/${projectFolder}/AICS/Applicants`;
 

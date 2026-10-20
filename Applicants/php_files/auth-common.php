@@ -866,7 +866,7 @@ function aics_is_logged_in_applicat(): bool
 
 function aics_require_applicat_login(): void
 {
-    aics_require_role_login('applicat', '../login.html');
+    aics_require_role_login('applicat', '../login.php');
 }
 
 function aics_is_ajax_request(): bool

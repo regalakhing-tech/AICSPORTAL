@@ -8,9 +8,9 @@ function landingpage_order_assert(bool $condition, string $message): void
     }
 }
 
-$path = __DIR__ . '/../../landingpage.html';
+$path = __DIR__ . '/../../landingpage.php';
 $html = file_get_contents($path);
-landingpage_order_assert(is_string($html), 'Could not read landingpage.html.');
+landingpage_order_assert(is_string($html), 'Could not read landingpage.php.');
 
 $document = new DOMDocument();
 libxml_use_internal_errors(true);

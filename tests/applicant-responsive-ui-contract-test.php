@@ -10,7 +10,7 @@ function responsive_assert(bool $condition, string $message): void
 
 $root = dirname(__DIR__);
 $pages = [
-    'Applicants/login.html',
+    'Applicants/login.php',
     'Applicants/blank-gis.php',
     'Applicants/php_files/overview-dashboard.php',
     'Applicants/php_files/my-profile.php',
@@ -66,7 +66,7 @@ foreach (array_slice($pages, 2) as $page) {
 
 $loginCss = file_get_contents($root . '/Applicants/css files/login.css');
 responsive_assert(is_string($loginCss), 'Cannot read login stylesheet.');
-$loginPage = file_get_contents($root . '/Applicants/login.html');
+$loginPage = file_get_contents($root . '/Applicants/login.php');
 responsive_assert(is_string($loginPage), 'Cannot read login page.');
 responsive_assert(
     str_contains($loginPage, 'css files/login.css?v=redesign-v7'),
