@@ -14,7 +14,7 @@ function aics_document_requirements(): array
         'medical' => [$document('valid_id', 'Valid Identification Card'), $document('med_cert', 'Medical Abstract or Medical Certificate'), $document('billing_statement', 'Billing Statement or Prescription')],
         'burial' => [$document('valid_id', 'Valid Identification Card'), $document('death_cert', 'Death Certificate'), $document('funeral_contract', 'Funeral Contract')],
         'special_cases' => [$document('valid_id', 'Valid Identification Card'), $document('report_police_med', 'Police Report or Medical Report')],
-        'educational_basic' => [$document('valid_id', 'Valid Identification Card'), $document('registration_form', 'School ID or Enrollment Form')],
+        'educational_basic' => [$document('valid_id', 'Valid Identification Card'), $document('school_id', 'School ID'), $document('registration_form', 'Enrollment Form')],
         'disaster_victims' => [$document('valid_id', 'Valid Identification Card'), $document('damaged_house_photo', 'Photo of Damaged Property', false)],
         'high_inflation_affected' => [$document('valid_id', 'Valid Identification Card')],
     ];

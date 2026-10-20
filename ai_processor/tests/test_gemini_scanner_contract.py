@@ -36,11 +36,12 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(identity_role('damaged_house_photo'), None)
         self.assertEqual(document_label('medical_certificate'), 'Medical Abstract or Medical Certificate')
 
-    def test_education_slot_accepts_a_school_id_or_enrollment_form(self):
-        self.assertEqual(document_label('registration_form'), 'School ID or Enrollment Form')
-        looks_like = DOCUMENT_CATALOG['registration_form']['looks_like'].lower()
-        self.assertIn('school id', looks_like)
-        self.assertIn('enrollment form', looks_like)
+    def test_education_asks_for_a_school_id_and_an_enrollment_form(self):
+        self.assertEqual(document_label('school_id'), 'School ID')
+        self.assertEqual(document_label('registration_form'), 'Enrollment Form')
+        self.assertIn('school id', DOCUMENT_CATALOG['school_id']['looks_like'].lower())
+        self.assertIn('enrollment form', DOCUMENT_CATALOG['registration_form']['looks_like'].lower())
+        self.assertEqual(identity_role('school_id'), 'learner')
         self.assertEqual(identity_role('registration_form'), 'learner')
 
 

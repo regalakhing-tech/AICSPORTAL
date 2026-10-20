@@ -81,6 +81,7 @@ ROI_EXTRACTION_PROFILES = {
     'police_report': {'identity_fields': ('subject_name',), 'anchors': {'subject_name': ('victim name', 'name of victim', 'victim', 'injured person', 'person assisted', 'person served')}},
     'medical_report': {'identity_fields': ('subject_name',), 'anchors': {'subject_name': ('patient name', 'name of patient', 'name of examinee', 'examinee', 'patient')}},
     'school_assessment': {'identity_fields': ('client_name',), 'anchors': {'client_name': ('student name', 'name of student', 'learner name', 'name of learner')}},
+    'school_id': {'identity_fields': ('client_name',), 'anchors': {'client_name': ('student name', 'name of student', 'learner name', 'name')}},
     'registration_form': {'identity_fields': ('client_name',), 'anchors': {'client_name': ('student name', 'name of student', 'learner name', 'name of learner', 'student')}},
     'drrm_damage_certification': {'identity_fields': ('client_name',), 'anchors': {'client_name': ('name of affected person', 'affected person', 'name of beneficiary', 'beneficiary', 'name of displaced person')}},
     'drrm_displacement_certification': {'identity_fields': ('client_name',), 'anchors': {'client_name': ('name of displaced person', 'displaced person', 'name of affected person', 'affected person', 'beneficiary')}},
@@ -89,6 +90,7 @@ ROI_EXTRACTION_PROFILES = {
     'report_police_med': {'identity_fields': ('subject_name',), 'anchors': {'subject_name': ('victim name', 'victim', 'injured person', 'patient name', 'name of examinee')}},
     'school_assessment': {'identity_fields': ('client_name',), 'anchors': {'client_name': ('student name', 'learner name', 'name of student')}},
     'registration_form': {'identity_fields': ('client_name',), 'anchors': {'client_name': ('student name', 'learner name', 'name of learner')}},
+    'school_id': {'identity_fields': ('client_name',), 'anchors': {'client_name': ('student name', 'learner name', 'name')}},
     'mdrrmo_cert': {'identity_fields': ('client_name',), 'anchors': {'client_name': ('name of affected person', 'affected person', 'displaced person', 'beneficiary')}},
     # These are deliberately separate from the canonical upload-slot names.
     # Both slots expose only the certified beneficiary, never officer, case, or
@@ -116,7 +118,9 @@ def resolve_roi_profile(expected_type: str, classification: dict) -> str | None:
         return subtype
     if detected == 'school_assessment' and subtype in ('school_assessment', 'enrollment_assessment', 'senior_high_school_assessment'):
         return 'school_assessment'
-    if detected == 'registration_form' and subtype in ('deped_basic_education_enrollment_form', 'private_school_registration_form', 'enrollment_form', 'school_id'):
+    if detected == 'school_id' and subtype == 'school_id':
+        return 'school_id'
+    if detected == 'registration_form' and subtype in ('deped_basic_education_enrollment_form', 'private_school_registration_form', 'enrollment_form'):
         return 'registration_form'
     if detected == 'mdrrmo_cert' and subtype in ('damage_certification', 'house_damage_certification'):
         return 'drrm_damage_certification'

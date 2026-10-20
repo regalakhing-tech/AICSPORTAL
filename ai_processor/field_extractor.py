@@ -48,6 +48,7 @@ _LEGACY_FIELD_SPECS = {
     'crisis_situation_cert': ('client_name',),
     'school_assessment': ('client_name', 'document_date', 'issuing_organization'),
     'registration_form': ('client_name', 'document_date', 'issuing_organization'),
+    'school_id': ('client_name', 'issuing_organization'),
     'mdrrmo_cert': ('client_name', 'document_date', 'issuing_organization'),
     'eclip_cert': ('client_name',),
 }
@@ -358,6 +359,7 @@ FIELD_LEVEL_CANDIDATE_FIELDS = {
     'report_police_med': ('subject_name',),
     'school_assessment': ('client_name',),
     'registration_form': ('client_name',),
+    'school_id': ('client_name',),
     'mdrrmo_cert': ('client_name',),
     'eclip_cert': ('client_name',),
     'crisis_situation_cert': ('client_name',),
@@ -588,6 +590,9 @@ def extract_document_fields(document_type: str, ocr_text: str, ocr_metadata: dic
         _set_text(fields, 'client_name', text, ('Learner Name', 'Name of Learner', 'Student Name', 'Name of Student'), ocr_metadata, .75, normalize_name)
         _set_date(fields, 'document_date', text, ('Enrollment Date', 'Date Enrolled', 'Date Registered', 'Registration Date'), ocr_metadata, .72, strict=True)
         _set_text(fields, 'issuing_organization', text, ('School', 'School Name', 'Issuing Office'), ocr_metadata, .68)
+    elif kind == 'school_id':
+        _set_text(fields, 'client_name', text, ('Student Name', 'Name of Student', 'Learner Name', 'Name'), ocr_metadata, .72, normalize_name)
+        _set_text(fields, 'issuing_organization', text, ('School', 'School Name'), ocr_metadata, .68)
     elif kind == 'mdrrmo_cert':
         _set_text(fields, 'client_name', text, ('Name of Displaced Person', 'Displaced Person', 'Name of Affected Person', 'Name of Client', 'Name of Beneficiary', 'Name of House Owner', 'Name of Household Head'), ocr_metadata, .75, normalize_name)
         _set_date(fields, 'document_date', text, ('Date Issued', 'Certificate Date', 'Date of Certification'), ocr_metadata, .72, strict=True)

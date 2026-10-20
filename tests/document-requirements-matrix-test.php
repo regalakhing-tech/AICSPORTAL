@@ -4,7 +4,7 @@ require_once __DIR__ . '/../includes/document-requirements.php';
 function matrix_assert(bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); }
 $expected = [
     'medical' => ['valid_id', 'med_cert', 'billing_statement'], 'burial' => ['valid_id', 'death_cert', 'funeral_contract'],
-    'special_cases' => ['valid_id', 'report_police_med'], 'educational_basic' => ['valid_id', 'registration_form'],
+    'special_cases' => ['valid_id', 'report_police_med'], 'educational_basic' => ['valid_id', 'school_id', 'registration_form'],
     'disaster_victims' => ['valid_id', 'damaged_house_photo'],
     'high_inflation_affected' => ['valid_id'],
 ];
@@ -21,6 +21,6 @@ matrix_assert(aics_document_requirement_label('damaged_house_photo') === 'Photo 
 matrix_assert(aics_document_type_is_verifiable('mdrrmo_cert'), 'Previously uploaded MDRRMO certificates must remain reviewable.');
 matrix_assert(aics_document_requirement_label('mdrrmo_cert') === 'MDRRMO Certification of Damage or Displacement', 'Historical MDRRMO certificate label changed.');
 matrix_assert(!aics_document_type_content_classification_applies('damaged_house_photo'), 'Damaged-house photo must not require document classification.');
-matrix_assert(aics_document_requirement_label('registration_form') === 'School ID or Enrollment Form', 'Education asks for a School ID or Enrollment Form.');
+matrix_assert(aics_document_requirement_label('school_id') === 'School ID' && aics_document_requirement_label('registration_form') === 'Enrollment Form', 'Education asks for a School ID and an Enrollment Form.');
 matrix_assert(aics_document_type_is_verifiable('school_assessment') && aics_document_requirement_label('school_assessment') === 'School Assessment Form', 'Previously uploaded School Assessment Forms must remain reviewable.');
 echo "All-category document requirement matrix test passed.\n";

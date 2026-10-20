@@ -85,7 +85,7 @@ function aics_normalize_ai_review_feedback(array $feedback): array
 /** @return array<int,string> */
 function aics_ai_supported_document_types(): array
 {
-    return ['valid_id', 'med_cert', 'billing_statement', 'death_cert', 'funeral_contract', 'report_police_med', 'school_assessment', 'registration_form', 'mdrrmo_cert', 'eclip_cert', 'crisis_situation_cert', 'damaged_house_photo'];
+    return ['valid_id', 'med_cert', 'billing_statement', 'death_cert', 'funeral_contract', 'report_police_med', 'school_assessment', 'school_id', 'registration_form', 'mdrrmo_cert', 'eclip_cert', 'crisis_situation_cert', 'damaged_house_photo'];
 }
 
 function aics_record_ai_review_feedback(mysqli $connection, int $reviewId, int $staffId, array $feedback): int

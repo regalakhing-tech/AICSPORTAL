@@ -26,12 +26,19 @@ School Year 2026-2027 Grade 9'''
 
 
 class PhilippineRegistrationFormValidationTests(unittest.TestCase):
-    def test_school_id_is_accepted_in_the_education_slot(self):
-        result = classify_document(SCHOOL_ID, 'registration_form')
+    def test_school_id_matches_the_school_id_slot(self):
+        result = classify_document(SCHOOL_ID, 'school_id')
         self.assertEqual(result['decision'], 'match')
-        self.assertEqual(result['detected_type'], 'registration_form')
-        self.assertEqual(result['document_subtype'], 'school_id')
-        self.assertEqual(result['display_type'], 'School ID')
+        self.assertEqual(result['detected_type'], 'school_id')
+
+    def test_school_id_is_not_an_enrollment_form(self):
+        result = classify_document(SCHOOL_ID, 'registration_form')
+        self.assertEqual(result['decision'], 'wrong_slot')
+        self.assertEqual(result['detected_type'], 'school_id')
+
+    def test_enrollment_form_is_not_a_school_id(self):
+        result = classify_document(DEPED, 'school_id')
+        self.assertNotEqual(result['decision'], 'match')
 
     def match(self, text):
         result = classify_document(text, 'registration_form')

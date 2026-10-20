@@ -47,11 +47,16 @@ DOCUMENT_CATALOG: dict[str, dict] = {
         'looks_like': 'School statement of assessment or tuition/fee breakdown for a student for a term.',
         'role': 'learner',
     },
+    'school_id': {
+        'label': 'School ID',
+        'looks_like': 'The learner\'s school ID card: a student ID issued by the school, showing the school name and '
+                      'the learner\'s name, usually with a photo, student number or LRN, and school year.',
+        'role': 'learner',
+    },
     'registration_form': {
-        'label': 'School ID or Enrollment Form',
-        'looks_like': 'Either the learner\'s school ID card (student ID issued by the school, with the school name '
-                      'and the learner\'s name, usually with a photo), or the learner\'s school enrollment form, '
-                      'registration form, or certificate of enrollment.',
+        'label': 'Enrollment Form',
+        'looks_like': 'The learner\'s school enrollment form or registration form, or a certificate of enrollment, '
+                      'for the current school year. Not a school ID card.',
         'role': 'learner',
     },
     'mdrrmo_cert': {

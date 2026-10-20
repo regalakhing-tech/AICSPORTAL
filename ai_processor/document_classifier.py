@@ -330,7 +330,7 @@ def _registration_form_result(text):
             subtype, display = 'enrollment_form', 'Enrollment Form'
         return {'recognized': True, 'subtype': subtype, 'display_type': display, 'score': 16 + int(deped) + int(parent_guardian) + int(office) + int(shs) + int(subject_section), 'evidence': evidence}
     if id_card and school and not marker and not report_card and not certificate and not financial:
-        return {'recognized': True, 'subtype': 'school_id', 'display_type': 'School ID', 'score': 16 + int(lrn) + int(school_year or grade), 'evidence': evidence}
+        return {'recognized': False, 'subtype': 'school_id', 'display_type': 'School ID', 'score': 14, 'evidence': evidence, 'distinct_wrong_type': 'school_id'}
     if report_card:
         return {'recognized': False, 'subtype': 'report_card', 'display_type': 'Report Card', 'score': 14, 'evidence': evidence, 'distinct_wrong_type': 'academic_record'}
     if financial and school and learner and (school_year or grade):
@@ -339,6 +339,25 @@ def _registration_form_result(text):
         display = 'Certificate of Enrollment' if certificate else ('Student Information Sheet' if student_sheet else ('Admission Application' if admission else 'School-Related Registration Document'))
         return {'recognized': False, 'subtype': 'registration_related_other', 'display_type': display, 'score': 7, 'evidence': evidence, 'related': True}
     return {'recognized': False, 'subtype': 'unknown', 'display_type': None, 'score': 0, 'evidence': evidence}
+
+
+def _school_id_result(text):
+    """Detect a learner's school ID card; ID and learner numbers are never kept."""
+    school = _contains_any(text, ('academy', 'institute', 'college', 'university', 'integrated school', 'national high school', 'high school', 'elementary school', 'learning center', 'school'))
+    id_card = _contains_any(text, ('student id', 'student i d', 'student identification', 'identification card', 'id card', 'student no', 'student number'))
+    learner = _contains_any(text, ('name', 'student name', 'learner name'))
+    lrn = _contains_any(text, ('lrn', 'learner reference number'))
+    school_year = _contains_any(text, ('school year', 's y ', 'sy ', 'grade', 'year level', 'course', 'valid until'))
+    other_school_document = _contains_any(text, ('registration form', 'enrollment form', 'enrolment form', 'certificate of enrollment', 'assessment form', 'report card', 'statement of account'))
+    evidence = {
+        'school_issuer': ['School information detected'] if school else [],
+        'id_card_marker': ['School ID card marker detected'] if id_card else [],
+        'learner_identity': ['Learner information detected'] if learner else [],
+        'school_year_or_grade': ['School year or grade information detected'] if school_year else [],
+    }
+    if school and id_card and not other_school_document:
+        return {'recognized': True, 'subtype': 'school_id', 'display_type': 'School ID', 'score': 16 + int(lrn) + int(school_year) + int(learner), 'evidence': evidence}
+    return {'recognized': False, 'subtype': 'unknown', 'display_type': None, 'score': 4 if id_card and school else 0, 'evidence': evidence}
 
 
 def _mdrrmo_result(text):
@@ -410,6 +429,9 @@ def classify_document(text: str, expected_type: str) -> dict:
     registration_result = _registration_form_result(normalized)
     scores['registration_form'] = registration_result['score']
     evidence['registration_form'] = [item for group in registration_result['evidence'].values() for item in group]
+    school_id_result = _school_id_result(normalized)
+    scores['school_id'] = school_id_result['score']
+    evidence['school_id'] = [item for group in school_id_result['evidence'].values() for item in group]
     mdrrmo_result = _mdrrmo_result(normalized)
     scores['mdrrmo_cert'] = mdrrmo_result['score']
     evidence['mdrrmo_cert'] = [item for group in mdrrmo_result['evidence'].values() for item in group]
@@ -419,7 +441,7 @@ def classify_document(text: str, expected_type: str) -> dict:
     structured = {'valid_id': id_result, 'med_cert': medical_result, 'billing_statement': billing_result,
                   'death_cert': death_result, 'funeral_contract': funeral_result, 'report_police_med': report_result,
                   'school_assessment': school_result, 'registration_form': registration_result,
-                  'mdrrmo_cert': mdrrmo_result}
+                  'school_id': school_id_result, 'mdrrmo_cert': mdrrmo_result}
     expected_recognized = bool(structured.get(expected, {}).get('recognized'))
     partial_other = []
     if not expected_recognized:
@@ -434,7 +456,7 @@ def classify_document(text: str, expected_type: str) -> dict:
         labels = {'valid_id': 'Valid ID', 'med_cert': 'Medical Abstract or Medical Certificate',
                   'billing_statement': 'Billing Statement or Prescription', 'death_cert': 'Death Certificate',
                   'funeral_contract': 'Funeral Contract', 'report_police_med': 'Police or Medical Report',
-                  'school_assessment': 'School Assessment Form', 'registration_form': 'School ID or Enrollment Form',
+                  'school_assessment': 'School Assessment Form', 'registration_form': 'Enrollment Form', 'school_id': 'School ID',
                   'mdrrmo_cert': 'MDRRMO Certification'}
         detected, high, decision, slot_result = partial_other[0], True, 'wrong_slot', 'wrong_document'
         reason = f'The uploaded document appears to be a {labels[detected]}, but this upload slot requires a {labels.get(expected, expected)}.'
@@ -442,8 +464,10 @@ def classify_document(text: str, expected_type: str) -> dict:
         detected, high, decision, reason, slot_result = 'mdrrmo_cert', True, 'match', 'Multiple Philippine DRRM-office certification evidence groups match the required MDRRMO Certification of Damage or Displacement slot.', 'matched'
     elif expected == 'mdrrmo_cert' and mdrrmo_result.get('related') and not (detected and detected != 'mdrrmo_cert' and high):
         detected, decision, reason, slot_result = 'mdrrmo_cert', 'uncertain', 'The submitted file appears to be a disaster-related document, but the system could not reliably confirm that it is the required MDRRMO/LDRRMO Certification of Damage or Displacement.', 'manual_review'
+    elif expected == 'school_id' and school_id_result['recognized']:
+        detected, high, decision, reason, slot_result = 'school_id', True, 'match', 'School ID card evidence matches the required School ID slot.', 'matched'
     elif expected == 'registration_form' and registration_result['recognized']:
-        detected, high, decision, reason, slot_result = 'registration_form', True, 'match', 'School ID or enrollment evidence matches the required School ID or Enrollment Form slot.', 'matched'
+        detected, high, decision, reason, slot_result = 'registration_form', True, 'match', 'Multiple Philippine school-registration evidence groups match the required Enrollment Form slot.', 'matched'
     elif expected == 'registration_form' and registration_result.get('distinct_wrong_type'):
         detected, high, decision, reason, slot_result = registration_result['distinct_wrong_type'], True, 'wrong_slot', f'The uploaded document appears to be a {registration_result["display_type"]}, which is separate from the required Registration Form.', 'wrong_document'
     elif expected == 'registration_form' and registration_result.get('related') and not (detected and detected != 'registration_form' and high):
@@ -483,9 +507,9 @@ def classify_document(text: str, expected_type: str) -> dict:
     elif detected == expected and high:
         decision, reason, slot_result = 'match', 'Detected document evidence matches the expected upload slot.', 'matched'
     elif detected and detected != expected and high and top - expected_score >= 5:
-        labels = {'valid_id': 'Valid Identification Card', 'med_cert': 'Medical Abstract / Medical Certificate', 'billing_statement': 'Billing Statement / Prescription', 'death_cert': 'Death Certificate', 'funeral_contract': 'Funeral Contract', 'report_police_med': 'Police Report / Medical Report', 'school_assessment': 'School Assessment Form', 'registration_form': 'School ID or Enrollment Form', 'mdrrmo_cert': 'MDRRMO Certification of Damage or Displacement', 'academic_record': 'Academic Assessment Record', 'birth_certificate': 'Birth Certificate'}
+        labels = {'valid_id': 'Valid Identification Card', 'med_cert': 'Medical Abstract / Medical Certificate', 'billing_statement': 'Billing Statement / Prescription', 'death_cert': 'Death Certificate', 'funeral_contract': 'Funeral Contract', 'report_police_med': 'Police Report / Medical Report', 'school_assessment': 'School Assessment Form', 'registration_form': 'Enrollment Form', 'school_id': 'School ID', 'mdrrmo_cert': 'MDRRMO Certification of Damage or Displacement', 'academic_record': 'Academic Assessment Record', 'birth_certificate': 'Birth Certificate'}
         label = labels[detected] if detected in labels else DOCUMENT_CLASS_RULES[detected][0]
-        expected_label = {'valid_id': 'Valid ID', 'med_cert': 'Medical Abstract or Medical Certificate', 'billing_statement': 'Billing Statement or Prescription', 'death_cert': 'Death Certificate', 'funeral_contract': 'Funeral Contract', 'report_police_med': 'Police Report or Medical Report', 'school_assessment': 'School Assessment Form', 'registration_form': 'School ID or Enrollment Form', 'mdrrmo_cert': 'MDRRMO Certification of Damage or Displacement'}.get(expected, DOCUMENT_CLASS_RULES.get(expected, (expected,))[0])
+        expected_label = {'valid_id': 'Valid ID', 'med_cert': 'Medical Abstract or Medical Certificate', 'billing_statement': 'Billing Statement or Prescription', 'death_cert': 'Death Certificate', 'funeral_contract': 'Funeral Contract', 'report_police_med': 'Police Report or Medical Report', 'school_assessment': 'School Assessment Form', 'registration_form': 'Enrollment Form', 'school_id': 'School ID', 'mdrrmo_cert': 'MDRRMO Certification of Damage or Displacement'}.get(expected, DOCUMENT_CLASS_RULES.get(expected, (expected,))[0])
         decision, reason, slot_result = 'wrong_slot', f'The uploaded document appears to be a {label}, but this upload slot requires a {expected_label}.', 'wrong_document'
     else:
         decision, reason, slot_result = 'uncertain', 'The document contains insufficient reliable evidence to confidently determine its document type.', 'manual_review'
@@ -506,6 +530,8 @@ def classify_document(text: str, expected_type: str) -> dict:
         result.update({'document_subtype':school_result['subtype'],'display_type':school_result['display_type'],'school_evidence':school_result['evidence'],'slot_result':slot_result,'authenticity_notice':'Document content and format are AI-assisted checks. School enrollment, fee assessment, registrar authorization, signatures, and legal authenticity are not independently verified.'})
     if expected == 'registration_form' or detected == 'registration_form':
         result.update({'document_subtype':registration_result['subtype'],'display_type':registration_result['display_type'],'registration_evidence':registration_result['evidence'],'slot_result':slot_result,'authenticity_notice':'Document content and format are AI-assisted checks. School enrollment, learner registration, registrar authorization, signatures, and legal authenticity are not independently verified.'})
+    if expected == 'school_id' or detected == 'school_id':
+        result.update({'document_subtype':'school_id','display_type':'School ID','school_id_evidence':school_id_result['evidence'],'slot_result':slot_result,'authenticity_notice':'Document content and format are AI-assisted checks. The school, the ID card and its numbers are not independently verified.'})
     if expected == 'mdrrmo_cert' or detected == 'mdrrmo_cert':
         result.update({'document_subtype':mdrrmo_result['subtype'],'display_type':mdrrmo_result['display_type'],'mdrrmo_evidence':mdrrmo_result['evidence'],'slot_result':slot_result,'authenticity_notice':'Document content and format are AI-assisted checks. MDRRMO/LDRRMO issuance, field inspection, damage assessment, displacement status, signatures, seals, and legal authenticity are not independently verified.'})
     return result

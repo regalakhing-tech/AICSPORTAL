@@ -6,7 +6,7 @@ from ai_processor.document_profiles import get_profile, supported_document_types
 EXPECTED = {
     'valid_id', 'med_cert', 'billing_statement', 'death_cert',
     'funeral_contract', 'report_police_med', 'school_assessment',
-    'registration_form', 'mdrrmo_cert', 'eclip_cert',
+    'registration_form', 'school_id', 'mdrrmo_cert', 'eclip_cert',
     'crisis_situation_cert', 'damaged_house_photo',
 }
 

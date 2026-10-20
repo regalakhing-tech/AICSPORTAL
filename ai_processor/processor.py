@@ -136,7 +136,7 @@ def process_one(dry_run=False, document_id=None):
                         fields[key] = evidence_field
             # A bounded, safe-field fallback may use a high-confidence profile;
             # Valid IDs also require independent family-marker and anchor proof.
-            profile_fields = {'valid_id': ('name', 'birth_date', 'address'), 'med_cert': ('patient_name', 'birth_date'), 'billing_statement': ('patient_name',), 'death_cert': ('deceased_name',), 'funeral_contract': ('deceased_name',), 'report_police_med': ('subject_name',), 'school_assessment': ('client_name',), 'registration_form': ('client_name',), 'mdrrmo_cert': ('client_name',), 'eclip_cert': ('client_name',), 'crisis_situation_cert': ('client_name',)}.get(expected_type, ())
+            profile_fields = {'valid_id': ('name', 'birth_date', 'address'), 'med_cert': ('patient_name', 'birth_date'), 'billing_statement': ('patient_name',), 'death_cert': ('deceased_name',), 'funeral_contract': ('deceased_name',), 'report_police_med': ('subject_name',), 'school_assessment': ('client_name',), 'registration_form': ('client_name',), 'school_id': ('client_name',), 'mdrrmo_cert': ('client_name',), 'eclip_cert': ('client_name',), 'crisis_situation_cert': ('client_name',)}.get(expected_type, ())
             weak = {key for key in profile_fields if fields.get(key, {}).get('status') != 'extracted'}
             profile, eligible_weak, roi_eligibility = resolve_safe_roi_fields(expected_type, classification, ocr_metadata, weak)
             ocr_metadata['roi_eligibility'] = roi_eligibility

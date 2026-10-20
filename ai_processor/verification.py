@@ -8,7 +8,7 @@ REQUIRED = {
     'funeral_contract': ['deceased_name'],
     'billing_statement': [],  # prescriptions are accepted and need no billing amount
     'valid_id': [],
-    'report_police_med': [], 'school_assessment': [], 'registration_form': [], 'mdrrmo_cert': [],
+    'report_police_med': [], 'school_assessment': [], 'registration_form': [], 'school_id': [], 'mdrrmo_cert': [],
     'eclip_cert': [], 'crisis_situation_cert': [], 'damaged_house_photo': [],
 }
 NAME_REQUIRED = {'valid_id', 'med_cert', 'billing_statement', 'death_cert', 'funeral_contract'}
@@ -17,7 +17,7 @@ DOCUMENT_LABELS = {
     'billing_statement': 'Billing Statement / Prescription', 'death_cert': 'Death Certificate',
     'funeral_contract': 'Funeral Contract', 'report_police_med': 'Police / Medical / Legal Report',
     'crisis_situation_cert': 'Certificate of Person in Crisis Situation', 'school_assessment': 'School Assessment Form',
-    'registration_form': 'School ID or Enrollment Form', 'mdrrmo_cert': 'MDRRMO Certification of Damage or Displacement',
+    'registration_form': 'Enrollment Form', 'school_id': 'School ID', 'mdrrmo_cert': 'MDRRMO Certification of Damage or Displacement',
     'eclip_cert': 'Former-Rebel Eligibility Certification', 'damaged_house_photo': 'Photographic Evidence of Damaged House',
 }
 

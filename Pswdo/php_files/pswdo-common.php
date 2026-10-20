@@ -695,7 +695,8 @@ function pswdo_seed_lookup_tables(mysqli $connection): void
         ['report_police_med', 'Police or Medical Report', 100],
         ['eclip_cert', 'Certificate from E-CLIP or JTF-ELCAC', 110],
         ['school_assessment', 'School Assessment Form', 115],
-        ['registration_form', 'School ID or Enrollment Form', 116],
+        ['school_id', 'School ID', 114],
+        ['registration_form', 'Enrollment Form', 116],
         ['crisis_situation_cert', 'Certificate of Person in Crisis Situation', 117],
         // Backward-compatible aliases from older uploads
         ['medical_certificate', 'Medical Certificate', 120],
@@ -760,6 +761,12 @@ function pswdo_seed_lookup_tables(mysqli $connection): void
             $stmt->close();
             $position++;
         }
+        // Documents dropped from this assistance type stop being required (uploaded files are kept).
+        $placeholders = implode(', ', array_fill(0, count($documentCodes), '?'));
+        $stmt = $connection->prepare("DELETE ard FROM aics_assistance_required_documents ard INNER JOIN aics_assistance_types at ON at.id = ard.assistance_type_id INNER JOIN aics_document_types dt ON dt.id = ard.document_type_id WHERE at.assistance_code = ? AND dt.document_code NOT IN ({$placeholders})");
+        $stmt->bind_param(str_repeat('s', count($documentCodes) + 1), $assistanceCode, ...$documentCodes);
+        $stmt->execute();
+        $stmt->close();
     }
 
     // Certificate of Eligibility remains outside applicant uploads.

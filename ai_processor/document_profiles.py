@@ -83,11 +83,16 @@ _PROFILES = {
         ('client_name', 'document_date', 'issuing_organization'), ('client_name',),
         'client_name', ('registration form', 'report card')),
     'registration_form': _profile(
-        'registration_form', 'School ID or Enrollment Form',
-        (('registration form', 'enrollment form', 'certificate of registration', 'student id', 'student identification'),
+        'registration_form', 'Enrollment Form',
+        (('registration form', 'enrollment form', 'certificate of registration'),
          ('school', 'college', 'university'), ('learner', 'student name', 'school year')),
         ('client_name', 'document_date', 'issuing_organization'), ('client_name',),
         'client_name', ('assessment form', 'report card')),
+    'school_id': _profile(
+        'school_id', 'School ID',
+        (('student id', 'student identification', 'id card', 'student no'),
+         ('school', 'college', 'university', 'academy'), ('name', 'lrn', 'school year')),
+        ('client_name',), ('client_name',), 'client_name', ('registration form', 'enrollment form', 'report card')),
     'mdrrmo_cert': _profile(
         'mdrrmo_cert', 'MDRRMO Certification of Damage or Displacement',
         (('mdrrmo', 'ldrrmo', 'disaster risk reduction'),
