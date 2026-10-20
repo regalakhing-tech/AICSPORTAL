@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth-guard.php';
+require_once __DIR__ . '/app-shell.php';
 require_once __DIR__ . '/auth-common.php';
 
 aics_start_session();
@@ -244,6 +245,7 @@ foreach ($notifications as $item) {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" href="<?= notif_h($cssUrl) ?>">
+<?= aics_app_shell_head() ?>
 <style>
 /* ==========================================================================
    Notifications Page - Modern Executive Design
@@ -1230,5 +1232,6 @@ foreach ($notifications as $item) {
 })();
 </script>
 <?php require __DIR__ . '/../../chatbot/applicant-widget.php'; ?>
+<?= aics_app_shell_script() ?>
 </body>
 </html>

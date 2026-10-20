@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth-guard.php';
+require_once __DIR__ . '/app-shell.php';
 require_once __DIR__ . '/dashboard-data-lib.php';
 require_once __DIR__ . '/application-rules.php';
 
@@ -164,6 +165,7 @@ function overview_h(string $value): string
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" href="<?= overview_h($cssUrl) ?>">
+<?= aics_app_shell_head() ?>
 </head>
 <body data-account-status="<?= overview_h($currentAccountStatusCode) ?>" data-banned-modal-required="<?= $forceBannedModal ? '1' : '0' ?>">
 <div class="app-container">
@@ -621,5 +623,6 @@ function overview_h(string $value): string
 <script id="dashboard-bootstrap" type="application/json"><?= htmlspecialchars((string) json_encode($dashboardData, JSON_UNESCAPED_UNICODE), ENT_NOQUOTES, 'UTF-8') ?></script>
 <script src="<?= overview_h($appJsUrl) ?>"></script>
 <?php require __DIR__ . '/../../chatbot/applicant-widget.php'; ?>
+<?= aics_app_shell_script() ?>
 </body>
 </html>

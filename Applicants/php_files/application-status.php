@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth-guard.php';
+require_once __DIR__ . '/app-shell.php';
 require_once __DIR__ . '/auth-common.php';
 require_once __DIR__ . '/application-rules.php';
 require_once __DIR__ . '/../../includes/document-requirements.php';
@@ -489,6 +490,7 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" href="<?= status_h($cssUrl) ?>">
+<?= aics_app_shell_head() ?>
 <style>
 /* ==========================================================================
    Application Status Page - Modern Executive Design
@@ -1873,5 +1875,6 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
 
 <script src="<?= status_h($appJsUrl) ?>"></script>
 <?php require __DIR__ . '/../../chatbot/applicant-widget.php'; ?>
+<?= aics_app_shell_script() ?>
 </body>
 </html>

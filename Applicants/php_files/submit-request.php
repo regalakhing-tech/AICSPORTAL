@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth-guard.php';
+require_once __DIR__ . '/app-shell.php';
 require_once __DIR__ . '/auth-common.php';
 require_once __DIR__ . '/application-rules.php';
 require_once __DIR__ . '/application-access.php';
@@ -452,6 +453,7 @@ if ($editRequestId > 0) {
     rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="../css files/applicant-pages.css?v=<?= htmlspecialchars($assetCssVersion, ENT_QUOTES, 'UTF-8') ?>">
+  <?= aics_app_shell_head() ?>
 </head>
 
 <body data-account-status="<?= htmlspecialchars($currentAccountStatusCode, ENT_QUOTES, 'UTF-8') ?>" data-banned-modal-required="<?= $forceBannedModal ? '1' : '0' ?>">
@@ -1152,6 +1154,7 @@ if ($editRequestId > 0) {
   <script src="../js files/beneficiary-birthdate.js?v=<?= htmlspecialchars($birthdateJsVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
   <script src="../js files/applicant-pages.js?v=<?= htmlspecialchars($assetJsVersion, ENT_QUOTES, 'UTF-8') ?>"></script>
 <?php require __DIR__ . '/../../chatbot/applicant-widget.php'; ?>
+<?= aics_app_shell_script() ?>
 </body>
 
 </html>

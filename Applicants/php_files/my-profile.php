@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth-guard.php';
+require_once __DIR__ . '/app-shell.php';
 require_once __DIR__ . '/auth-common.php';
 
 aics_start_session();
@@ -58,6 +59,7 @@ if ($returnCandidate !== '') {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" href="<?= htmlspecialchars($cssUrl, ENT_QUOTES, 'UTF-8') ?>">
+<?= aics_app_shell_head() ?>
 </head>
 <body data-account-status="<?= htmlspecialchars($currentAccountStatusCode, ENT_QUOTES, 'UTF-8') ?>" data-banned-modal-required="<?= $forceBannedModal ? '1' : '0' ?>">
 <div class="app-container">
@@ -469,5 +471,6 @@ if ($returnCandidate !== '') {
 <script src="<?= htmlspecialchars($barangaysJsUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
 <script src="<?= htmlspecialchars($profileJsUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
 <?php require __DIR__ . '/../../chatbot/applicant-widget.php'; ?>
+<?= aics_app_shell_script() ?>
 </body>
 </html>
