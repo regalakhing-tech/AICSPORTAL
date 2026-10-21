@@ -232,23 +232,17 @@ try {
 }
 
 $totalRequests = count($requests);
-$totalRequiredFiles = 0;
-$totalUploadedRequiredFiles = 0;
 
 foreach ($requests as $requestId => $requestData) {
     $requiredTypes = $requiredByAssistance[$requestData['assistance_type']] ?? [];
     $requiredStates = [];
     $uploadedRequiredCount = 0;
-    $checkedRequiredCount = 0;
 
     foreach ($requiredTypes as $requiredType) {
         $doc = $requestData['documents'][$requiredType] ?? null;
         $uploaded = is_array($doc);
         if ($uploaded) {
             $uploadedRequiredCount++;
-            if (((int) ($doc['is_checked'] ?? 0)) === 1) {
-                $checkedRequiredCount++;
-            }
         }
 
         $requiredStates[] = [
@@ -265,12 +259,9 @@ foreach ($requests as $requestId => $requestData) {
     }
 
     $requiredCount = count($requiredTypes);
-    $progressPct = $requiredCount > 0 ? (int) round(($checkedRequiredCount / $requiredCount) * 100) : 0;
 
     $requests[$requestId]['required_count'] = $requiredCount;
     $requests[$requestId]['uploaded_required_count'] = $uploadedRequiredCount;
-    $requests[$requestId]['checked_required_count'] = $checkedRequiredCount;
-    $requests[$requestId]['documents_progress_pct'] = $progressPct;
     $requests[$requestId]['required_document_states'] = $requiredStates;
     $requests[$requestId]['stage_rows'] = status_stage_rows(
         (string) ($requestData['status_code'] ?? ''),
@@ -279,14 +270,7 @@ foreach ($requests as $requestId => $requestData) {
         (string) ($requestData['updated_label'] ?? '')
     );
     $requests[$requestId]['stage_rows'] = status_gate_stage_override($requests[$requestId]['stage_rows'], (string) ($requestData['gate_status'] ?? 'released'));
-
-    $totalRequiredFiles += $requiredCount;
-    $totalUploadedRequiredFiles += $checkedRequiredCount;
 }
-
-$overallDocumentsPct = $totalRequiredFiles > 0
-    ? (int) round(($totalUploadedRequiredFiles / $totalRequiredFiles) * 100)
-    : 0;
 
 function status_h(string $value): string
 {
@@ -341,6 +325,46 @@ function status_first_assistance_type(string $json): string
 /**
  * @return array{label:string,badge:string,timeline_level:int}
  */
+/**
+ * What the applicant does next once PSWDO has decided, shown in place of the
+ * expected processing time: visit for further screening, wait for the
+ * schedule text, come on the release date, or wait for a new date. Null while
+ * PSWDO is still reviewing (the expected processing card shows) and after a
+ * release or rejection (those have their own sections).
+ *
+ * @param array<string, mixed> $req
+ * @return array{tone: string, icon: string, label: string, title: string, lines: list<string>}|null
+ */
+function status_stage_notice(array $req): ?array
+{
+    $status = strtolower(trim((string) ($req['status_code'] ?? '')));
+    $release = strtolower(trim((string) ($req['release_status'] ?? '')));
+    $date = (string) ($req['scheduled_date'] ?? '');
+    if (in_array($status, ['approved', 'validated'], true)) {
+        return ['tone' => 'approved', 'icon' => 'fa-building-circle-check', 'label' => 'Approved for further screening', 'title' => 'Visit the PSWDO Office', 'lines' => [
+            'Any office day: Monday to Thursday, 8:00 AM - 11:00 AM or 1:00 PM - 4:00 PM.',
+            'Bring the original copies of your requirements.',
+        ]];
+    }
+    if (!in_array($status, ['for_release', 'for release'], true)) return null;
+    if ($release === 'missed') {
+        return ['tone' => 'missed', 'icon' => 'fa-calendar-xmark', 'label' => 'Release schedule missed', 'title' => 'Wait for a new schedule', 'lines' => [
+            'PSWDO will text you a new date, time and place.',
+        ]];
+    }
+    if ($date !== '' && $date !== '0000-00-00') {
+        $time = status_fmt_time((string) ($req['scheduled_time'] ?? ''));
+        $venue = trim((string) ($req['venue'] ?? ''));
+        return ['tone' => 'scheduled', 'icon' => 'fa-calendar-day', 'label' => $release === 'ready_for_release' ? 'Your assistance is ready' : 'Release scheduled', 'title' => status_fmt_date($date) . ($time !== '' ? ', ' . $time : ''), 'lines' => [
+            'Place: ' . ($venue !== '' ? $venue : 'PSWDO Office'),
+            'Bring your valid ID and your requirements. Please arrive on time.',
+        ]];
+    }
+    return ['tone' => 'waiting', 'icon' => 'fa-hourglass-half', 'label' => 'Further screening passed', 'title' => 'Wait for your release schedule', 'lines' => [
+        'PSWDO will text you the date, time and place to receive your assistance.',
+    ]];
+}
+
 function status_request_meta(string $status): array
 {
     $normalized = strtolower(trim($status));
@@ -676,65 +700,6 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
   font-weight: 700;
   white-space: nowrap;
   flex-shrink: 0;
-}
-
-/* ---------- Overall Document Progress Card ---------- */
-.status-page .status-progress-overview-card {
-  padding: 22px 26px;
-  border-radius: 20px;
-  border: 1.5px solid #e2e8f0;
-  background: #ffffff;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
-  margin-bottom: 24px;
-}
-
-.status-page .status-progress-overview-card .docs-progress-head {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 14px;
-}
-
-.status-page .status-progress-overview-card .docs-progress-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 15px;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  display: grid;
-  place-items: center;
-  font-size: 22px;
-  color: #0284c7;
-  flex-shrink: 0;
-}
-
-.status-page .status-progress-overview-card .docs-progress-copy strong {
-  font-size: 16px;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.01em;
-}
-
-.status-page .status-progress-overview-card .docs-progress-copy span {
-  font-size: 14px;
-  color: #64748b;
-  font-weight: 500;
-}
-
-.status-page .status-progress-overview-card .progress-track-senior {
-  height: 10px;
-  background: #f1f5f9;
-  border-radius: 999px;
-  overflow: hidden;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
-}
-
-.status-page .status-progress-overview-card .progress-track-senior span {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #0284c7 0%, #10b981 100%);
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
-  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ---------- Request Card Block ---------- */
@@ -1502,7 +1467,7 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
           </div>
           <div class="cooldown-copy">
             <strong class="cooldown-title">Application Cooldown Period Active</strong>
-            <span class="cooldown-detail">Under PSWDO policy, an annual interval applies between assistance grants. Your next eligible submission date is <strong><?= status_h(aics_format_cooldown_date((string) ($cooldownInfo['eligible_on'] ?? ''))) ?></strong>.</span>
+            <span class="cooldown-detail"><span class="cooldown-policy">Under PSWDO policy, an annual interval applies between assistance grants.</span> <span>Your next eligible submission date is</span> <strong><?= status_h(aics_format_cooldown_date((string) ($cooldownInfo['eligible_on'] ?? ''))) ?></strong>.</span>
           </div>
           <div class="cooldown-tag">
             <i class="fas fa-hourglass-half"></i> Active Cooldown
@@ -1523,33 +1488,11 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
           </a>
         </section>
       <?php else: ?>
-        <section class="section-card docs-progress-senior status-progress-overview-card">
-          <div class="docs-progress-head">
-            <div class="docs-progress-icon"><i class="fas fa-file-circle-check"></i></div>
-            <div class="docs-progress-copy">
-              <strong>Overall Document Progress</strong>
-              <span><?= (int) $totalUploadedRequiredFiles ?> of <?= (int) $totalRequiredFiles ?> required files are checked by PSWDO.</span>
-            </div>
-            <div class="docs-progress-badge">
-              <?php if ($overallDocumentsPct === 100): ?>
-                <span class="badge-senior ok"><i class="fas fa-check-double"></i> 100% Ready</span>
-              <?php else: ?>
-                <span class="badge-senior pending"><i class="fas fa-clock"></i> <?= (int) $overallDocumentsPct ?>% Ready</span>
-              <?php endif; ?>
-            </div>
-          </div>
-          <div class="progress-track progress-track-senior">
-            <span style="width: <?= (int) $overallDocumentsPct ?>%;"></span>
-          </div>
-        </section>
-
         <div class="docs-requests-list">
           <?php foreach ($requests as $req): ?>
             <?php
-              $progressPct = (int) ($req['documents_progress_pct'] ?? 0);
               $requiredCount = (int) ($req['required_count'] ?? 0);
               $uploadedRequiredCount = (int) ($req['uploaded_required_count'] ?? 0);
-              $checkedRequiredCount = (int) ($req['checked_required_count'] ?? 0);
               $statusBadge = (string) ($req['status_badge'] ?? 'pending');
               $statusLabel = (string) ($req['status_label'] ?? 'Pending');
               $stageRows = is_array($req['stage_rows'] ?? null) ? $req['stage_rows'] : [];
@@ -1568,7 +1511,6 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                       <span class="status-meta-chip chip-ref"><i class="fas fa-hashtag"></i> <strong><?= status_h((string) ($req['reference_no'] ?? '-')) ?></strong></span>
                       <span class="status-meta-chip chip-user"><i class="fas fa-user"></i> <?= status_h((string) ($req['beneficiary_name'] ?? '-')) ?></span>
                       <span class="status-meta-chip chip-date"><i class="fas fa-calendar-day"></i> Applied: <?= status_h((string) ($req['date_applied_label'] ?? 'Not available')) ?></span>
-                      <span class="status-meta-chip chip-docs"><i class="fas fa-file-circle-check"></i> <?= $checkedRequiredCount ?> / <?= $requiredCount ?> docs checked</span>
                     </div>
                   </div>
                 </div>
@@ -1598,8 +1540,8 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                             <input type="hidden" name="document_type" value="<?= status_h((string) ($gateItem['type'] ?? '')) ?>">
                             <label class="ai-gate-fix-button">
                               <i class="fas fa-upload" aria-hidden="true"></i>
-                              <span class="ai-gate-fix-button-text">Upload a new file</span>
-                              <input type="file" name="reupload_file" accept=".pdf,.jpg,.jpeg,.png" required aria-label="Upload a new <?= status_h((string) ($gateItem['label'] ?? 'document')) ?>" onchange="this.form.querySelector('.ai-gate-fix-button-text').textContent = 'Uploading\u2026'; this.form.submit();">
+                              <span class="ai-gate-fix-button-text" data-upload-text>Upload a new file</span>
+                              <input type="file" name="reupload_file" accept=".pdf,.jpg,.jpeg,.png" required aria-label="Upload a new <?= status_h((string) ($gateItem['label'] ?? 'document')) ?>">
                             </label>
                           </form>
                         </li>
@@ -1636,6 +1578,17 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                 <div class="ai-gate-notice is-review" role="status">
                   <i class="fas fa-user-shield" aria-hidden="true"></i>
                   <span>Your documents are being reviewed before they go to PSWDO.</span>
+                </div>
+              <?php elseif (($stageNotice = status_stage_notice($req)) !== null): ?>
+                <div class="ai-gate-notice is-eta ai-gate-eta is-stage is-<?= status_h($stageNotice['tone']) ?>" role="status">
+                  <i class="fas <?= status_h($stageNotice['icon']) ?>" aria-hidden="true"></i>
+                  <div class="ai-gate-eta-body">
+                    <span class="ai-gate-eta-label"><?= status_h($stageNotice['label']) ?></span>
+                    <strong class="ai-gate-eta-span"><?= status_h($stageNotice['title']) ?></strong>
+                    <?php foreach ($stageNotice['lines'] as $stageLine): ?>
+                      <span class="ai-gate-stage-line"><?= status_h($stageLine) ?></span>
+                    <?php endforeach; ?>
+                  </div>
                 </div>
               <?php elseif (is_array($req['gate_eta'] ?? null) && !in_array($statusBadge, ['ok', 'danger'], true)): ?>
                 <?php $gateEta = $req['gate_eta']; ?>
@@ -1797,17 +1750,8 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
 
               <div class="status-block status-checklist-block">
                 <div class="section-title-wrap">
-                  <h3 class="section-title"><i class="fas fa-list-check"></i> Document Checklist Progress</h3>
-                  <span class="section-title-hint"><?= $checkedRequiredCount ?> of <?= $requiredCount ?> required documents verified</span>
-                </div>
-                <div class="document-progress-shell document-progress-senior status-progress">
-                  <div class="progress-track progress-track-senior">
-                    <span style="width: <?= (int) $progressPct ?>%;"></span>
-                  </div>
-                  <div class="progress-meta progress-meta-senior">
-                    <i class="fas fa-list-check"></i>
-                    <span><?= $checkedRequiredCount ?> of <?= $requiredCount ?> required documents checked by PSWDO.</span>
-                  </div>
+                  <h3 class="section-title"><i class="fas fa-list-check"></i> Document Checklist</h3>
+                  <span class="section-title-hint"><?= $uploadedRequiredCount ?> of <?= $requiredCount ?> required documents uploaded</span>
                 </div>
 
                 <div class="document-checklist document-checklist-senior">
@@ -1862,8 +1806,8 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                             <input type="hidden" name="request_id" value="<?= (int) ($req['id'] ?? 0) ?>">
                             <input type="hidden" name="document_type" value="<?= status_h((string) ($state['type'] ?? '')) ?>">
                             <label class="btn-senior btn-senior-primary" style="padding: 8px 12px; font-size: 12px; cursor:pointer;">
-                              <i class="fas fa-upload"></i> Re-upload
-                              <input type="file" name="reupload_file" accept=".pdf,.jpg,.jpeg,.png" required style="display:none;" onchange="this.form.submit();">
+                              <i class="fas fa-upload"></i> <span data-upload-text>Re-upload</span>
+                              <input type="file" name="reupload_file" accept=".pdf,.jpg,.jpeg,.png" required style="display:none;">
                             </label>
                           </form>
                         <?php endif; ?>
@@ -1889,6 +1833,37 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
   </main>
 </div>
 
+<script>
+  // Re-upload: the chosen file is sent at once. While it uploads, every
+  // re-upload button is locked so a second click cannot start another upload.
+  (function () {
+    var uploading = false;
+    document.addEventListener('click', function (event) {
+      var label = uploading && event.target instanceof Element ? event.target.closest('label') : null;
+      if (label && label.querySelector('input[name="reupload_file"]')) event.preventDefault();
+    }, true);
+    document.addEventListener('change', function (event) {
+      var input = event.target;
+      if (uploading || !(input instanceof HTMLInputElement) || input.name !== 'reupload_file' || !input.files || input.files.length === 0) return;
+      uploading = true;
+      document.querySelectorAll('input[name="reupload_file"]').forEach(function (other) {
+        var label = other.closest('label');
+        if (!label) return;
+        label.classList.add('is-uploading');
+        label.setAttribute('aria-disabled', 'true');
+        label.style.cursor = 'progress';
+      });
+      var current = input.closest('label');
+      var icon = current ? current.querySelector('i') : null;
+      var text = current ? current.querySelector('[data-upload-text]') : null;
+      if (icon) icon.className = 'fas fa-spinner fa-spin';
+      if (text) text.textContent = 'Uploading…';
+      input.form.submit();
+    });
+    // Returning to this page from browser history shows the buttons unlocked.
+    window.addEventListener('pageshow', function (event) { if (event.persisted) window.location.reload(); });
+  }());
+</script>
 <script src="<?= status_h($appJsUrl) ?>"></script>
 <?php require __DIR__ . '/../../chatbot/applicant-widget.php'; ?>
 <?= aics_app_shell_script() ?>

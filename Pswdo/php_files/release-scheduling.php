@@ -701,10 +701,6 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
             <input id="release-modal-time" data-default-value="<?= pswdo_h($defaultScheduleTime) ?>" type="time" name="scheduled_time" value="<?= pswdo_h($defaultScheduleTime) ?>" required>
           </div>
         </div>
-        <div class="field-wrap release-schedule-amount">
-          <label for="release-modal-amount">Amount to release (₱)</label>
-          <input id="release-modal-amount" type="number" name="amount_given" min="1" max="99999999.99" step="0.01" inputmode="decimal" placeholder="e.g. 5000.00" required>
-        </div>
         <input id="release-modal-venue" type="hidden" name="venue" value="PSWDO Office">
         <input type="hidden" name="batch_limit" value="<?= $batchLimit ?>">
         <input type="hidden" id="release-modal-notes" name="notes" value="">
@@ -722,11 +718,10 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
             </div>
             <div class="field-wrap">
               <label for="release-modal-sms-message">Message <span class="field-optional">Optional</span></label>
-              <textarea id="release-modal-sms-message" name="sms_message" rows="4" maxlength="600"></textarea>
+              <textarea id="release-modal-sms-message" name="sms_message" rows="10" maxlength="600"></textarea>
             </div>
           </div>
         </div>
-        <p class="release-simulation-note"><i class="fas fa-building"></i> MSWDO preview is generated automatically.</p>
 
         <div class="confirm-actions">
           <button type="button" class="btn-outline" id="cancel-release-schedule">Cancel</button>

@@ -199,6 +199,27 @@ try {
             $redirectExtra['batch_date_to'] = $scheduledDate;
             $redirectExtra['batch_key'] = 'all';
         }
+    } elseif ($actionType === 'bulk_approve_requests') {
+        $rawIds = $_POST['request_ids'] ?? [];
+        set_time_limit(0); // one SMS per applicant
+        $outcome = pswdo_bulk_approve_requests_action($connection, is_array($rawIds) ? $rawIds : [], $accountId);
+        $_SESSION['aics_pswdo_approval_feedback'] = $outcome;
+        $approvedCount = count($outcome['approved']);
+        $message = $approvedCount . ' applicant' . ($approvedCount === 1 ? '' : 's') . ' approved and notified by SMS.';
+        if ($outcome['failed'] !== []) $responseStatus = 'error';
+    } elseif ($actionType === 'bulk_approve_for_release') {
+        $rawIds = $_POST['request_ids'] ?? [];
+        set_time_limit(0); // one SMS per applicant
+        $outcome = pswdo_bulk_finish_prescreening_action($connection, is_array($rawIds) ? $rawIds : [], $accountId);
+        $message = $outcome['moved'] . ' applicant' . ($outcome['moved'] === 1 ? '' : 's') . ' moved to Release Scheduling. SMS sent: '
+            . $outcome['sms_sent'] . ' of ' . $outcome['moved'] . '.';
+        if ($outcome['failed'] !== []) {
+            $message .= ' Not moved: ' . implode('; ', array_map(
+                static fn (array $entry): string => trim($entry['name'] . ' ' . $entry['reference']) . ' (' . $entry['reason'] . ')',
+                $outcome['failed']
+            )) . '.';
+        }
+        if ($outcome['failed'] !== [] || $outcome['sms_sent'] < $outcome['moved']) $responseStatus = 'error';
     } elseif ($requestId <= 0) {
         throw new RuntimeException('Invalid request target.');
     } elseif ($actionType === 'record_ai_review_feedback') {
@@ -265,6 +286,14 @@ try {
         }
         if ($followupWarning) {
             $message .= ' The decision was saved, but one follow-up record could not be completed.';
+        }
+        if (((string) ($_POST['embed'] ?? '')) !== '1') {
+            $entry = ['name' => (string) $result['applicant_name'], 'reference' => $referenceNo, 'sms_sent' => $screeningSmsSent];
+            $_SESSION['aics_pswdo_approval_feedback'] = [
+                'approved' => $isReadyForPrescreen ? [$entry] : [],
+                'incomplete' => $isReadyForPrescreen ? [] : [$entry],
+                'failed' => [],
+            ];
         }
     } elseif ($actionType === 'document_check') {
         $documentId = (int) ($_POST['document_id'] ?? 0);
@@ -449,11 +478,10 @@ try {
             : ('Release status is now ' . $statusLabel . '.');
         $redirectExtra['schedule_request'] = (string) $requestId;
     } elseif ($actionType === 'approve_for_release') {
-        $result = pswdo_approve_for_release_action($connection, $requestId, $accountId);
-        $referenceNo = trim((string) ($result['reference_no'] ?? ''));
-        $message = $referenceNo !== ''
-            ? ('Request ' . $referenceNo . ' approved for release and moved to Release Scheduling queue.')
-            : 'Request approved for release and moved to Release Scheduling queue.';
+        $result = pswdo_finish_prescreening_action($connection, $requestId, $accountId);
+        $message = trim($result['name'] . ' (' . $result['reference'] . ')', ' ()') . ' passed further screening and moved to Release Scheduling. '
+            . ($result['sms_sent'] ? 'The applicant was texted to wait for the schedule.' : 'The SMS could not be sent; please text the applicant.');
+        if (!$result['sms_sent']) $responseStatus = 'error';
     } elseif ($actionType === 'reschedule_unattended') {
         $result = pswdo_reschedule_unattended_action($connection, $requestId, $accountId);
         $referenceNo = trim((string) ($result['reference_no'] ?? ''));
@@ -465,9 +493,17 @@ try {
         $rejectionReason = trim((string) ($_POST['remarks'] ?? ''));
         $result = pswdo_mark_request_invalid_action($connection, $requestId, $accountId, true, '', $rejectionReason, true);
         $referenceNo = trim((string) ($result['reference_no'] ?? ''));
-        $message = $referenceNo !== ''
-            ? ('Request ' . $referenceNo . ' has been rejected and the applicant has been notified.')
-            : 'Request has been rejected and the applicant has been notified.';
+        $smsSent = false;
+        try {
+            $rejectionSms = pswdo_rejection_sms_message($referenceNo, pswdo_request_identity($connection, $requestId)['name'], $rejectionReason);
+            pswdo_send_sms_to_applicant_action($connection, $requestId, 'rejection_notice', $rejectionSms, $accountId);
+            $smsSent = true;
+        } catch (Throwable $exception) {
+            error_log('AICS rejection SMS failed request_id=' . $requestId . ' error=' . $exception->getMessage());
+        }
+        $message = ($referenceNo !== '' ? 'Request ' . $referenceNo . ' has been rejected.' : 'Request has been rejected.')
+            . ($smsSent ? ' The applicant was sent an SMS with the reason.' : ' The SMS could not be sent; the applicant can still see the reason in their portal.');
+        if (!$smsSent) $responseStatus = 'error';
     } else {
         throw new RuntimeException('Unsupported workflow action.');
     }

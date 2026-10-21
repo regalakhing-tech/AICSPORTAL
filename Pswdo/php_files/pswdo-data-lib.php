@@ -112,7 +112,7 @@ function pswdo_tamper_analysis_json(string $findingsJson, string $supplementJson
     }
     if ($status !== 'completed') { $base['status'] = 'unknown'; $base['message'] = 'Alteration analysis result is unavailable. Manual document review is required.'; return $base; }
     $decision = strtolower(trim((string) ($raw['decision'] ?? 'clear'))) === 'review' ? 'review' : 'clear';
-    $reviewBasis = in_array(($raw['review_basis'] ?? ''), ['none', 'deterministic_chronology_conflict', 'corroborated_visual_evidence', 'local_copied_region', 'cryptographic_signature_problem'], true)
+    $reviewBasis = in_array(($raw['review_basis'] ?? ''), ['none', 'deterministic_chronology_conflict', 'corroborated_visual_evidence', 'local_copied_region', 'cryptographic_signature_problem', 'generative_ai_provenance'], true)
         ? (string) $raw['review_basis'] : 'none';
     $base['status'] = 'completed';
     $base['decision'] = $decision;
@@ -123,6 +123,7 @@ function pswdo_tamper_analysis_json(string $findingsJson, string $supplementJson
             : 'Suspected alteration — staff review required')
         : 'No corroborated alteration signal';
     if ($decision === 'review' && $reviewBasis === 'cryptographic_signature_problem') $base['label'] = 'PDF signature requires staff review';
+    if ($decision === 'review' && $reviewBasis === 'generative_ai_provenance') $base['label'] = 'Made or edited with generative AI — staff review required';
     $base['confidence_band'] = in_array(($raw['confidence_band'] ?? ''), ['low', 'moderate', 'high'], true) ? (string) $raw['confidence_band'] : 'low';
     $rawDateConflict = is_array($raw['date_conflict'] ?? null) ? $raw['date_conflict'] : null;
     if ($reviewBasis === 'deterministic_chronology_conflict' && $rawDateConflict !== null) {
@@ -136,9 +137,9 @@ function pswdo_tamper_analysis_json(string $findingsJson, string $supplementJson
             $base['date_conflict'] = ['document_date' => $documentDate, 'conflicting_years' => array_slice($years, 0, 5)];
         }
     }
-    $allowedFamilies = ['gemini_visual', 'semantic_chronology', 'local_regional', 'local_visual', 'adcd_net'];
+    $allowedFamilies = ['gemini_visual', 'semantic_chronology', 'local_regional', 'local_visual', 'adcd_net', 'file_provenance'];
     $base['evidence_families'] = array_values(array_intersect($allowedFamilies, array_map('strval', (array) ($raw['evidence_families'] ?? []))));
-    $allowedTypes = ['typography_mismatch', 'baseline_or_spacing_mismatch', 'ink_or_color_mismatch', 'pasted_region_boundary', 'background_texture_discontinuity', 'compression_or_resampling_difference', 'signature_or_stamp_anomaly', 'other_visual_anomaly', 'date_context_conflict', 'value_context_conflict', 'copy_move_region', 'repeated_visual_region', 'erasure_or_cover_region', 'handwritten_correction', 'sample_or_watermark', 'digital_text_overlay', 'file_format_mismatch', 'metadata_date_conflict', 'invalid_pdf_signature', 'pdf_changed_after_signing'];
+    $allowedTypes = ['typography_mismatch', 'baseline_or_spacing_mismatch', 'ink_or_color_mismatch', 'pasted_region_boundary', 'background_texture_discontinuity', 'compression_or_resampling_difference', 'signature_or_stamp_anomaly', 'other_visual_anomaly', 'date_context_conflict', 'value_context_conflict', 'copy_move_region', 'repeated_visual_region', 'erasure_or_cover_region', 'handwritten_correction', 'sample_or_watermark', 'digital_text_overlay', 'file_format_mismatch', 'metadata_date_conflict', 'invalid_pdf_signature', 'pdf_changed_after_signing', 'ai_generated_content'];
     $safeBox = static function ($value): ?array {
         if (!is_array($value) || count($value) !== 4 || array_keys($value) !== [0, 1, 2, 3]) return null;
         foreach ($value as $coordinate) if (!is_int($coordinate) || $coordinate < 0 || $coordinate > 1000) return null;
@@ -172,6 +173,11 @@ function pswdo_tamper_analysis_json(string $findingsJson, string $supplementJson
     }
     $signature = is_array($fileFacts['pdf_signature'] ?? null) ? $fileFacts['pdf_signature'] : [];
     if (in_array(($signature['state'] ?? ''), ['unsigned', 'unavailable', 'invalid_structure', 'invalid_signature', 'intact', 'changed_after_signing'], true)) $base['auxiliary']['file']['pdf_signature'] = ['state' => (string) $signature['state']];
+    $provenance = is_array($fileFacts['ai_provenance'] ?? null) ? $fileFacts['ai_provenance'] : [];
+    if (in_array(($provenance['state'] ?? ''), ['generated', 'edited'], true)) {
+        $base['auxiliary']['file']['ai_provenance'] = ['state' => (string) $provenance['state'], 'tool' => substr((string) ($provenance['tool'] ?? 'a generative AI tool'), 0, 60)];
+    }
+    if (($fileFacts['design_app'] ?? null) === true) $base['auxiliary']['file']['design_app'] = true;
     foreach (array_slice((array) ($auxiliary['qr'] ?? []), 0, 12) as $qr) {
         if (!is_array($qr)) continue;
         $preview = substr((string) ($qr['content_preview'] ?? ''), 0, 160);
@@ -191,6 +197,7 @@ function pswdo_tamper_analysis_json(string $findingsJson, string $supplementJson
                 : 'Independent checks found possible document changes that require staff inspection.')
             : 'No corroborated alteration signal was found.';
         if ($decision === 'review' && $reviewBasis === 'cryptographic_signature_problem') $base['message'] = 'The PDF signature did not verify or a later revision needs staff inspection.';
+    if ($decision === 'review' && $reviewBasis === 'generative_ai_provenance') $base['message'] = 'The file says it was made or edited with a generative AI tool, so it is not a direct photo or scan.';
         return $base;
     }
     $number = static function ($value): ?float { return is_numeric($value) && is_finite((float) $value) && (float) $value >= 0 ? (float) $value : null; };
@@ -211,6 +218,7 @@ function pswdo_tamper_analysis_json(string $findingsJson, string $supplementJson
             : 'Independent checks found possible document changes that require staff inspection.')
         : 'Image analysis completed. Measurements support staff review only.';
     if ($decision === 'review' && $reviewBasis === 'cryptographic_signature_problem') $base['message'] = 'The PDF signature did not verify or a later revision needs staff inspection.';
+    if ($decision === 'review' && $reviewBasis === 'generative_ai_provenance') $base['message'] = 'The file says it was made or edited with a generative AI tool, so it is not a direct photo or scan.';
     return $base;
 }
 
@@ -2263,7 +2271,6 @@ function pswdo_mark_request_in_progress_action(mysqli $connection, int $requestI
     }
 
     $referenceNo = trim((string) ($row['reference_no'] ?? ''));
-    $beneficiaryName = trim((string) ($row['beneficiary_complete_name'] ?? ''));
     $statusCode = pswdo_normalize_status_code((string) ($row['request_status'] ?? 'pending'));
     if (in_array($statusCode, ['released', 'not_approved', 'cancelled'], true)) {
         throw new RuntimeException('This request is already final and cannot be moved to in-progress.');
@@ -2280,12 +2287,6 @@ function pswdo_mark_request_in_progress_action(mysqli $connection, int $requestI
     $isReady = (bool) ($prescreen['is_ready'] ?? false);
     $requiredTotal = (int) ($prescreen['required_total'] ?? 0);
     $uploadedTotal = (int) ($prescreen['uploaded_total'] ?? 0);
-    $staffReviewedTotal = (int) ($prescreen['staff_reviewed_total'] ?? 0);
-    $allStaffReviewed = (bool) ($prescreen['all_staff_reviewed'] ?? false);
-
-    if (!$allStaffReviewed) {
-        throw new RuntimeException('Review all required documents before approving this application.');
-    }
 
     $targetStatus = $isReady ? 'approved' : 'incomplete_requirements';
     $historyRemarks = $isReady
@@ -2328,8 +2329,8 @@ function pswdo_mark_request_in_progress_action(mysqli $connection, int $requestI
             : 'Your application is approved and now queued for screening.';
         $notificationStage = 'Approved for Screening';
 
-        $formalSmsMessage = pswdo_default_sms_message('for_screening', $referenceNo, $beneficiaryName);
         try {
+            $formalSmsMessage = pswdo_default_sms_message('for_screening', $referenceNo, pswdo_request_identity($connection, $requestId)['name'], pswdo_uploaded_requirements($connection, $requestId));
             pswdo_send_sms_to_applicant_action($connection, $requestId, 'for_screening', $formalSmsMessage, $accountId, false);
             $screeningSmsSent = true;
         } catch (Throwable) {
@@ -2373,6 +2374,7 @@ function pswdo_mark_request_in_progress_action(mysqli $connection, int $requestI
 
     return [
         'reference_no' => $referenceNo,
+        'applicant_name' => pswdo_request_identity($connection, $requestId)['name'],
         'status_code' => $targetStatus,
         'status_label' => pswdo_status_labels()[$targetStatus] ?? ($isReady ? 'Approved' : 'Incomplete Requirements'),
         'is_ready_for_prescreening' => $isReady,
@@ -2381,6 +2383,61 @@ function pswdo_mark_request_in_progress_action(mysqli $connection, int $requestI
         'required_total' => $requiredTotal,
         'uploaded_total' => $uploadedTotal,
     ];
+}
+
+/**
+ * The applicant's name (the beneficiary's when missing) and reference, for staff-facing results.
+ *
+ * @return array{name: string, reference: string}
+ */
+function pswdo_request_identity(mysqli $connection, int $requestId): array
+{
+    $lookup = $connection->prepare('SELECT reference_no, beneficiary_complete_name, applicant_first_name, applicant_last_name FROM aics_requests WHERE id = ? LIMIT 1');
+    $lookup->bind_param('i', $requestId);
+    $lookup->execute();
+    $row = $lookup->get_result()?->fetch_assoc() ?? [];
+    $lookup->close();
+
+    $name = trim(trim((string) ($row['applicant_first_name'] ?? '')) . ' ' . trim((string) ($row['applicant_last_name'] ?? '')));
+    if ($name === '') $name = trim((string) ($row['beneficiary_complete_name'] ?? ''));
+    return [
+        'name' => $name !== '' ? $name : 'Applicant',
+        'reference' => trim((string) ($row['reference_no'] ?? '')),
+    ];
+}
+
+/**
+ * Approves each selected request like a single approval (status, screening
+ * queue, applicant SMS) and sorts the results for the feedback card.
+ *
+ * @param array<int, mixed> $rawIds
+ * @return array{approved: list<array{name: string, reference: string, sms_sent: bool}>, incomplete: list<array{name: string, reference: string, sms_sent: bool}>, failed: list<array{name: string, reference: string, reason: string}>}
+ */
+function pswdo_bulk_approve_requests_action(mysqli $connection, array $rawIds, int $accountId): array
+{
+    $requestIds = array_values(array_unique(array_filter(array_map('intval', $rawIds), static fn (int $id): bool => $id > 0)));
+    if ($requestIds === []) {
+        throw new RuntimeException('Select at least one request to approve.');
+    }
+
+    $outcome = ['approved' => [], 'incomplete' => [], 'failed' => []];
+    foreach (array_slice($requestIds, 0, 100) as $requestId) {
+        try {
+            if (!aics_ai_gate_is_released($connection, $requestId)) {
+                throw new RuntimeException('This request is still being checked by AICS AI.');
+            }
+            $result = pswdo_mark_request_in_progress_action($connection, $requestId, $accountId);
+            $outcome[$result['is_ready_for_prescreening'] ? 'approved' : 'incomplete'][] = [
+                'name' => (string) $result['applicant_name'],
+                'reference' => (string) $result['reference_no'],
+                'sms_sent' => (bool) $result['screening_sms_sent'],
+            ];
+        } catch (Throwable $exception) {
+            $outcome['failed'][] = pswdo_request_identity($connection, $requestId) + ['reason' => $exception->getMessage()];
+        }
+    }
+
+    return $outcome;
 }
 
 function pswdo_save_prescreening_decision_action(
@@ -2844,10 +2901,6 @@ function pswdo_mark_request_invalid_action(
 
     $cleanRejectionReason = trim($rejectionReason);
     if ($isExplicitRejection) {
-        $prescreen = pswdo_evaluate_prescreening_readiness($connection, $requestId);
-        if (!(bool) ($prescreen['all_staff_reviewed'] ?? false)) {
-            throw new RuntimeException('Review all required documents before rejecting this application.');
-        }
         if ($cleanRejectionReason === '') {
             throw new RuntimeException('Please provide a reason for rejecting this application.');
         }
@@ -2929,8 +2982,8 @@ function pswdo_send_sms_to_applicant_action(
     ?string $recipientOverride = null
 ): array {
     $lookup = $connection->prepare(
-        'SELECT r.reference_no, r.beneficiary_complete_name, r.applicant_contact_number,
-                ap.contact_number AS profile_contact_number, r.request_status
+        'SELECT r.reference_no, r.beneficiary_complete_name, r.applicant_first_name, r.applicant_last_name,
+                r.applicant_contact_number, ap.contact_number AS profile_contact_number, r.request_status
          FROM aics_requests r
          LEFT JOIN aics_account_requests ar ON ar.request_id = r.id
          LEFT JOIN aics_applicant_profiles ap ON ap.account_id = ar.account_id
@@ -2946,7 +2999,7 @@ function pswdo_send_sms_to_applicant_action(
     }
 
     $referenceNo = trim((string) ($row['reference_no'] ?? ''));
-    $beneficiaryName = trim((string) ($row['beneficiary_complete_name'] ?? 'Applicant'));
+    $recipientName = pswdo_sms_recipient_name($row);
     $rawContact = pswdo_applicant_sms_contact($row);
     if ($rawContact === '') {
         throw new RuntimeException('Applicant contact number is missing.');
@@ -2965,11 +3018,13 @@ function pswdo_send_sms_to_applicant_action(
 
     $finalMessage = trim($messageText);
     if ($finalMessage === '') {
-        $finalMessage = pswdo_default_sms_message($decision, $referenceNo, $beneficiaryName);
+        $finalMessage = pswdo_default_sms_message($decision, $referenceNo, $recipientName);
     }
+    $finalMessage = pswdo_sms_with_greeting($finalMessage);
 
     $providerResult = pswdo_send_sms_via_philsms($recipient, $finalMessage);
     $stage = match ($decision) {
+        'screening_passed' => 'Screening Complete SMS',
         'incomplete_requirements' => 'Incomplete Requirements SMS',
         'invalid_requirements' => 'Invalid Requirements SMS',
         'rejection_notice' => 'Rejection Notice SMS',
@@ -2990,50 +3045,36 @@ function pswdo_send_sms_to_applicant_action(
 }
 
 /**
- * "Amount: PHP 5,000.00" plus a line break, or "" when no amount is set yet.
- *
- * @param array<string, mixed> $item
- */
-function pswdo_release_amount_sms_line(array $item): string
-{
-    $amount = (float) ($item['amount_given'] ?? 0);
-    return $amount > 0 ? 'Amount: PHP ' . number_format($amount, 2) . "\n" : '';
-}
-
-/**
  * @param array<string, mixed> $item
  */
 function pswdo_build_release_schedule_sms_message(array $item): string
 {
-    $beneficiary = trim((string) ($item['beneficiary_name'] ?? ''));
-    if ($beneficiary === '') {
-        $beneficiary = 'Applicant';
-    }
+    $applicant = pswdo_sms_recipient_name($item);
 
     $referenceNo = trim((string) ($item['reference_no'] ?? ''));
-    $referenceLabel = $referenceNo !== '' ? $referenceNo : 'your application';
+    $referenceLabel = $referenceNo !== '' ? $referenceNo : 'hindi available';
     $scheduleDate = trim((string) ($item['scheduled_date_label'] ?? ''));
     if ($scheduleDate === '') {
-        $scheduleDate = 'the scheduled date';
+        $scheduleDate = 'itinakdang petsa';
     }
     $scheduleTime = trim((string) ($item['scheduled_time_label'] ?? ''));
     if ($scheduleTime === '') {
-        $scheduleTime = 'the scheduled time';
+        $scheduleTime = 'itinakdang oras';
     }
     $venue = trim((string) ($item['venue'] ?? ''));
     if ($venue === '') {
         $venue = 'PSWDO Office';
     }
 
-    return 'Good day, ' . $beneficiary . ".\n"
-        . "This is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\n"
-        . 'Your application, ' . $referenceLabel . ", is scheduled for assistance release on:\n"
-        . 'Date: ' . $scheduleDate . "\n"
-        . 'Time: ' . $scheduleTime . "\n"
-        . 'Venue: ' . $venue . "\n"
-        . pswdo_release_amount_sms_line($item)
-        . "Please arrive on time and bring your valid ID and required documents.\n"
-        . 'Thank you.';
+    return '{greeting}, ' . $applicant . ".\n"
+        . "Ito po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\n"
+        . "Naka-schedule na po ang pagkuha ng tulong para sa inyong AICS application.\n"
+        . 'Reference No.: ' . $referenceLabel . "\n"
+        . 'Petsa: ' . $scheduleDate . "\n"
+        . 'Oras: ' . $scheduleTime . "\n"
+        . 'Lugar: ' . $venue . "\n"
+        . "Pakidating po sa takdang oras at dalhin ang inyong valid ID at mga requirements.\n"
+        . 'Maraming salamat po.';
 }
 
 /**
@@ -3045,20 +3086,21 @@ function pswdo_apply_release_schedule_sms_tokens(string $template, array $item):
     if ($beneficiary === '') {
         $beneficiary = 'Applicant';
     }
+    $applicant = pswdo_sms_recipient_name($item);
 
     $referenceNo = trim((string) ($item['reference_no'] ?? ''));
     if ($referenceNo === '') {
-        $referenceNo = 'your application';
+        $referenceNo = 'hindi available';
     }
 
     $scheduleDate = trim((string) ($item['scheduled_date_label'] ?? ''));
     if ($scheduleDate === '') {
-        $scheduleDate = 'the scheduled date';
+        $scheduleDate = 'itinakdang petsa';
     }
 
     $scheduleTime = trim((string) ($item['scheduled_time_label'] ?? ''));
     if ($scheduleTime === '') {
-        $scheduleTime = 'the scheduled time';
+        $scheduleTime = 'itinakdang oras';
     }
 
     $venue = trim((string) ($item['venue'] ?? ''));
@@ -3067,8 +3109,9 @@ function pswdo_apply_release_schedule_sms_tokens(string $template, array $item):
     }
 
     return str_replace(
-        ['{beneficiary}', '{reference}', '{schedule_date}', '{schedule_time}', '{venue}', '{amount_line}'],
-        [$beneficiary, $referenceNo, $scheduleDate, $scheduleTime, $venue, pswdo_release_amount_sms_line($item)],
+        // {amount_line} is blanked for messages typed before the amount left the SMS.
+        ['{applicant}', '{beneficiary}', '{reference}', '{schedule_date}', '{schedule_time}', '{venue}', '{amount_line}'],
+        [$applicant, $beneficiary, $referenceNo, $scheduleDate, $scheduleTime, $venue, ''],
         $template
     );
 }
@@ -3165,14 +3208,15 @@ function pswdo_send_mass_release_schedule_sms_action(
                 $updateStmt->close();
             }
             $item['scheduled_time'] = $newTime;
+            $item['scheduled_time_label'] = pswdo_release_time_label($newTime);
             $item['release_batch'] = $newBatch;
         }
 
         $mswdoItems[] = $item;
 
-        $message = trim($messageTemplate) !== ''
+        $message = pswdo_sms_with_greeting(trim($messageTemplate) !== ''
             ? pswdo_apply_release_schedule_sms_tokens($messageTemplate, $item)
-            : pswdo_build_release_schedule_sms_message($item);
+            : pswdo_build_release_schedule_sms_message($item));
         try {
             pswdo_send_sms_via_philsms($recipient, $message);
             pswdo_save_sms_delivery_audit($connection, $requestId, 'Release Schedule SMS', $message, $accountId, 'sent');
@@ -3211,10 +3255,29 @@ function pswdo_apply_prescreening_sms_tokens(string $template, array $item): str
     $referenceNo = trim((string) ($item['reference_no'] ?? ''));
 
     return str_replace(
-        ['{beneficiary}', '{reference}'],
-        [$beneficiary !== '' ? $beneficiary : 'Applicant', $referenceNo !== '' ? $referenceNo : 'reference unavailable'],
+        ['{applicant}', '{beneficiary}', '{reference}'],
+        [pswdo_sms_recipient_name($item), $beneficiary !== '' ? $beneficiary : 'Applicant', $referenceNo !== '' ? $referenceNo : 'hindi available'],
         $template
     );
+}
+
+/**
+ * The name an applicant SMS is addressed to. It goes to the applicant's
+ * phone, so it is the applicant's name; the beneficiary's only when no
+ * applicant name was recorded.
+ *
+ * @param array<string, mixed> $row a request row or queue item
+ */
+function pswdo_sms_recipient_name(array $row): string
+{
+    $name = trim((string) ($row['applicant_name'] ?? ''));
+    if ($name === '' || $name === 'Applicant') {
+        $name = trim(trim((string) ($row['applicant_first_name'] ?? '')) . ' ' . trim((string) ($row['applicant_last_name'] ?? '')));
+    }
+    if ($name === '') {
+        $name = trim((string) ($row['beneficiary_name'] ?? $row['beneficiary_complete_name'] ?? ''));
+    }
+    return $name !== '' ? $name : 'Applicant';
 }
 
 /**
@@ -3263,11 +3326,10 @@ function pswdo_send_mass_prescreening_sms_action(
             continue;
         }
 
-        $beneficiary = trim((string) ($item['beneficiary_name'] ?? ''));
         $referenceNo = trim((string) ($item['reference_no'] ?? ''));
         $message = trim($messageTemplate);
         if ($message === '') {
-            $message = pswdo_default_sms_message('for_screening', $referenceNo, $beneficiary);
+            $message = pswdo_default_sms_message('for_screening', $referenceNo, pswdo_sms_recipient_name($item));
         }
 
         $message = pswdo_apply_prescreening_sms_tokens($message, $item);
@@ -3290,7 +3352,9 @@ function pswdo_send_mass_prescreening_sms_action(
 function pswdo_detect_sms_decision_status(mysqli $connection, int $requestId, string $fallbackDecision): string
 {
     $fallback = pswdo_normalize_sms_decision_status($fallbackDecision);
-    if ($requestId <= 0) {
+    // Sent the moment PSWDO finishes pre-screening or rejects, so the stored
+    // queue state does not tell which notice this is.
+    if ($requestId <= 0 || in_array($fallback, ['screening_passed', 'rejection_notice'], true)) {
         return $fallback;
     }
 
@@ -3341,41 +3405,147 @@ function pswdo_detect_sms_decision_status(mysqli $connection, int $requestId, st
     };
 }
 
-function pswdo_default_sms_message(string $decisionStatus, string $referenceNo, string $beneficiaryName): string
+/**
+ * @param array<string, mixed> $requirements documents to bring to the office, from pswdo_uploaded_requirements() (approval notice only)
+ */
+function pswdo_default_sms_message(string $decisionStatus, string $referenceNo, string $applicantName, array $requirements = []): string
 {
-    $referenceLabel = $referenceNo !== '' ? (' ' . $referenceNo) : '';
-    $beneficiaryLabel = trim($beneficiaryName) !== '' ? trim($beneficiaryName) : 'Applicant';
+    $applicantLabel = trim($applicantName) !== '' ? trim($applicantName) : 'Applicant';
+    // {greeting} becomes "Magandang umaga po" etc. when the SMS is sent.
+    $opening = '{greeting}, ' . $applicantLabel . ".\n"
+        . "Ito po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\n";
+    $reference = 'Reference No.: ' . ($referenceNo !== '' ? $referenceNo : 'hindi available') . "\n";
+    $closing = 'Maraming salamat po.';
 
-    if ($decisionStatus === 'incomplete_requirements') {
-        return 'Good day ' . $beneficiaryLabel . '. Your AICS application' . $referenceLabel
-            . ' has incomplete requirements. Please submit the missing documents so PSWDO can continue your screening.';
-    }
-    if ($decisionStatus === 'invalid_requirements') {
-        return 'Good day ' . $beneficiaryLabel . '. Your AICS application' . $referenceLabel
-            . ' was marked as not approved due to invalid requirements. Please coordinate with PSWDO for guidance.';
-    }
-    if ($decisionStatus === 'release_schedule') {
-        return 'Good day ' . $beneficiaryLabel . '. Your AICS application' . $referenceLabel
-            . ' is scheduled for assistance release on the assigned date and time in PSWDO Office. Please arrive on time and bring your valid requirements.';
-    }
-    if ($decisionStatus === 'ready_for_release') {
-        return 'Good day ' . $beneficiaryLabel . '. Your AICS application' . $referenceLabel
-            . ' is ready for release. Please follow the schedule and venue instructions from PSWDO.';
-    }
-    if ($decisionStatus === 'missed_release') {
-        return 'Good day ' . $beneficiaryLabel . '. Our records show that the release schedule for your AICS application' . $referenceLabel
-            . ' was missed. Please wait for the rescheduling advice from PSWDO.';
-    }
+    $body = match ($decisionStatus) {
+        // Same text as the Screening Queue Mass Notice default.
+        'screening_passed' => "Tapos na po at pumasa na sa further screening ang inyong AICS application.\n" . $reference
+            . "Hintayin na lamang po ang aming text para sa petsa, oras at lugar ng pagkuha ng inyong tulong.\n",
+        'incomplete_requirements' => "Kulang pa po ang requirements ng inyong AICS application.\n" . $reference
+            . "Pakisumite po ang mga kulang na dokumento upang maipagpatuloy namin ang inyong screening.\n",
+        'invalid_requirements' => "Ikinalulungkot po naming ipaalam na hindi naaprubahan ang inyong AICS application dahil sa hindi wastong requirements.\n" . $reference
+            . "Makipag-ugnayan po sa PSWDO Office para sa gabay.\n",
+        'release_schedule' => "Naka-schedule na po ang pagkuha ng tulong para sa inyong AICS application.\n" . $reference
+            . "Pumunta po sa PSWDO Office sa itinakdang petsa at oras, at dalhin ang inyong valid ID at mga requirements.\n",
+        'ready_for_release' => "Handa na po ang tulong para sa inyong AICS application.\n" . $reference
+            . "Sundin po ang schedule at lugar na ibinigay ng PSWDO.\n",
+        'missed_release' => "Ayon po sa aming tala, hindi ninyo nadaluhan ang schedule ng pagkuha ng tulong para sa inyong AICS application.\n" . $reference
+            . "Hintayin po ang abiso ng PSWDO para sa bagong schedule.\n",
+        default => "Aprubado na po ang inyong AICS application.\n" . $reference
+            . "Maaari na po kayong pumunta sa PSWDO Office sa anumang araw ng opisina:\n"
+            . "Lunes hanggang Huwebes, 8:00 AM - 11:00 AM at 1:00 PM - 4:00 PM.\n"
+            . pswdo_requirements_sms_text($requirements),
+    };
 
-    $screeningReferenceLabel = $referenceNo !== '' ? $referenceNo : 'reference unavailable';
-    return 'Good day, ' . $beneficiaryLabel . ".\n"
-        . "This is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\n"
-        . 'Your AICS application, ' . $screeningReferenceLabel . ", has been approved for further screening.\n"
-        . "Please proceed to:\n"
-        . "Office: PSWDO Office\n"
-        . "Purpose: Further Screening\n"
-        . "Please bring your valid ID and required documents.\n"
-        . 'Thank you.';
+    return $opening . $body . $closing;
+}
+
+/**
+ * The SMS an applicant gets when PSWDO rejects their application, with the
+ * reason PSWDO typed. Same text as the "Rejection Notice (Default)" template.
+ */
+function pswdo_rejection_sms_message(string $referenceNo, string $applicantName, string $reason): string
+{
+    $reason = trim($reason);
+    if ($reason !== '' && !preg_match('/[.!?]$/u', $reason)) $reason .= '.';
+    return '{greeting}, ' . (trim($applicantName) !== '' ? trim($applicantName) : 'Applicant') . ".\n"
+        . "Ito po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\n"
+        . "Ikinalulungkot po naming ipaalam na hindi naaprubahan ang inyong AICS application.\n"
+        . 'Reference No.: ' . ($referenceNo !== '' ? $referenceNo : 'hindi available') . "\n"
+        . 'Dahilan: ' . ($reason !== '' ? $reason : 'Makipag-ugnayan po sa PSWDO para sa detalye.') . "\n"
+        . "Para sa paglilinaw o karagdagang tulong, maaari po kayong pumunta sa PSWDO Office, Lunes hanggang Huwebes, 8:00 AM - 11:00 AM at 1:00 PM - 4:00 PM.\n"
+        . 'Maraming salamat po.';
+}
+
+/**
+ * "Magandang umaga po", "tanghali", "hapon" or "gabi" for the hour an SMS is
+ * sent, in Philippine time.
+ */
+function pswdo_sms_greeting(?DateTimeImmutable $now = null): string
+{
+    $hour = (int) ($now ?? new DateTimeImmutable('now', new DateTimeZone('Asia/Manila')))->format('G');
+    return match (true) {
+        $hour >= 5 && $hour < 12 => 'Magandang umaga po',
+        $hour === 12 => 'Magandang tanghali po',
+        $hour >= 13 && $hour < 18 => 'Magandang hapon po',
+        default => 'Magandang gabi po',
+    };
+}
+
+/** Puts the greeting for the send time into an SMS's {greeting} placeholder. */
+function pswdo_sms_with_greeting(string $message, ?DateTimeImmutable $now = null): string
+{
+    return str_replace('{greeting}', pswdo_sms_greeting($now), $message);
+}
+
+/**
+ * Names of the uploaded documents, each once, split by whose document it is:
+ * the valid ID is the applicant's own (its back belongs to it), every other
+ * requirement is the beneficiary's (as on the Apply form).
+ *
+ * @param array<int, string> $documentCodes
+ * @return array{applicant: list<string>, beneficiary: list<string>}
+ */
+function pswdo_requirement_owners_from_codes(array $documentCodes): array
+{
+    $owners = ['applicant' => [], 'beneficiary' => []];
+    foreach ($documentCodes as $code) {
+        $code = aics_normalize_document_type((string) $code);
+        if ($code === '' || $code === 'valid_id_back') continue;
+        $owners[$code === 'valid_id' ? 'applicant' : 'beneficiary'][$code] = pswdo_document_label($code);
+    }
+    return ['applicant' => array_values($owners['applicant']), 'beneficiary' => array_values($owners['beneficiary'])];
+}
+
+/**
+ * The requirements to bring for the approval SMS.
+ *
+ * @return array{applicant: list<string>, beneficiary: list<string>, beneficiary_name: string, same_person: bool}
+ */
+function pswdo_uploaded_requirements(mysqli $connection, int $requestId): array
+{
+    $statement = $connection->prepare('SELECT document_type FROM aics_request_documents WHERE request_id = ? ORDER BY uploaded_at ASC, id ASC');
+    $statement->bind_param('i', $requestId);
+    $statement->execute();
+    $codes = array_column($statement->get_result()?->fetch_all(MYSQLI_ASSOC) ?? [], 'document_type');
+    $statement->close();
+
+    $lookup = $connection->prepare('SELECT beneficiary_complete_name, applicant_relationship FROM aics_requests WHERE id = ? LIMIT 1');
+    $lookup->bind_param('i', $requestId);
+    $lookup->execute();
+    $row = $lookup->get_result()?->fetch_assoc() ?? [];
+    $lookup->close();
+
+    $beneficiaryName = trim((string) ($row['beneficiary_complete_name'] ?? ''));
+    $applicantName = pswdo_request_identity($connection, $requestId)['name'];
+    return pswdo_requirement_owners_from_codes(array_map('strval', $codes)) + [
+        'beneficiary_name' => $beneficiaryName,
+        'same_person' => strcasecmp(trim((string) ($row['applicant_relationship'] ?? '')), 'Self') === 0
+            || ($beneficiaryName !== '' && strcasecmp($beneficiaryName, $applicantName) === 0),
+    ];
+}
+
+/**
+ * "Pakidala po..." lines of the approval SMS. Each document is listed under
+ * the person it belongs to, so the applicant knows whose papers to bring.
+ *
+ * @param array{applicant?: list<string>, beneficiary?: list<string>, beneficiary_name?: string, same_person?: bool} $requirements
+ */
+function pswdo_requirements_sms_text(array $requirements): string
+{
+    $applicantDocs = (array) ($requirements['applicant'] ?? []);
+    $beneficiaryDocs = (array) ($requirements['beneficiary'] ?? []);
+    if ($applicantDocs === [] && $beneficiaryDocs === []) {
+        return "Pakidala po ang inyong valid ID at ang orihinal na kopya ng inyong mga requirements.\n";
+    }
+    $list = static fn (array $labels): string => '- ' . implode("\n- ", $labels) . "\n";
+    if (!empty($requirements['same_person'])) {
+        return "Pakidala po ang orihinal na kopya ng inyong mga requirements:\n" . $list([...$applicantDocs, ...$beneficiaryDocs]);
+    }
+    $beneficiaryName = trim((string) ($requirements['beneficiary_name'] ?? ''));
+    return "Pakidala po ang orihinal na kopya ng mga requirements:\n"
+        . ($applicantDocs !== [] ? "Para sa inyo (applicant):\n" . $list($applicantDocs) : '')
+        . ($beneficiaryDocs !== [] ? 'Para sa beneficiary' . ($beneficiaryName !== '' ? ' (' . $beneficiaryName . ')' : '') . ":\n" . $list($beneficiaryDocs) : '');
 }
 
 function pswdo_normalize_sms_decision_status(string $status): string
@@ -3387,6 +3557,8 @@ function pswdo_normalize_sms_decision_status(string $status): string
         'release_schedule', 'release schedule', 'scheduled', 'rescheduled' => 'release_schedule',
         'ready_for_release', 'ready for release' => 'ready_for_release',
         'missed_release', 'missed release', 'missed' => 'missed_release',
+        'screening_passed' => 'screening_passed',
+        'rejection_notice' => 'rejection_notice',
         default => 'for_screening',
     };
 }
@@ -4236,6 +4408,65 @@ function pswdo_approve_for_release_action(mysqli $connection, int $requestId, in
 }
 
 /**
+ * Pre-screening passed: the request moves to Release Scheduling and the
+ * applicant gets an SMS to wait for the schedule text.
+ *
+ * @return array{name: string, reference: string, sms_sent: bool}
+ */
+function pswdo_finish_prescreening_action(mysqli $connection, int $requestId, int $accountId): array
+{
+    pswdo_approve_for_release_action($connection, $requestId, $accountId);
+    $smsSent = false;
+    try {
+        pswdo_send_sms_to_applicant_action($connection, $requestId, 'screening_passed', '', $accountId);
+        $smsSent = true;
+    } catch (Throwable $exception) {
+        error_log('AICS pre-screening SMS failed request_id=' . $requestId . ' error=' . $exception->getMessage());
+    }
+    $identity = pswdo_request_identity($connection, $requestId);
+    try {
+        pswdo_save_notification_action(
+            $connection,
+            $requestId,
+            'Further Screening Passed',
+            'Your application ' . $identity['reference'] . ' passed further screening. Please wait for an SMS with your release schedule.',
+            $accountId
+        );
+    } catch (Throwable $exception) {
+        error_log('AICS pre-screening notification failed request_id=' . $requestId . ' error=' . $exception->getMessage());
+    }
+    return $identity + ['sms_sent' => $smsSent];
+}
+
+/**
+ * Finishes pre-screening for each selected request, like the mass notice:
+ * one SMS per applicant, and a count of what happened.
+ *
+ * @param array<int, mixed> $rawIds
+ * @return array{moved: int, sms_sent: int, failed: list<array{name: string, reference: string, reason: string}>}
+ */
+function pswdo_bulk_finish_prescreening_action(mysqli $connection, array $rawIds, int $accountId): array
+{
+    $requestIds = array_values(array_unique(array_filter(array_map('intval', $rawIds), static fn (int $id): bool => $id > 0)));
+    if ($requestIds === []) {
+        throw new RuntimeException('Select at least one applicant to approve for scheduling.');
+    }
+
+    $outcome = ['moved' => 0, 'sms_sent' => 0, 'failed' => []];
+    foreach (array_slice($requestIds, 0, 100) as $requestId) {
+        try {
+            $result = pswdo_finish_prescreening_action($connection, $requestId, $accountId);
+            $outcome['moved']++;
+            if ($result['sms_sent']) $outcome['sms_sent']++;
+        } catch (Throwable $exception) {
+            $outcome['failed'][] = pswdo_request_identity($connection, $requestId) + ['reason' => $exception->getMessage()];
+        }
+    }
+
+    return $outcome;
+}
+
+/**
  * @return array<int, array<string, mixed>>
  */
 function pswdo_fetch_release_schedule_queue(
@@ -4660,7 +4891,9 @@ function pswdo_save_release_schedule_action(
     if (trim($venue) === '') {
         throw new RuntimeException('Release venue is required.');
     }
-    pswdo_validate_release_amount($amountGiven);
+    // The amount is entered at Complete Release; one saved earlier is kept.
+    if ($amountGiven > 0) pswdo_validate_release_amount($amountGiven);
+    $amountValue = $amountGiven > 0 ? $amountGiven : null;
 
     $lookup = $connection->prepare(
         'SELECT r.reference_no, r.request_status, rs.scheduled_date, rs.scheduled_time, rs.venue FROM aics_requests r LEFT JOIN aics_request_release_schedule rs ON rs.request_id = r.id WHERE r.id = ? LIMIT 1'
@@ -4725,7 +4958,7 @@ function pswdo_save_release_schedule_action(
             scheduled_time = VALUES(scheduled_time),
             venue = VALUES(venue),
             release_batch = VALUES(release_batch),
-            amount_given = VALUES(amount_given),
+            amount_given = COALESCE(VALUES(amount_given), amount_given),
             release_status = VALUES(release_status),
             notes = VALUES(notes),
             updated_by_account_id = VALUES(updated_by_account_id)
@@ -4738,7 +4971,7 @@ function pswdo_save_release_schedule_action(
         $scheduledTimeSql,
         $venueValue,
         $batchValue,
-        $amountGiven,
+        $amountValue,
         $releaseStatus,
         $notesValue,
         $accountId,

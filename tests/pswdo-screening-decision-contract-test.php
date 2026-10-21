@@ -21,14 +21,14 @@ screening_contract_assert(is_string($script), 'PSWDO page script could not be re
 screening_contract_assert(str_contains($library, "'all_staff_reviewed' => \$allStaffReviewed"), 'Required-document staff-review completion is not exposed by the authoritative evaluator.');
 screening_contract_assert(str_contains($library, "'all_approved' => \$allApproved"), 'Required-document approval completion is not exposed by the authoritative evaluator.');
 screening_contract_assert(str_contains($library, "['checked', 'needs_reupload', 'invalid']"), 'Staff review does not recognize existing non-approved review outcomes.');
-screening_contract_assert(str_contains($library, 'Review all required documents before approving this application.'), 'Approve is not blocked for incomplete staff review.');
+screening_contract_assert(!str_contains($library, 'Review all required documents before approving this application.'), 'Approve still waits for every document to be checked.');
 screening_contract_assert(!str_contains($library, 'Resolve the required document issues before approving this application.'), 'Final approval still requires an artificial per-document approval state.');
-screening_contract_assert(str_contains($library, 'Review all required documents before rejecting this application.'), 'Reject is not blocked for incomplete staff review.');
+screening_contract_assert(!str_contains($library, 'Review all required documents before rejecting this application.'), 'Reject still waits for every document to be checked.');
 screening_contract_assert(str_contains($library, 'Please provide a reason for rejecting this application.'), 'Reject reason is not enforced by the server.');
 screening_contract_assert(str_contains($library, "['approved', 'released', 'not_approved', 'cancelled']"), 'Terminal status guard does not include approved requests.');
 screening_contract_assert(str_contains($workflow, "\$result = pswdo_mark_request_invalid_action"), 'Reject workflow does not use the server-side decision gate.');
 screening_contract_assert(str_contains($page, 'Approve Application?') && str_contains($page, '></i> Approve'), 'Final approval action was not renamed to Approve.');
 screening_contract_assert(str_contains($page, 'textarea id="reject-reason-text"') && str_contains($page, 'aria-required="true"'), 'Reject reason field is not required and accessible.');
-screening_contract_assert(str_contains($script, 'data-staff-review-incomplete') && str_contains($script, 'Please provide a reason for rejecting this application.'), 'Client prechecks are missing the screening decision gates.');
+screening_contract_assert(!str_contains($script, 'data-staff-review-incomplete') && str_contains($script, 'Please provide a reason for rejecting this application.'), 'Client prechecks still wait for every document to be checked, or lost the reject reason check.');
 
 echo "PSWDO screening decision contract test passed.\n";

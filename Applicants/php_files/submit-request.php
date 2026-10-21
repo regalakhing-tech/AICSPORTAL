@@ -804,7 +804,7 @@ if ($editRequestId > 0) {
                     </div>
                     <div class="field">
                       <label>Age <span class="required-star">*</span></label>
-                      <input type="number" name="applicant_age" id="applicant-age" min="0" max="120" placeholder="e.g. 42" inputmode="numeric" class="numeric-only" required readonly>
+                      <input type="number" name="applicant_age" id="applicant-age" min="0" max="120" placeholder="e.g. 42" inputmode="numeric" class="numeric-only readonly-field" required readonly>
                       <p id="applicant-age-warning" role="alert" style="display:none;margin:6px 0 0;font-size:12.5px;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px;line-height:1.45;">
                         <i class="fas fa-triangle-exclamation"></i>
                         Applicant should be of legal age (18 and above).
@@ -836,7 +836,7 @@ if ($editRequestId > 0) {
                     </div>
                     <div class="field">
                       <label>Applicant Contact Number <span class="required-star">*</span></label>
-                      <input type="tel" name="applicant_contact_number" id="applicant-contact-number" placeholder="09XXXXXXXXX" maxlength="11" inputmode="numeric" class="numeric-only" readonly class="readonly-field">
+                      <input type="tel" name="applicant_contact_number" id="applicant-contact-number" placeholder="09XXXXXXXXX" maxlength="11" inputmode="numeric" class="numeric-only readonly-field" readonly>
                     </div>
                     <div class="field">
                       <label>Applicant Email <span class="field-optional-badge">Optional</span></label>
@@ -895,7 +895,7 @@ if ($editRequestId > 0) {
 
                   <div class="field-group">
                     <label class="group-label">Beneficiary Category</label>
-                    <div class="choice-grid" role="radiogroup" aria-label="Beneficiary Category">
+                    <div class="choice-grid choice-grid-category" role="radiogroup" aria-label="Beneficiary Category">
                       <label class="choice-card">
                         <input type="radio" name="client_category" value="youth" required>
                         <span><i class="fas fa-child-reaching"></i> Youth</span>

@@ -17,10 +17,7 @@ ai_details_assert(is_string($page) && str_contains($page, 'View marked areas') &
 ai_details_assert(is_string($page) && str_contains($page, 'ai-document-verification-heading') && str_contains($page, 'ai-document-verification-header') && !str_contains($page, 'ai-alteration-section'), 'Unified AI presentation is missing, or the old alteration section is back.');
 $script = file_get_contents(__DIR__ . '/../Pswdo/js files/pswdo-pages.js');
 ai_details_assert(is_string($script) && str_contains($script, 'findings?.tamper_detection') && str_contains($script, 'Document Alteration Review'), 'Dynamic details modal does not use the canonical alteration result.');
-ai_details_assert(is_string($page) && str_contains($page, 'class="btn-tag btn-ai-rescan"') && str_contains($page, '> Rescan</button>') && str_contains($page, '> Scanning...</button>'), 'Document action column is missing the Rescan/Scanning control.');
-ai_details_assert(is_string($page) && str_contains($page, '$actionAiStatus = strtolower') && str_contains($page, '$actionAiProcessing = $actionAiStatus === \'processing\''), 'Rescan state must be calculated from the current document instead of a previous table row.');
-ai_details_assert(is_string($page) && str_contains($page, 'action_type" value="reprocess_ai_review"') && str_contains($page, 'csrf_token'), 'AI action does not reuse the protected reprocess workflow.');
-ai_details_assert(is_string($page) && str_contains($page, 'action="ai-reprocess.php"') && str_contains($page, 'class="inline-form js-ai-reprocess"'), 'Rescan does not use the in-place AI endpoint.');
+ai_details_assert(is_string($page) && !str_contains($page, 'js-ai-reprocess') && !str_contains($page, '> Rescan</button>'), 'The document action column must not show Rescan.');
 ai_details_assert(is_string($script) && str_contains($script, 'new FormData(form)') && str_contains($script, 'fetch(form.action') && str_contains($script, 'start(documentId, requestId)'), 'Rescan does not update and poll in place.');
 ai_details_assert(is_string($script) && str_contains($script, 'button.disabled = true') && str_contains($script, 'Scanning...'), 'AI action does not disable and show scanning immediately.');
 ai_details_assert(is_string($page) && str_contains($page, 'data-reopen-ai-document-id='), 'Canonical reload cannot identify which rescanned document details to reopen.');

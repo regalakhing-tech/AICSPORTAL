@@ -8,20 +8,22 @@ if (!is_string($script) || !is_string($page)) {
 }
 
 $cases = [
-    'doc_reupload_default' => "Good day, Peter Parker.\n"
-        . "This is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\n"
-        . "Your document for request AICS-2026-D1C55F requires changes.\n"
-        . "Document: Valid Identification Card\n"
-        . "Please re-upload the updated document through your Application Status page.\n"
-        . "Reason: Please update this document based on the PSWDO review.\n"
-        . "Thank you.",
-    'doc_invalid_default' => "Good day.\n"
-        . "This is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\n"
-        . "Your document for request AICS-2026-D1C55F has been marked as invalid.\n"
-        . "Document: Valid Identification Card\n"
-        . "Please upload a clearer or correct version through your Application Status page.\n"
-        . "Reason: Please update this document based on the PSWDO review.\n"
-        . "Thank you.",
+    'doc_reupload_default' => "{greeting}, Peter Parker.\n"
+        . "Ito po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\n"
+        . "Kailangan pong palitan ang isang dokumento ng inyong AICS application.\n"
+        . "Reference No.: AICS-2026-D1C55F\n"
+        . "Dokumento: Valid Identification Card\n"
+        . "Dahilan: Pakipalitan po ang dokumentong ito ayon sa pagsusuri ng PSWDO.\n"
+        . "Paki-upload po ang bagong kopya sa inyong Application Status page.\n"
+        . "Maraming salamat po.",
+    'doc_invalid_default' => "{greeting}, Peter Parker.\n"
+        . "Ito po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\n"
+        . "Hindi po tinanggap ang isang dokumento ng inyong AICS application.\n"
+        . "Reference No.: AICS-2026-D1C55F\n"
+        . "Dokumento: Valid Identification Card\n"
+        . "Dahilan: Pakipalitan po ang dokumentong ito ayon sa pagsusuri ng PSWDO.\n"
+        . "Paki-upload po ang mas malinaw o tamang kopya sa inyong Application Status page.\n"
+        . "Maraming salamat po.",
 ];
 
 foreach ($cases as $id => $expected) {
@@ -30,8 +32,8 @@ foreach ($cases as $id => $expected) {
         throw new RuntimeException("Document review template {$id} is missing.");
     }
     $rendered = str_replace(
-        ['{beneficiary}', '{reference}', '{document_label}', '{reason}'],
-        ['Peter Parker', 'AICS-2026-D1C55F', 'Valid Identification Card', 'Please update this document based on the PSWDO review.'],
+        ['{applicant}', '{reference}', '{document_label}', '{reason}'],
+        ['Peter Parker', 'AICS-2026-D1C55F', 'Valid Identification Card', 'Pakipalitan po ang dokumentong ito ayon sa pagsusuri ng PSWDO.'],
         stripcslashes($matches[1])
     );
     if ($rendered !== $expected) {
@@ -39,7 +41,7 @@ foreach ($cases as $id => $expected) {
     }
 }
 
-if (!str_contains($page, 'data-document-reason="Please update this document based on the PSWDO review."')) {
+if (!str_contains($page, 'data-document-reason="Pakipalitan po ang dokumentong ito ayon sa pagsusuri ng PSWDO."')) {
     throw new RuntimeException('Document review default reason does not match the requested format.');
 }
 

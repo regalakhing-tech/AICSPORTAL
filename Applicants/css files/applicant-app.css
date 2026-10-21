@@ -540,11 +540,6 @@
     justify-self: start;
   }
 
-  body.has-app-shell .content-area .status-progress-overview-card {
-    padding: 16px;
-    margin-bottom: 14px;
-  }
-
   /* Request cards (Status, Manage, Documents): icon beside the title, the
      reference and date chips across the full width underneath. */
   body.has-app-shell .content-area .docs-request-head {

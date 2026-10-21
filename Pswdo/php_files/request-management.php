@@ -13,6 +13,10 @@ if (!isset($_SESSION['aics_pswdo_csrf']) || !is_string($_SESSION['aics_pswdo_csr
 }
 $csrfToken = (string) $_SESSION['aics_pswdo_csrf'];
 
+// Set by an approval in workflow-action.php; shown once as the feedback card.
+$approvalFeedback = is_array($_SESSION['aics_pswdo_approval_feedback'] ?? null) ? $_SESSION['aics_pswdo_approval_feedback'] : null;
+unset($_SESSION['aics_pswdo_approval_feedback']);
+
 $accountId = (int) ($_SESSION['aics_account_id'] ?? 0);
 $displayName = pswdo_current_display_name();
 $initials = pswdo_initials($displayName);
@@ -174,7 +178,7 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
           </form>
         </section>
 
-        <?php if ($actionStatus !== '' && $actionMessage !== ''): ?>
+        <?php if ($actionStatus !== '' && $actionMessage !== '' && $approvalFeedback === null): ?>
           <div class="alert toast-alert js-toast-alert <?= $actionStatus === 'success' ? 'alert-success' : 'alert-error' ?>" role="status" aria-live="polite">
             <i class="fas fa-<?= $actionStatus === 'success' ? 'circle-check' : 'triangle-exclamation' ?>"></i>
             <span><?= pswdo_h($actionMessage) ?></span>
@@ -188,6 +192,15 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
         <section class="panel-card">
           <header class="panel-head">
             <h2><i class="fas fa-list-check"></i> Incoming Applicant Requests</h2>
+            <form method="post" action="workflow-action.php" id="bulk-approve-form" class="bulk-approve-bar js-confirm-action" hidden
+              data-title="Approve Selected Applications?"
+              data-message="">
+              <input type="hidden" name="csrf_token" value="<?= pswdo_h($csrfToken) ?>">
+              <input type="hidden" name="action_type" value="bulk_approve_requests">
+              <input type="hidden" name="return_page" value="requests">
+              <span class="bulk-approve-count" id="bulk-approve-count" aria-live="polite">0 selected</span>
+              <button type="submit" class="btn-solid"><i class="fas fa-clipboard-check"></i> Approve Selected</button>
+            </form>
           </header>
           <?php if (count($requests) === 0): ?>
             <p class="empty-note">No requests found for the current filter.</p>
@@ -196,6 +209,7 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
               <table class="request-table">
                 <thead>
                   <tr>
+                    <th class="request-select-cell"><input type="checkbox" id="select-all-requests" aria-label="Select all requests that can be approved"></th>
                     <th>Reference</th>
                     <th>Applicant / Beneficiary</th>
                     <th>Applying For</th>
@@ -212,8 +226,7 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                   <?php foreach ($requests as $request): ?>
                     <?php
                       $statusCode = (string) ($request['status_code'] ?? 'pending_review');
-                      $docChecked = (int) ($request['checked_total'] ?? 0);
-                      $docTotal = (int) ($request['required_total'] ?? 0);
+                      $canSelectForApproval = !in_array($statusCode, ['approved', ...$terminalStatusCodes], true);
                       $aiProcessed = (int) ($request['ai_processed_total'] ?? 0);
                       $aiCompleted = (int) ($request['ai_completed_total'] ?? 0);
                       $aiUnavailable = (int) ($request['ai_unavailable_total'] ?? 0);
@@ -231,9 +244,13 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                       $aiRequestLabel = (string) ($request['ai_request_label'] ?? 'No verifiable files');
                       $aiProgress = max(0, min(100, (int) ($request['ai_progress_percent'] ?? 0)));
                       $hasAiFlaggedInconsistency = pswdo_request_has_flagged_inconsistency((array) ($request['required_documents'] ?? []));
-                      $staffState = $docTotal > 0 && $docChecked >= $docTotal ? 'Staff Review Complete' : 'Staff Review Pending';
                     ?>
                     <tr data-ai-request-row data-request-id="<?= (int) ($request['id'] ?? 0) ?>" data-ai-state="<?= pswdo_h($aiRequestState) ?>" class="<?= pswdo_h(trim(($aiRequestState === 'scanning' ? 'is-ai-scanning ' : '') . ($hasAiFlaggedInconsistency ? 'has-ai-flagged-inconsistency' : ''))) ?>">
+                      <td class="request-select-cell">
+                        <?php if ($canSelectForApproval): ?>
+                          <input type="checkbox" class="js-request-select" value="<?= (int) ($request['id'] ?? 0) ?>" aria-label="Select request <?= pswdo_h((string) ($request['reference_no'] ?? '')) ?>">
+                        <?php endif; ?>
+                      </td>
                       <td><strong><?= pswdo_h((string) ($request['reference_no'] ?? '-')) ?></strong></td>
                       <td>
                         <div class="cell-user">
@@ -255,7 +272,6 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                               <span style="--ai-progress: <?= $aiProgress ?>%"></span>
                             </span>
                           <?php endif; ?>
-                          <small class="request-staff-state"><?= pswdo_h($staffState) ?></small>
                         </div>
                       </td>
                       <td>
@@ -368,30 +384,13 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
           ? trim((string) (explode(' | ', $storedPriorityBasis, 3)[2] ?? $storedPriorityBasis))
           : $priorityBasis;
       $priorityExplanation = pswdo_priority_explanation_for_display($priorityExplanation);
-      $staffReviewedTotal = count(array_filter(
-          (array) ($request['required_documents'] ?? []),
-          static fn (array $document): bool => !empty($document['is_required'])
-              && !empty($document['uploaded'])
-              && in_array(strtolower(trim((string) ($document['review_status'] ?? 'pending'))), ['checked', 'needs_reupload', 'invalid'], true)
-      ));
-      $approvedDocumentTotal = count(array_filter(
-          (array) ($request['required_documents'] ?? []),
-          static fn (array $document): bool => !empty($document['is_required'])
-              && !empty($document['uploaded'])
-              && !empty($document['checked'])
-              && strtolower(trim((string) ($document['review_status'] ?? 'pending'))) === 'checked'
-      ));
-      $approvalConfirmMessage = 'Approve this application? All required documents must have been reviewed and accepted before approval.';
+      $approvalConfirmMessage = 'Approve this application? The applicant gets an SMS listing their requirements and the PSWDO office hours.';
       $incompleteQueueUrl = $paths['dashboard_url'] . '?page=prescreening&queue_tab=incomplete_requirements';
       $invalidQueueUrl = $paths['dashboard_url'] . '?page=prescreening&queue_tab=invalid_requirements';
     ?>
     <template id="request-detail-source-<?= $requestId ?>">
       <div
         class="request-detail-shell"
-        data-required-total="<?= (int) ($request['required_total'] ?? 0) ?>"
-        data-checked-total="<?= (int) ($request['checked_total'] ?? 0) ?>"
-        data-staff-reviewed-total="<?= $staffReviewedTotal ?>"
-        data-approved-total="<?= $approvedDocumentTotal ?>"
         data-status-code="<?= pswdo_h((string) ($request['status_code'] ?? 'pending_review')) ?>"
         data-terminal-locked="<?= in_array($statusCode, $terminalStatusCodes, true) ? '1' : '0' ?>"
         data-document-actions-locked="<?= in_array($statusCode, ['for_release', 'released', 'cancelled', 'not_approved'], true) ? '1' : '0' ?>"
@@ -605,7 +604,7 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
             <div class="request-detail-item"><span>Relationship to Beneficiary</span><strong><?= pswdo_h($applicantRelationship === 'Self' ? 'Self (same as beneficiary)' : ($applicantRelationship !== '' ? $applicantRelationship : 'Not provided')) ?></strong></div>
             <div class="request-detail-item"><span>Contact</span><strong><?= pswdo_h(trim((string) ($request['applicant_contact_number'] ?? '')) !== '' ? (string) $request['applicant_contact_number'] : 'Not available') ?></strong></div>
             <div class="request-detail-item"><span>Email</span><strong><?= pswdo_h(trim((string) ($request['applicant_email'] ?? '')) !== '' ? (string) $request['applicant_email'] : 'Not available') ?></strong></div>
-            <div class="request-detail-item"><span>Address</span><strong><?= pswdo_h($applicantLocationLabel) ?></strong></div>
+            <div class="request-detail-item request-detail-item-address"><span>Address</span><strong><?= pswdo_h($applicantLocationLabel) ?></strong></div>
             <div class="request-detail-item request-detail-item-income-wide"><span>Occupation / Source of Income</span><strong><?= pswdo_h(trim((string) ($request['applicant_occupation'] ?? '')) !== '' ? (string) $request['applicant_occupation'] : 'Not provided') ?></strong></div>
             <div class="request-detail-item request-detail-item-income-wide"><span>Estimated Monthly Income</span><strong><?= pswdo_h(trim((string) ($request['applicant_estimated_monthly_income'] ?? '')) !== '' ? (string) $request['applicant_estimated_monthly_income'] : 'Not provided') ?></strong></div>
           </div>
@@ -662,7 +661,6 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                   <th>Document</th>
                   <th>File</th>
                   <th>Upload</th>
-                  <th>Review</th>
                   <th>AI check</th>
                   <th>Action</th>
                 </tr>
@@ -671,7 +669,6 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                 <?php foreach (($request['required_documents'] ?? []) as $doc): ?>
                   <?php
                     $uploaded = (bool) ($doc['uploaded'] ?? false);
-                    $checked = (bool) ($doc['checked'] ?? false);
                     $reviewStatus = strtolower(trim((string) ($doc['review_status'] ?? 'pending')));
                     $documentId = (int) ($doc['document_id'] ?? 0);
                     $fileName = trim((string) ($doc['file_name'] ?? 'Uploaded file'));
@@ -710,21 +707,6 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                       <?php endif; ?>
                     </td>
                     <td><?= $uploaded ? '<span class="pill pill-info">Uploaded</span>' : ($reviewStatus === 'optional_not_uploaded' ? '<span class="pill pill-info">Optional not uploaded</span>' : '<span class="pill pill-warning">Not uploaded</span>') ?></td>
-                    <td>
-                      <?php if ($reviewStatus === 'optional_not_uploaded'): ?>
-                        <span class="pill pill-info">Optional not uploaded</span>
-                      <?php elseif ($reviewStatus === 'needs_reupload'): ?>
-                        <span class="pill pill-warning">Needs Changes</span>
-                      <?php elseif ($reviewStatus === 'invalid'): ?>
-                        <span class="pill pill-danger">Invalid</span>
-                      <?php elseif ($checked || $reviewStatus === 'checked'): ?>
-                        <span class="pill pill-success">Checked</span>
-                      <?php elseif ($uploaded): ?>
-                        <span class="pill pill-info">Pending</span>
-                      <?php else: ?>
-                        <span class="pill pill-warning">Missing</span>
-                      <?php endif; ?>
-                    </td>
                     <td>
                       <?php if ($uploaded): ?>
                         <?php
@@ -856,6 +838,7 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                       <?php endif; ?>
                     </td>
                     <td class="modal-doc-actions">
+                      <div class="modal-doc-action-buttons">
                       <?php if ($uploaded && $fileUrl !== ''): ?>
                         <button
                           type="button"
@@ -868,10 +851,8 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                           data-back-file-name="<?= pswdo_h((string) ($backPhoto['file_name'] ?? 'Back of ID')) ?>"
                           data-back-file-mime="<?= pswdo_h((string) ($backPhoto['mime_type'] ?? '')) ?>"
                           data-back-document-id="<?= $backDocumentId ?>"
-                          data-back-is-checked="<?= !empty($backPhoto['checked']) ? '1' : '0' ?>"
                           data-request-id="<?= $requestId ?>"
                           data-document-id="<?= $documentId ?>"
-                          data-is-checked="<?= $checked ? '1' : '0' ?>"
                         >
                           <i class="fas fa-eye"></i> File
                         </button>
@@ -892,26 +873,12 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                           data-document-code="<?= pswdo_h((string) ($doc['code'] ?? '')) ?>"
                           data-document-label="<?= pswdo_h($docLabel) ?>"
                           data-document-review-status="needs_reupload"
-                          data-document-reason="Please update this document based on the PSWDO review."
+                          data-document-reason="Pakipalitan po ang dokumentong ito ayon sa pagsusuri ng PSWDO."
                         >
                           <i class="fas fa-pen-to-square"></i> Review
                         </button>
                       <?php endif; ?>
-
-                      <?php $actionAiReviewId = (int) ($doc['ai_review_id'] ?? 0); $actionAiStatus = strtolower(trim((string) ($doc['ai_status'] ?? ''))); $actionAiProcessing = $actionAiStatus === 'processing'; ?>
-                      <?php if ($uploaded && $documentId > 0 && $actionAiReviewId > 0): ?>
-                        <form method="post" action="ai-reprocess.php" class="inline-form js-ai-reprocess">
-                          <input type="hidden" name="csrf_token" value="<?= pswdo_h($csrfToken) ?>">
-                          <input type="hidden" name="action_type" value="reprocess_ai_review">
-                          <input type="hidden" name="request_id" value="<?= $requestId ?>">
-                          <input type="hidden" name="ai_review_id" value="<?= $actionAiReviewId ?>">
-                          <?php if ($actionAiProcessing): ?>
-                            <button type="submit" class="btn-tag btn-ai-rescan" disabled aria-disabled="true" aria-busy="true"><i class="fas fa-circle-notch fa-spin"></i> Scanning...</button>
-                          <?php else: ?>
-                            <button type="submit" class="btn-tag btn-ai-rescan"><i class="fas fa-rotate"></i> Rescan</button>
-                          <?php endif; ?>
-                        </form>
-                      <?php endif; ?>
+                      </div>
                     </td>
                   </tr>
                 <?php endforeach; ?>
@@ -941,7 +908,7 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
           <?php if (!$isEmbedded): ?>
           <form method="post" action="workflow-action.php" id="approve-screening-form" class="inline-form js-confirm-action"
             data-title="Approve Application?"
-            data-message="All required documents have been reviewed and accepted. Approve this application?">
+            data-message="Approve this application? The applicant gets an SMS listing their requirements and the PSWDO office hours.">
             <input type="hidden" name="csrf_token" value="<?= pswdo_h($csrfToken) ?>">
             <input type="hidden" name="action_type" value="view_request">
             <input type="hidden" name="request_id" id="approve-screening-request-id" value="">
@@ -978,14 +945,6 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
         <div class="file-preview-stage" id="file-preview-stage">
           <p class="file-preview-empty">Select a file to preview.</p>
         </div>
-      </div>
-      <div class="file-preview-actions">
-        <button type="button" class="btn-solid" id="file-preview-approve-btn" data-request-id="" data-document-id="">
-          <i class="fas fa-circle-check"></i> Mark as Checked
-        </button>
-        <button type="button" class="btn-solid" id="file-preview-back-approve-btn" data-request-id="" data-document-id="" hidden>
-          <i class="fas fa-circle-check"></i> Mark Back as Checked
-        </button>
       </div>
     </div>
   </div>
@@ -1061,10 +1020,98 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
     </div>
   </div>
 
+  <?php if ($approvalFeedback !== null): ?>
+    <?php
+      $feedbackApproved = array_values((array) ($approvalFeedback['approved'] ?? []));
+      $feedbackIncomplete = array_values((array) ($approvalFeedback['incomplete'] ?? []));
+      $feedbackFailed = array_values((array) ($approvalFeedback['failed'] ?? []));
+      $feedbackApprovedCount = count($feedbackApproved);
+      $feedbackTitle = match (true) {
+          $feedbackApprovedCount === 1 => (string) ($feedbackApproved[0]['name'] ?? 'Applicant') . ' has been accepted',
+          $feedbackApprovedCount > 1 => $feedbackApprovedCount . ' applicants have been accepted',
+          default => 'No application was accepted',
+      };
+      $feedbackLead = match (true) {
+          $feedbackApprovedCount === 1 => 'The application is now in the Screening Queue.',
+          $feedbackApprovedCount > 1 => 'The applications are now in the Screening Queue.',
+          default => 'See what needs attention below.',
+      };
+      $feedbackSmsMissed = count(array_filter($feedbackApproved, static fn ($entry): bool => empty($entry['sms_sent'])));
+    ?>
+    <div class="approval-feedback-modal open" id="approval-feedback-modal">
+      <section class="approval-feedback-card<?= $feedbackApprovedCount === 0 ? ' is-warning' : '' ?>" role="dialog" aria-modal="true" aria-labelledby="approval-feedback-title" aria-describedby="approval-feedback-lead">
+        <header class="approval-feedback-head">
+          <span class="approval-feedback-seal" aria-hidden="true"><i class="fas <?= $feedbackApprovedCount > 0 ? 'fa-check' : 'fa-exclamation' ?>"></i></span>
+          <div class="approval-feedback-heading">
+            <h3 id="approval-feedback-title"><?= pswdo_h($feedbackTitle) ?></h3>
+            <p id="approval-feedback-lead"><?= pswdo_h($feedbackLead) ?></p>
+          </div>
+          <button type="button" class="approval-feedback-close" data-close-approval-feedback aria-label="Close"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+        </header>
+
+        <ul class="approval-feedback-list">
+          <?php foreach ($feedbackApproved as $entry): ?>
+            <li class="approval-feedback-row">
+              <span class="approval-feedback-person">
+                <strong><?= pswdo_h((string) ($entry['name'] ?? 'Applicant')) ?></strong>
+                <span class="approval-feedback-ref"><?= pswdo_h((string) ($entry['reference'] ?? '')) ?></span>
+              </span>
+              <?php if (!empty($entry['sms_sent'])): ?>
+                <span class="approval-sms-state is-sent"><i class="fas fa-check" aria-hidden="true"></i> SMS sent</span>
+              <?php else: ?>
+                <span class="approval-sms-state is-unsent"><i class="fas fa-comment-slash" aria-hidden="true"></i> SMS not sent</span>
+              <?php endif; ?>
+            </li>
+          <?php endforeach; ?>
+          <?php foreach ($feedbackIncomplete as $entry): ?>
+            <li class="approval-feedback-row">
+              <span class="approval-feedback-person">
+                <strong><?= pswdo_h((string) ($entry['name'] ?? 'Applicant')) ?></strong>
+                <span class="approval-feedback-ref"><?= pswdo_h((string) ($entry['reference'] ?? '')) ?></span>
+                <span class="approval-feedback-reason">Missing documents, so it moved to Incomplete Requirements.</span>
+              </span>
+              <span class="approval-sms-state is-incomplete"><i class="fas fa-file-circle-exclamation" aria-hidden="true"></i> Incomplete</span>
+            </li>
+          <?php endforeach; ?>
+          <?php foreach ($feedbackFailed as $entry): ?>
+            <li class="approval-feedback-row">
+              <span class="approval-feedback-person">
+                <strong><?= pswdo_h((string) ($entry['name'] ?? 'Applicant')) ?></strong>
+                <span class="approval-feedback-ref"><?= pswdo_h((string) ($entry['reference'] ?? '')) ?></span>
+                <span class="approval-feedback-reason is-failed"><?= pswdo_h((string) ($entry['reason'] ?? 'Could not be approved.')) ?></span>
+              </span>
+              <span class="approval-sms-state is-failed"><i class="fas fa-xmark" aria-hidden="true"></i> Not approved</span>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+
+        <?php if ($feedbackApprovedCount > 0): ?>
+          <p class="approval-feedback-note">
+            <i class="fas fa-calendar-day" aria-hidden="true"></i>
+            <span>The SMS asks <?= $feedbackApprovedCount === 1 ? 'the applicant' : 'each applicant' ?> to visit the PSWDO Office with their original requirements, Monday to Thursday, 8:00–11:00 AM or 1:00–4:00 PM.</span>
+          </p>
+        <?php endif; ?>
+        <?php if ($feedbackSmsMissed > 0): ?>
+          <p class="approval-feedback-note is-alert">
+            <i class="fas fa-phone" aria-hidden="true"></i>
+            <span><?= $feedbackSmsMissed === 1 ? 'One SMS could not be sent.' : $feedbackSmsMissed . ' SMS could not be sent.' ?> Call or text <?= $feedbackSmsMissed === 1 ? 'that applicant' : 'those applicants' ?> to tell them they were accepted.</span>
+          </p>
+        <?php endif; ?>
+
+        <footer class="approval-feedback-actions">
+          <?php if ($feedbackApprovedCount > 0): ?>
+            <a class="btn-outline" href="<?= pswdo_h($paths['dashboard_url']) ?>?page=prescreening">View Screening Queue</a>
+          <?php endif; ?>
+          <button type="button" class="btn-solid" id="close-approval-feedback">Done</button>
+        </footer>
+      </section>
+    </div>
+  <?php endif; ?>
+
   <div class="confirm-modal" id="reject-reason-modal">
     <div class="confirm-card">
       <h3><i class="fas fa-circle-xmark"></i> Reject Application?</h3>
-      <p>This will mark the request as <strong>Not Approved</strong> and notify the applicant. This action cannot be undone.</p>
+      <p>This marks the request as <strong>Not Approved</strong> and texts the applicant the reason you write below. This action cannot be undone.</p>
       <form method="post" action="workflow-action.php" id="reject-reason-form">
         <input type="hidden" name="csrf_token" value="<?= pswdo_h($csrfToken) ?>">
         <input type="hidden" name="action_type" value="reject_request">
@@ -1072,8 +1119,10 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
         <input type="hidden" name="return_page" value="requests">
         <div class="field-wrap" style="margin-top:12px;">
           <label for="reject-reason-text">Reason for Rejection <span aria-hidden="true">*</span></label>
-          <textarea id="reject-reason-text" name="remarks" rows="3" maxlength="400" required aria-required="true" placeholder="e.g. Ineligible based on submitted requirements..." style="width:100%;border-radius:8px;border:1px solid #d1d5db;padding:8px 10px;font-size:14px;resize:vertical;"></textarea>
+          <textarea id="reject-reason-text" name="remarks" rows="3" maxlength="400" required aria-required="true" placeholder="hal. Hindi tugma ang pangalan sa valid ID at sa medical certificate." style="width:100%;border-radius:8px;border:1px solid #d1d5db;padding:8px 10px;font-size:14px;resize:vertical;"></textarea>
         </div>
+        <p class="sms-preview-label"><i class="fas fa-comment-sms" aria-hidden="true"></i> This SMS is sent to the applicant:</p>
+        <pre class="sms-preview" id="reject-sms-preview" data-template="<?= pswdo_h(pswdo_rejection_sms_message('{reference}', '{applicant}', '{rejection_reason}')) ?>"></pre>
         <div class="confirm-actions" style="margin-top:12px;">
           <button type="button" class="btn-outline" id="cancel-reject-modal">Cancel</button>
           <button type="submit" class="btn-solid danger"><i class="fas fa-circle-xmark"></i> Confirm Reject</button>

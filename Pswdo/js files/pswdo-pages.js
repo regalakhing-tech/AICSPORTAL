@@ -1199,13 +1199,10 @@
     return `${normalizedHour}:${minute} ${suffix}`;
   }
 
-  function formatMassDateLabel(rawValue) {
-    return formatScheduleDateLabel(rawValue) || "{schedule_date}";
-  }
-
-  function formatMassTimeLabel(rawValue) {
-    return formatScheduleTimeLabel(rawValue) || "{schedule_time}";
-  }
+  const massPlaceholderNote = document.createElement("p");
+  massPlaceholderNote.className = "sms-mass-placeholder-note";
+  massPlaceholderNote.hidden = true;
+  (messageInput.closest(".field-wrap") || messageInput).after(massPlaceholderNote);
 
   function refreshSmsMessageFromSelection() {
     const selectedOption = templateSelect.selectedOptions[0];
@@ -1214,17 +1211,10 @@
       return;
     }
 
-    const templateText = selectedOption.getAttribute("data-template-text") || "";
-    const isMass = activeContext?.scope === "mass";
-    if (!isMass) {
-      messageInput.value = templateText;
-      return;
-    }
-
-    messageInput.value = templateText
-      .replaceAll("{schedule_date}", formatMassDateLabel(massDateInput.value))
-      .replaceAll("{schedule_time}", formatMassTimeLabel(massTimeInput.value))
-      .replaceAll("{venue}", massVenueInput.value.trim() || "PSWDO Office");
+    // A mass notice keeps its {placeholders}: the server fills in each
+    // applicant's own name, reference and saved schedule (date, batch time,
+    // venue) when it sends, so nobody gets someone else's date.
+    messageInput.value = selectedOption.getAttribute("data-template-text") || "";
   }
 
   function syncBodyLock() {
@@ -1234,157 +1224,165 @@
     document.body.classList.toggle("modal-open", hasOpenSidebar || hasOpenModal);
   }
 
+  // Applicant SMS, in Tagalog. {greeting} becomes "Magandang umaga po",
+  // "tanghali", "hapon" or "gabi" for the time the message is sent.
   const templates = {
+    // First is the Screening Queue Mass Notice default: further screening
+    // passed and the schedule text is coming.
     for_screening: [
       {
+        id: "screening_schedule_soon",
+        label: "Further screening passed, wait for schedule (Default)",
+        text: "{greeting}, {applicant}.\nIto po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nTapos na po at pumasa na sa further screening ang inyong AICS application.\nReference No.: {reference}\nHintayin na lamang po ang aming text para sa petsa, oras at lugar ng pagkuha ng inyong tulong.\nMaraming salamat po.",
+      },
+      {
         id: "screening_default",
-        label: "Ready for Screening (Default)",
-        text: "Good day, {beneficiary}.\nThis is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nYour AICS application, {reference}, has been approved for further screening.\nPlease proceed to:\nOffice: PSWDO Office\nPurpose: Further Screening\nPlease bring your valid ID and required documents.\nThank you.",
+        label: "Approved, visit the office",
+        text: "{greeting}, {applicant}.\nIto po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nAprubado na po ang inyong AICS application.\nReference No.: {reference}\nMaaari na po kayong pumunta sa PSWDO Office sa anumang araw ng opisina:\nLunes hanggang Huwebes, 8:00 AM - 11:00 AM at 1:00 PM - 4:00 PM.\nPakidala po ang inyong valid ID at ang orihinal na kopya ng inyong mga requirements.\nMaraming salamat po.",
       },
       {
         id: "screening_under_review",
         label: "Under Review Update",
-        text: "PSWDO update: Application {reference} is now under screening review. Please keep your line open for possible follow-up.",
+        text: "{greeting}, {applicant}. Ito po ay mula sa PSWDO. Kasalukuyan pong sinusuri para sa screening ang inyong AICS application ({reference}). Panatilihin po sanang bukas ang inyong linya para sa posibleng follow-up. Maraming salamat po.",
       },
       {
         id: "screening_followup",
         label: "Follow-up Reminder",
-        text: "Your request {reference} has passed initial requirements checking and is now for screening. We will send another message once next steps are available.",
+        text: "{greeting}, {applicant}. Pumasa na po sa unang pagsusuri ng requirements ang inyong AICS application ({reference}) at ito ay para na sa screening. Magpapadala po kami ng panibagong mensahe kapag may susunod na hakbang. Maraming salamat po.",
       },
     ],
     incomplete_requirements: [
       {
         id: "incomplete_default",
         label: "Incomplete Requirements (Default)",
-        text: "Good day {beneficiary}. Your AICS application {reference} has incomplete requirements. Please submit the missing documents so PSWDO can continue your screening.",
+        text: "{greeting}, {applicant}.\nIto po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nKulang pa po ang requirements ng inyong AICS application.\nReference No.: {reference}\nPakisumite po ang mga kulang na dokumento upang maipagpatuloy namin ang inyong screening.\nMaraming salamat po.",
       },
       {
         id: "incomplete_missing_docs",
         label: "Missing Documents Notice",
-        text: "PSWDO update: Request {reference} cannot proceed to screening yet due to incomplete requirements. Please complete all required documents.",
+        text: "{greeting}, {applicant}. Hindi pa po maaaring magpatuloy sa screening ang inyong AICS application ({reference}) dahil kulang pa ang requirements. Pakikumpleto po ang lahat ng kailangang dokumento. Maraming salamat po.",
       },
       {
         id: "incomplete_followup",
         label: "Action Needed Reminder",
-        text: "Please complete pending requirements for application {reference}. Once complete, PSWDO will continue your screening process.",
+        text: "{greeting}, {applicant}. Paalala po: pakikumpleto ang mga natitirang requirements ng inyong AICS application ({reference}). Kapag kumpleto na, ipagpapatuloy po ng PSWDO ang inyong screening. Maraming salamat po.",
       },
     ],
     invalid_requirements: [
       {
         id: "invalid_default",
         label: "Invalid Requirements (Default)",
-        text: "Good day {beneficiary}. Your AICS application {reference} was marked as not approved due to invalid requirements. Please coordinate with PSWDO for guidance.",
+        text: "{greeting}, {applicant}.\nIto po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nIkinalulungkot po naming ipaalam na hindi naaprubahan ang inyong AICS application dahil sa hindi wastong requirements.\nReference No.: {reference}\nMakipag-ugnayan po sa PSWDO Office para sa gabay.\nMaraming salamat po.",
       },
       {
         id: "invalid_correction",
         label: "Correction Required",
-        text: "PSWDO update: Application {reference} was tagged invalid due to requirement issues. Please visit the office for correction guidance.",
+        text: "{greeting}, {applicant}. May problema po sa requirements ng inyong AICS application ({reference}). Mangyaring pumunta po sa PSWDO Office para sa gabay sa pagwawasto. Maraming salamat po.",
       },
       {
         id: "invalid_followup",
         label: "Not Approved Notice",
-        text: "Your request {reference} is currently not approved because of invalid requirements. Please contact PSWDO to clarify your next steps.",
+        text: "{greeting}, {applicant}. Sa ngayon po ay hindi naaprubahan ang inyong AICS application ({reference}) dahil sa hindi wastong requirements. Makipag-ugnayan po sa PSWDO para malaman ang susunod na hakbang. Maraming salamat po.",
       },
     ],
     rejection_notice: [
       {
         id: "reject_default",
         label: "Rejection Notice (Default)",
-        text: "Good day {beneficiary}. We regret to inform you that your AICS application {reference} has been reviewed and was not approved by PSWDO. Reason: {rejection_reason} For further assistance, please coordinate with the PSWDO office.",
+        text: "{greeting}, {applicant}.\nIto po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nIkinalulungkot po naming ipaalam na hindi naaprubahan ang inyong AICS application.\nReference No.: {reference}\nDahilan: {rejection_reason}\nPara sa paglilinaw o karagdagang tulong, maaari po kayong pumunta sa PSWDO Office, Lunes hanggang Huwebes, 8:00 AM - 11:00 AM at 1:00 PM - 4:00 PM.\nMaraming salamat po.",
       },
       {
         id: "reject_ineligible",
         label: "Ineligible Notice",
-        text: "Good day {beneficiary}. After careful review, your AICS application {reference} did not meet the eligibility requirements. Please contact PSWDO for clarification and guidance.",
+        text: "{greeting}, {applicant}. Matapos ang masusing pagsusuri, ang inyong AICS application ({reference}) ay hindi po tumugma sa mga kwalipikasyon ng programa. Makipag-ugnayan po sa PSWDO para sa paliwanag at gabay. Maraming salamat po.",
       },
       {
         id: "reject_short",
         label: "Short Notice",
-        text: "PSWDO update: Your AICS application {reference} has been marked as Not Approved. Reason: {rejection_reason} Please coordinate with the PSWDO office for guidance.",
+        text: "{greeting}, {applicant}. Hindi po naaprubahan ang inyong AICS application ({reference}). Dahilan: {rejection_reason} Makipag-ugnayan po sa PSWDO Office para sa gabay. Maraming salamat po.",
       },
     ],
     document_review: [
       {
         id: "doc_reupload_default",
         label: "Needs Changes (Default)",
-        text: "Good day, {beneficiary}.\nThis is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nYour document for request {reference} requires changes.\nDocument: {document_label}\nPlease re-upload the updated document through your Application Status page.\nReason: {reason}\nThank you.",
+        text: "{greeting}, {applicant}.\nIto po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nKailangan pong palitan ang isang dokumento ng inyong AICS application.\nReference No.: {reference}\nDokumento: {document_label}\nDahilan: {reason}\nPaki-upload po ang bagong kopya sa inyong Application Status page.\nMaraming salamat po.",
       },
       {
         id: "doc_invalid_default",
         label: "Invalid Document",
-        text: "Good day.\nThis is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nYour document for request {reference} has been marked as invalid.\nDocument: {document_label}\nPlease upload a clearer or correct version through your Application Status page.\nReason: {reason}\nThank you.",
+        text: "{greeting}, {applicant}.\nIto po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nHindi po tinanggap ang isang dokumento ng inyong AICS application.\nReference No.: {reference}\nDokumento: {document_label}\nDahilan: {reason}\nPaki-upload po ang mas malinaw o tamang kopya sa inyong Application Status page.\nMaraming salamat po.",
       },
     ],
     release_schedule: [
       {
         id: "release_schedule_default",
         label: "Release Schedule (Default)",
-        text: "Good day, {beneficiary}.\nThis is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nYour application, {reference}, is scheduled for assistance release on:\nDate: {schedule_date}\nTime: {schedule_time}\nVenue: {venue}\n{amount_line}Please arrive on time and bring your valid ID and required documents.\nThank you.",
+        text: "{greeting}, {applicant}.\nIto po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nNaka-schedule na po ang pagkuha ng tulong para sa inyong AICS application.\nReference No.: {reference}\nPetsa: {schedule_date}\nOras: {schedule_time}\nLugar: {venue}\nPakidating po sa takdang oras at dalhin ang inyong valid ID at mga requirements.\nMaraming salamat po.",
       },
       {
         id: "release_schedule_reminder",
         label: "Release Reminder",
-        text: "PSWDO reminder: Your assistance release for request {reference} is set on {schedule_date} at {schedule_time}, venue: {venue}. Please be present during your assigned schedule.",
+        text: "{greeting}, {applicant}. Paalala po mula sa PSWDO: ang pagkuha ng tulong para sa inyong AICS application ({reference}) ay sa {schedule_date}, {schedule_time}, sa {venue}. Pakidalo po sa takdang schedule. Maraming salamat po.",
       },
       {
         id: "release_schedule_notice",
         label: "Distribution Notice",
-        text: "Good day, {beneficiary}.\nThis is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nYour application, {reference}, is scheduled for assistance release on:\nDate: {schedule_date}\nTime: {schedule_time}\nVenue: {venue}\n{amount_line}Please arrive on time and bring your valid ID and required documents.\nThank you.",
+        text: "{greeting}, {applicant}.\nIto po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nNaka-schedule na po ang pagkuha ng tulong para sa inyong AICS application.\nReference No.: {reference}\nPetsa: {schedule_date}\nOras: {schedule_time}\nLugar: {venue}\nPakidating po sa takdang oras at dalhin ang inyong valid ID at mga requirements.\nMaraming salamat po.",
       },
     ],
     ready_for_release: [
       {
         id: "ready_release_default",
         label: "Ready for Release (Default)",
-        text: "Good day {beneficiary}. Your AICS application {reference} is ready for release. Please proceed to {venue} on {schedule_date} at {schedule_time}. {batch_line}",
+        text: "{greeting}, {applicant}.\nIto po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nHanda na po ang tulong para sa inyong AICS application.\nReference No.: {reference}\nPumunta po sa {venue} sa {schedule_date}, {schedule_time}. {batch_line}\nMaraming salamat po.",
       },
       {
         id: "ready_release_confirmation",
         label: "Final Confirmation",
-        text: "PSWDO confirmation: Your assistance release for request {reference} is ready. Please attend your schedule on {schedule_date} at {schedule_time} in {venue}.",
+        text: "{greeting}, {applicant}. Kumpirmasyon po mula sa PSWDO: handa na ang tulong para sa inyong AICS application ({reference}). Pakidalo po sa {schedule_date}, {schedule_time}, sa {venue}. Maraming salamat po.",
       },
       {
         id: "ready_release_short",
         label: "Short Reminder",
-        text: "Your AICS release schedule for request {reference} is confirmed: {schedule_date}, {schedule_time}, {venue}. Please arrive on time.",
+        text: "{greeting}, {applicant}. Kumpirmado na po ang schedule ng pagkuha ng tulong para sa inyong AICS application ({reference}): {schedule_date}, {schedule_time}, {venue}. Pakidating po sa oras. Maraming salamat po.",
       },
     ],
     missed_release: [
       {
         id: "missed_release_default",
         label: "Missed Schedule (Default)",
-        text: "Good day {beneficiary}. Our records show that the release schedule for your AICS application {reference} was missed. Please wait for PSWDO instructions for rescheduling.",
+        text: "{greeting}, {applicant}.\nIto po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nAyon po sa aming tala, hindi ninyo nadaluhan ang schedule ng pagkuha ng tulong para sa inyong AICS application.\nReference No.: {reference}\nHintayin po ang abiso ng PSWDO para sa bagong schedule.\nMaraming salamat po.",
       },
       {
         id: "missed_release_reschedule",
         label: "Reschedule Notice",
-        text: "PSWDO update: You missed the scheduled release for request {reference}. Please coordinate with our office so we can arrange the next available schedule.",
+        text: "{greeting}, {applicant}. Hindi po ninyo nadaluhan ang schedule para sa inyong AICS application ({reference}). Makipag-ugnayan po sa aming opisina upang maiayos ang susunod na schedule. Maraming salamat po.",
       },
       {
         id: "missed_release_followup",
         label: "Follow-up Reminder",
-        text: "Your assistance release for request {reference} needs follow-up because the assigned schedule was missed. Please contact PSWDO for guidance.",
+        text: "{greeting}, {applicant}. Kailangan pong mag-follow-up para sa inyong AICS application ({reference}) dahil hindi nadaluhan ang naka-assign na schedule. Makipag-ugnayan po sa PSWDO para sa gabay. Maraming salamat po.",
       },
     ],
   };
 
   function applyTemplateTokens(templateText, context) {
     const batchLine = context.releaseBatch ? `Batch: ${context.releaseBatch}. ` : "";
-    const amount = Number.parseFloat(context.amountGiven || "");
-    const amountLine = amount > 0 ? `Amount: PHP ${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` : "";
     return templateText
-      .replaceAll("{reference}", context.referenceNo || "your application")
+      .replaceAll("{greeting}", smsGreeting())
+      .replaceAll("{reference}", context.referenceNo || "hindi available")
       .replaceAll("{beneficiary}", context.beneficiaryName || "Applicant")
       .replaceAll("{applicant}", context.applicantName || "Applicant")
-      .replaceAll("{schedule_date}", formatScheduleDateLabel(context.scheduleDate) || context.scheduleDate || "the scheduled date")
-      .replaceAll("{schedule_time}", formatScheduleTimeLabel(context.scheduleTime) || context.scheduleTime || "the scheduled time")
-      .replaceAll("{venue}", context.venue || "the assigned venue")
+      .replaceAll("{schedule_date}", formatScheduleDateLabel(context.scheduleDate) || context.scheduleDate || "itinakdang petsa")
+      .replaceAll("{schedule_time}", formatScheduleTimeLabel(context.scheduleTime) || context.scheduleTime || "itinakdang oras")
+      .replaceAll("{venue}", context.venue || "itinakdang lugar")
       .replaceAll("{release_batch}", context.releaseBatch || "")
       .replaceAll("{batch_line}", batchLine)
-      .replaceAll("{amount_line}", amountLine)
-      .replaceAll("{document_label}", context.documentLabel || "the document")
-      .replaceAll("{reason}", context.reason || "Please review and update.")
-      .replaceAll("{rejection_reason}", context.rejectionReason || "Please coordinate with PSWDO for details.");
+      .replaceAll("{amount_line}", "")
+      .replaceAll("{document_label}", context.documentLabel || "dokumento")
+      .replaceAll("{reason}", context.reason || "Pakisuri at palitan po ang dokumento.")
+      .replaceAll("{rejection_reason}", context.rejectionReason || "Makipag-ugnayan po sa PSWDO para sa detalye.");
   }
 
   function normalizeDecisionStatus(rawStatus) {
@@ -1443,12 +1441,13 @@
     documentReviewStatusInput.value = context.documentReviewStatus || "";
     documentLabelInput.value = context.documentLabel || "";
     recipientLabelInput.value = isMass ? `${context.recipientCount || 0} recipients` : context.recipientNumber;
-    massFieldsWrap.classList.toggle("is-hidden", !isReleaseMass);
-    if (isReleaseMass) {
-      massDateInput.value = /^\d{4}-\d{2}-\d{2}$/.test(context.scheduleDate || "") ? context.scheduleDate : "";
-      massTimeInput.value = /^\d{2}:\d{2}$/.test(context.scheduleTime || "") ? context.scheduleTime : "09:00";
-      massVenueInput.value = (context.venue || "").trim() || "PSWDO Office";
-    }
+    // Each applicant's own saved schedule goes into a release notice, so no
+    // shared date, time or venue is asked for here.
+    massFieldsWrap.classList.add("is-hidden");
+    massPlaceholderNote.hidden = !isMass;
+    massPlaceholderNote.textContent = isReleaseMass
+      ? "The words in { } are filled in for each applicant when sent: their name, reference number, and their own release date, time and place."
+      : "The words in { } are filled in for each applicant when sent: their name and reference number.";
 
     const list = context.decisionStatus === "incomplete_requirements"
       ? templates.incomplete_requirements
@@ -1491,7 +1490,7 @@
     const isReject = context.actionType === "reject_request";
     if (smsSubmitBtn instanceof HTMLButtonElement) {
       smsSubmitBtn.innerHTML = isReleaseMass
-        ? '<i class="fas fa-paper-plane"></i> Send SMS + Simulate MSWDO'
+        ? '<i class="fas fa-paper-plane"></i> Send Schedule SMS'
         : (isReject
         ? '<i class="fas fa-circle-xmark"></i> Send SMS & Reject'
         : '<i class="fas fa-paper-plane"></i> Send SMS');
@@ -1523,7 +1522,6 @@
       scheduleTime: button.getAttribute("data-schedule-time") || "",
       venue: button.getAttribute("data-venue") || "",
       releaseBatch: button.getAttribute("data-release-batch") || "",
-      amountGiven: button.getAttribute("data-amount-given") || "",
       decisionStatus: normalizeDecisionStatus(button.getAttribute("data-decision-status") || "for_screening"),
       documentId: button.getAttribute("data-document-id") || "",
       documentReviewStatus: button.getAttribute("data-document-review-status") || "needs_reupload",
@@ -1592,7 +1590,7 @@
         requestId: "",
         referenceNo: "{reference}",
         beneficiaryName: "{beneficiary}",
-        applicantName: "Applicant",
+        applicantName: "{applicant}",
         recipientNumber: "",
         recipientCount: readyCount > 0 ? readyCount : recipientCount,
         scheduleDate: new Date().toISOString().slice(0, 10),
@@ -1662,6 +1660,15 @@
   });
 })();
 
+// Same as pswdo_sms_greeting() in PHP: the greeting for the hour an SMS is written.
+function smsGreeting(now = new Date()) {
+  const hour = now.getHours();
+  if (hour >= 5 && hour < 12) return "Magandang umaga po";
+  if (hour === 12) return "Magandang tanghali po";
+  if (hour >= 13 && hour < 18) return "Magandang hapon po";
+  return "Magandang gabi po";
+}
+
 function showRuntimeToast(message, tone = "error") {
   const text = (message || "").toString().trim();
   if (text === "") {
@@ -1716,8 +1723,7 @@ function showRuntimeToast(message, tone = "error") {
   const smsFields = document.getElementById("release-modal-sms-fields");
   const smsRecipientInput = document.getElementById("release-modal-sms-recipient");
   const smsMessageInput = document.getElementById("release-modal-sms-message");
-  const amountInput = document.getElementById("release-modal-amount");
-  let smsActiveContext = { beneficiary: "Applicant", referenceNo: "-", contactNumber: "", batch: "", manuallyEdited: false };
+  let smsActiveContext = { applicant: "Applicant", referenceNo: "-", contactNumber: "", batch: "", manuallyEdited: false };
   const autoOpenRequestId = (document.body?.getAttribute("data-release-schedule-request-id") || "").trim();
 
   if (
@@ -1756,21 +1762,13 @@ function showRuntimeToast(message, tone = "error") {
     return `${hour12}:${String(mm).padStart(2, "0")} ${period}`;
   }
 
-  function formatAmountLabel(value) {
-    const amount = Number.parseFloat(value || "");
-    if (!(amount > 0)) return "";
-    return amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-
   function buildSmsTemplate() {
-    const beneficiary = smsActiveContext.beneficiary || "Applicant";
+    const applicant = smsActiveContext.applicant || "Applicant";
     const reference = smsActiveContext.referenceNo || "";
-    const dateLabel = formatDateLabel(dateInput.value || "") || "the scheduled date";
-    const timeLabel = formatTimeLabel(timeInput.value || "") || "the scheduled time";
+    const dateLabel = formatDateLabel(dateInput.value || "") || "itinakdang petsa";
+    const timeLabel = formatTimeLabel(timeInput.value || "") || "itinakdang oras";
     const venue = (venueInput.value || "PSWDO Office").trim() || "PSWDO Office";
-    const amountLabel = amountInput instanceof HTMLInputElement ? formatAmountLabel(amountInput.value) : "";
-    const amountLine = amountLabel ? `Amount: PHP ${amountLabel}\n` : "";
-    return `Good day, ${beneficiary}.\nThis is from the PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nYour application, ${reference}, is scheduled for assistance release on:\nDate: ${dateLabel}\nTime: ${timeLabel}\nVenue: ${venue}\n${amountLine}Please arrive on time and bring your valid ID and required documents.\nThank you.`;
+    return `${smsGreeting()}, ${applicant}.\nIto po ay mula sa PSWDO – Assistance to Individuals in Crisis Situation (AICS) Program.\nNaka-schedule na po ang pagkuha ng tulong para sa inyong AICS application.\nReference No.: ${reference || "hindi available"}\nPetsa: ${dateLabel}\nOras: ${timeLabel}\nLugar: ${venue}\nPakidating po sa takdang oras at dalhin ang inyong valid ID at mga requirements.\nMaraming salamat po.`;
   }
 
   function refreshSmsTemplate(force) {
@@ -1796,14 +1794,12 @@ function showRuntimeToast(message, tone = "error") {
     const batch = button.getAttribute("data-release-batch") || "";
     const notes = button.getAttribute("data-release-notes") || "";
     const contactNumber = button.getAttribute("data-contact-number") || "";
-    const amountGiven = button.getAttribute("data-amount-given") || "";
 
     if (!/^\d+$/.test(requestId)) {
       return;
     }
 
     requestIdInput.value = requestId;
-    if (amountInput instanceof HTMLInputElement) amountInput.value = amountGiven;
     titleRef.textContent = referenceNo;
     metaBeneficiary.textContent = beneficiary;
     metaDetails.textContent = `${assistance} · ${classification}`;
@@ -1813,7 +1809,8 @@ function showRuntimeToast(message, tone = "error") {
     notesInput.value = notes;
 
     smsActiveContext = {
-      beneficiary,
+      // The SMS goes to the applicant's phone, so it greets the applicant.
+      applicant: button.getAttribute("data-applicant-name") || beneficiary,
       referenceNo: referenceNo === "-" ? "" : referenceNo,
       contactNumber,
       batch,
@@ -1847,7 +1844,7 @@ function showRuntimeToast(message, tone = "error") {
     }
   });
 
-  [dateInput, timeInput, venueInput, amountInput].forEach((field) => {
+  [dateInput, timeInput, venueInput].forEach((field) => {
     if (field instanceof HTMLInputElement) {
       field.addEventListener("input", () => refreshSmsTemplate(false));
       field.addEventListener("change", () => refreshSmsTemplate(false));
@@ -2044,15 +2041,6 @@ function showRuntimeToast(message, tone = "error") {
       syncBodyLock();
       return;
     }
-    if (isApproveScreeningForm && form.getAttribute("data-staff-review-incomplete") === "1") {
-      showRuntimeToast("Review all required documents before approving this application.", "error");
-      return;
-    }
-    if (isApproveScreeningForm && form.getAttribute("data-docs-not-approved") === "1") {
-      showRuntimeToast("Resolve the required document issues before approving this application.", "error");
-      return;
-    }
-
     pendingForm = form;
     pendingSubmission = buildSubmissionPayload(form);
     const title = form.getAttribute("data-title") || "Confirm Action";
@@ -2158,8 +2146,6 @@ function showRuntimeToast(message, tone = "error") {
   const filePreviewStage = document.getElementById("file-preview-stage");
   const filePreviewName = document.getElementById("file-preview-name");
   const filePreviewLabel = document.getElementById("file-preview-label");
-  const filePreviewApproveBtn = document.getElementById("file-preview-approve-btn");
-  const filePreviewBackApproveBtn = document.getElementById("file-preview-back-approve-btn");
   const approveScreeningForm = document.getElementById("approve-screening-form");
   const approveScreeningBtn = document.getElementById("approve-screening-btn");
   const approveScreeningRequestIdInput = document.getElementById("approve-screening-request-id");
@@ -2174,8 +2160,6 @@ function showRuntimeToast(message, tone = "error") {
   let activeRequestReferenceNo = "";
   let activeRequestBeneficiaryName = "";
   let activeRequestApplicantName = "";
-  let activeRequiredDocumentTotal = 0;
-  let activeStaffReviewedTotal = 0;
   const ensureAiEndpoint = root instanceof HTMLBodyElement ? (root.getAttribute("data-ai-ensure-url") || "").trim() : "";
   const debug = typeof window.__aicsRequestManagementDebug === "function"
     ? window.__aicsRequestManagementDebug
@@ -2381,8 +2365,6 @@ function showRuntimeToast(message, tone = "error") {
     setGisButton("", false);
     activeRequestTerminalLocked = false;
     activeDocumentActionsLocked = false;
-    activeRequiredDocumentTotal = 0;
-    activeStaffReviewedTotal = 0;
     if (approveScreeningBtn instanceof HTMLButtonElement) {
       approveScreeningBtn.disabled = true;
     }
@@ -2498,15 +2480,6 @@ function showRuntimeToast(message, tone = "error") {
         : null;
       const sourceRequestId = sourceInput instanceof HTMLInputElement ? (sourceInput.value || "").trim() : "";
       const detailShell = detailsContent.querySelector(".request-detail-shell");
-      const requiredTotal = detailShell instanceof HTMLElement
-        ? Number.parseInt(detailShell.getAttribute("data-required-total") || "0", 10)
-        : 0;
-      const checkedTotal = detailShell instanceof HTMLElement
-        ? Number.parseInt(detailShell.getAttribute("data-checked-total") || "0", 10)
-        : 0;
-      const staffReviewedTotal = detailShell instanceof HTMLElement
-        ? Number.parseInt(detailShell.getAttribute("data-staff-reviewed-total") || "0", 10)
-        : 0;
       const statusCode = detailShell instanceof HTMLElement
         ? (detailShell.getAttribute("data-status-code") || "").trim().toLowerCase()
         : "";
@@ -2523,18 +2496,6 @@ function showRuntimeToast(message, tone = "error") {
         ? (detailShell.getAttribute("data-beneficiary-name") || "Applicant").trim() : "Applicant";
       activeRequestApplicantName = detailShell instanceof HTMLElement
         ? (detailShell.getAttribute("data-applicant-name") || "Applicant").trim() : "Applicant";
-      const allDocsChecked = requiredTotal === 0 || (
-        Number.isFinite(requiredTotal)
-        && Number.isFinite(checkedTotal)
-        && checkedTotal >= requiredTotal
-      );
-      const allStaffReviewed = requiredTotal === 0 || (
-        Number.isFinite(requiredTotal)
-        && Number.isFinite(staffReviewedTotal)
-        && staffReviewedTotal >= requiredTotal
-      );
-      activeRequiredDocumentTotal = Number.isFinite(requiredTotal) ? requiredTotal : 0;
-      activeStaffReviewedTotal = Number.isFinite(staffReviewedTotal) ? staffReviewedTotal : 0;
       const alreadyApproved = statusCode === "approved";
 
       if (exportPdfBtn instanceof HTMLAnchorElement) {
@@ -2567,34 +2528,14 @@ function showRuntimeToast(message, tone = "error") {
 
       if (/^\d+$/.test(sourceRequestId) && !activeRequestTerminalLocked) {
         approveScreeningRequestIdInput.value = sourceRequestId;
-        const docsIncomplete = !allDocsChecked;
-        // Keep this enabled for an incomplete review so the delegated submit
-        // handler can explain the server-enforced rule instead of leaving a
-        // seemingly unresponsive disabled action.
         approveScreeningBtn.disabled = alreadyApproved;
-        if (alreadyApproved) {
-          approveScreeningBtn.title = "This request has already been approved for screening.";
-        } else if (docsIncomplete) {
-          approveScreeningBtn.title = requiredTotal > 0
-            ? `Review and approve all required documents first (${checkedTotal}/${requiredTotal} checked).`
-            : "No required documents are configured for this assistance type.";
-        } else {
-          approveScreeningBtn.title = "";
-        }
+        approveScreeningBtn.title = alreadyApproved ? "This request has already been approved for screening." : "";
         approveScreeningForm.setAttribute("data-already-approved", alreadyApproved ? "1" : "0");
-        approveScreeningForm.setAttribute("data-docs-incomplete", docsIncomplete ? "1" : "0");
-        approveScreeningForm.setAttribute("data-staff-review-incomplete", allStaffReviewed ? "0" : "1");
-        approveScreeningForm.setAttribute("data-docs-not-approved", allDocsChecked ? "0" : "1");
-        approveScreeningForm.setAttribute("data-checked-total", checkedTotal.toString());
-        approveScreeningForm.setAttribute("data-required-total", requiredTotal.toString());
       } else {
         approveScreeningRequestIdInput.value = "";
         approveScreeningBtn.disabled = true;
         approveScreeningBtn.title = "";
         approveScreeningForm.setAttribute("data-already-approved", "0");
-        approveScreeningForm.setAttribute("data-docs-incomplete", "0");
-        approveScreeningForm.setAttribute("data-staff-review-incomplete", "0");
-        approveScreeningForm.setAttribute("data-docs-not-approved", "0");
       }
 
       if (rejectRequestBtn instanceof HTMLButtonElement && rejectRequestIdInput instanceof HTMLInputElement) {
@@ -2603,7 +2544,6 @@ function showRuntimeToast(message, tone = "error") {
           rejectRequestBtn.hidden = true;
         } else {
           rejectRequestIdInput.value = /^\d+$/.test(sourceRequestId) ? sourceRequestId : requestId.toString();
-          rejectReasonForm?.setAttribute("data-staff-review-incomplete", allStaffReviewed ? "0" : "1");
           rejectRequestBtn.disabled = false;
           rejectRequestBtn.hidden = false;
         }
@@ -2728,29 +2668,6 @@ function showRuntimeToast(message, tone = "error") {
       const backFileUrl = previewButton.getAttribute("data-back-file-url") || "";
       const backFileName = previewButton.getAttribute("data-back-file-name") || "Back of ID";
       const backFileMime = previewButton.getAttribute("data-back-file-mime") || "";
-      const requestId = previewButton.getAttribute("data-request-id") || "";
-      const documentId = previewButton.getAttribute("data-document-id") || "";
-      const isChecked = (previewButton.getAttribute("data-is-checked") || "0") === "1";
-      if (filePreviewApproveBtn instanceof HTMLButtonElement) {
-        filePreviewApproveBtn.setAttribute("data-request-id", requestId);
-        filePreviewApproveBtn.setAttribute("data-document-id", documentId);
-        filePreviewApproveBtn.disabled = isChecked || activeRequestTerminalLocked;
-        filePreviewApproveBtn.innerHTML = isChecked
-          ? `<i class="fas fa-circle-check"></i> ${backFileUrl ? "Front Checked" : "Checked"}`
-          : (activeRequestTerminalLocked
-            ? '<i class="fas fa-lock"></i> Action Unavailable'
-            : `<i class="fas fa-circle-check"></i> ${backFileUrl ? "Mark Front as Checked" : "Mark as Checked"}`);
-      }
-      if (filePreviewBackApproveBtn instanceof HTMLButtonElement) {
-        const backChecked = (previewButton.getAttribute("data-back-is-checked") || "0") === "1";
-        filePreviewBackApproveBtn.hidden = !backFileUrl;
-        filePreviewBackApproveBtn.setAttribute("data-request-id", requestId);
-        filePreviewBackApproveBtn.setAttribute("data-document-id", previewButton.getAttribute("data-back-document-id") || "");
-        filePreviewBackApproveBtn.disabled = backChecked || activeRequestTerminalLocked;
-        filePreviewBackApproveBtn.innerHTML = backChecked
-          ? '<i class="fas fa-circle-check"></i> Back Checked'
-          : '<i class="fas fa-circle-check"></i> Mark Back as Checked';
-      }
       openFilePreviewModal(fileUrl, fileName, fileLabel, fileMime, backFileUrl, backFileName, backFileMime);
       return;
     }
@@ -2783,48 +2700,6 @@ function showRuntimeToast(message, tone = "error") {
     closeFilePreviewBtn.addEventListener("click", closeFilePreviewModal);
   }
 
-  function submitPreviewCheck(button) {
-    const requestId = (button.getAttribute("data-request-id") || "").trim();
-    const documentId = (button.getAttribute("data-document-id") || "").trim();
-    if (!/^\d+$/.test(requestId) || !/^\d+$/.test(documentId)) {
-      return;
-    }
-
-    const csrf = document.querySelector('input[name="csrf_token"]');
-    const csrfToken = csrf instanceof HTMLInputElement ? csrf.value : "";
-    if (csrfToken.trim() === "") {
-      return;
-    }
-
-    const form = document.createElement("form");
-    form.method = "post";
-    form.action = "workflow-action.php";
-    form.style.display = "none";
-    [
-      ["csrf_token", csrfToken],
-      ["action_type", "document_check"],
-      ["request_id", requestId],
-      ["document_id", documentId],
-      ["is_checked", "1"],
-      ["remarks", "Document checked by PSWDO from preview."],
-      ["return_page", "requests"],
-    ].forEach(([name, value]) => {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = name;
-      input.value = value;
-      form.appendChild(input);
-    });
-    document.body.appendChild(form);
-    form.submit();
-  }
-
-  if (filePreviewApproveBtn instanceof HTMLButtonElement) {
-    filePreviewApproveBtn.addEventListener("click", () => submitPreviewCheck(filePreviewApproveBtn));
-  }
-  if (filePreviewBackApproveBtn instanceof HTMLButtonElement) {
-    filePreviewBackApproveBtn.addEventListener("click", () => submitPreviewCheck(filePreviewBackApproveBtn));
-  }
 
   if (filePreviewModal) {
     filePreviewModal.addEventListener("click", (event) => {
@@ -2847,17 +2722,32 @@ function showRuntimeToast(message, tone = "error") {
       if (rejectRequestBtn.disabled) {
         return;
       }
-      if (activeRequiredDocumentTotal > 0 && activeStaffReviewedTotal < activeRequiredDocumentTotal) {
-        showRuntimeToast("Review all required documents before rejecting this application.");
-        return;
-      }
       rejectReasonModal.classList.add("open");
       syncBodyLock();
+      showRejectSmsPreview();
       const reasonTextarea = document.getElementById("reject-reason-text");
       if (reasonTextarea instanceof HTMLTextAreaElement) {
         reasonTextarea.focus();
       }
     });
+  }
+
+  // The rejection SMS, as the applicant will get it, updated while the reason is typed.
+  function showRejectSmsPreview() {
+    const preview = document.getElementById("reject-sms-preview");
+    const reasonTextarea = document.getElementById("reject-reason-text");
+    if (!(preview instanceof HTMLElement) || !(reasonTextarea instanceof HTMLTextAreaElement)) return;
+    const typed = reasonTextarea.value.trim();
+    const reason = typed === "" ? "(isusulat ninyo sa itaas)" : (/[.!?]$/.test(typed) ? typed : `${typed}.`);
+    preview.textContent = (preview.getAttribute("data-template") || "")
+      .replaceAll("{greeting}", smsGreeting())
+      .replaceAll("{applicant}", activeRequestApplicantName || "Applicant")
+      .replaceAll("{reference}", activeRequestReferenceNo || "hindi available")
+      .replace("{rejection_reason}.", reason);
+  }
+  const rejectReasonInput = document.getElementById("reject-reason-text");
+  if (rejectReasonInput instanceof HTMLTextAreaElement) {
+    rejectReasonInput.addEventListener("input", showRejectSmsPreview);
   }
 
   if (cancelRejectModalBtn instanceof HTMLButtonElement) {
@@ -2878,11 +2768,6 @@ function showRuntimeToast(message, tone = "error") {
       if (!/^\d+$/.test(requestIdVal)) {
         event.preventDefault();
         showRuntimeToast("Unable to reject this application because its request ID is missing. Please reopen the application and try again.");
-        return;
-      }
-      if (rejectReasonForm.getAttribute("data-staff-review-incomplete") === "1") {
-        event.preventDefault();
-        showRuntimeToast("Review all required documents before rejecting this application.");
         return;
       }
       const reasonTextarea = document.getElementById("reject-reason-text");
@@ -3039,4 +2924,57 @@ function showRuntimeToast(message, tone = "error") {
       closeLogoutModal();
     }
   });
+})();
+
+// Request Management: select requests (or all) and approve them together; the
+// result card after an approval names who was accepted.
+(() => {
+  const selectAll = document.getElementById("select-all-requests");
+  const bulkForm = document.getElementById("bulk-approve-form");
+  const countLabel = document.getElementById("bulk-approve-count");
+  const boxes = Array.from(document.querySelectorAll(".js-request-select"));
+
+  if (selectAll instanceof HTMLInputElement && bulkForm instanceof HTMLFormElement && boxes.length > 0) {
+    const sync = () => {
+      const chosen = boxes.filter((box) => box instanceof HTMLInputElement && box.checked);
+      bulkForm.querySelectorAll('input[name="request_ids[]"]').forEach((input) => input.remove());
+      chosen.forEach((box) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "request_ids[]";
+        input.value = box.value;
+        bulkForm.appendChild(input);
+      });
+      const total = chosen.length;
+      bulkForm.hidden = total === 0;
+      if (countLabel instanceof HTMLElement) countLabel.textContent = `${total} selected`;
+      bulkForm.setAttribute("data-message", `Approve ${total} application${total === 1 ? "" : "s"}? Each applicant gets an SMS listing their requirements and the PSWDO office hours.`);
+      selectAll.checked = total === boxes.length;
+      selectAll.indeterminate = total > 0 && total < boxes.length;
+    };
+    selectAll.addEventListener("change", () => {
+      boxes.forEach((box) => { if (box instanceof HTMLInputElement) box.checked = selectAll.checked; });
+      sync();
+    });
+    boxes.forEach((box) => box.addEventListener("change", sync));
+    sync();
+  } else if (selectAll instanceof HTMLInputElement) {
+    selectAll.disabled = true;
+  }
+
+  const feedback = document.getElementById("approval-feedback-modal");
+  const done = document.getElementById("close-approval-feedback");
+  if (!(feedback instanceof HTMLElement)) return;
+  const close = () => {
+    feedback.classList.remove("open");
+    document.body.classList.remove("modal-open");
+  };
+  document.body.classList.add("modal-open");
+  feedback.querySelectorAll("[data-close-approval-feedback]").forEach((button) => button.addEventListener("click", close));
+  if (done instanceof HTMLButtonElement) {
+    done.addEventListener("click", close);
+    done.focus();
+  }
+  feedback.addEventListener("click", (event) => { if (event.target === feedback) close(); });
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape" && feedback.classList.contains("open")) close(); });
 })();

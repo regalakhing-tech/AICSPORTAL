@@ -1,10 +1,9 @@
 <?php
 declare(strict_types=1);
 
-// The release amount is set when PSWDO schedules a release and goes into the
-// applicant's SMS. "Complete Release" only confirms it; it asks for an amount
-// only when the schedule was saved without one (Set Schedule for All, older
-// schedules).
+// The release amount is not part of scheduling and never goes into the
+// applicant's SMS. PSWDO enters it at "Complete Release" (which only confirms
+// an amount saved earlier, e.g. by an older schedule).
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../Pswdo/php_files/pswdo-data-lib.php';
 require_once __DIR__ . '/http-regression-db.php';
@@ -16,19 +15,18 @@ function amount_assert(bool $condition, string $message): void
 
 // SMS text.
 $item = ['beneficiary_name' => 'Maria Santos', 'reference_no' => 'AICS-2026-123456', 'scheduled_date_label' => 'October 5, 2026', 'scheduled_time_label' => '9:00 AM', 'venue' => 'PSWDO Office', 'amount_given' => 5000.0];
-amount_assert(str_contains(pswdo_build_release_schedule_sms_message($item), "Venue: PSWDO Office\nAmount: PHP 5,000.00\nPlease arrive"), 'The release SMS states the amount.');
-amount_assert(!str_contains(pswdo_build_release_schedule_sms_message(['amount_given' => null] + $item), 'Amount:'), 'No amount line when none is set.');
-amount_assert(str_contains(pswdo_apply_release_schedule_sms_tokens("Venue: {venue}\n{amount_line}Thank you.", $item), "Venue: PSWDO Office\nAmount: PHP 5,000.00\nThank you."), 'Bulk notices fill in each applicant\'s amount.');
+amount_assert(str_contains(pswdo_build_release_schedule_sms_message($item), "Lugar: PSWDO Office\nPakidating") && !str_contains(pswdo_build_release_schedule_sms_message($item), '5,000'), 'The release SMS states the amount.');
+amount_assert(pswdo_apply_release_schedule_sms_tokens("Lugar: {venue}\n{amount_line}Maraming salamat po.", $item) === "Lugar: PSWDO Office\nMaraming salamat po.", 'An older message with an amount placeholder still sends the amount.');
 
 // Page and script.
 $page = (string) file_get_contents(__DIR__ . '/../Pswdo/php_files/release-scheduling.php');
 $script = (string) file_get_contents(__DIR__ . '/../Pswdo/js files/pswdo-pages.js');
 $formStart = (int) strpos($page, 'id="release-schedule-modal-form"');
 $scheduleForm = substr($page, $formStart, (int) strpos($page, 'id="bulk-schedule-modal"') - $formStart);
-amount_assert(str_contains($scheduleForm, 'id="release-modal-amount"') && str_contains($scheduleForm, 'name="amount_given"'), 'Schedule Release asks for the amount to release.');
-amount_assert(substr_count($page, 'data-amount-given="') >= 2, 'The Schedule and Release buttons carry the saved amount.');
-amount_assert(str_contains($script, 'const amountInput = document.getElementById("release-modal-amount");') && str_contains($script, 'Amount: PHP ${'), 'The Schedule Release SMS fills in the amount.');
-amount_assert(str_contains($script, '"{amount_line}"'), 'SMS templates can include the amount.');
+amount_assert(!str_contains($scheduleForm, 'release-modal-amount') && !str_contains($scheduleForm, 'name="amount_given"'), 'Schedule Release still asks for the amount to release.');
+amount_assert(!str_contains($scheduleForm, 'MSWDO preview'), 'Schedule Release still shows the MSWDO preview note.');
+amount_assert(substr_count($page, 'data-amount-given="') >= 2, 'The Release buttons lost the saved amount.');
+amount_assert(!str_contains($script, 'release-modal-amount') && !str_contains($script, 'Halaga:') && !str_contains($script, '{amount_line}Pakidating'), 'An SMS template or the Schedule Release SMS still includes the amount.');
 $releaseModal = substr($page, (int) strpos($page, 'id="mark-released-modal"'), 3000);
 amount_assert(str_contains($releaseModal, 'id="mark-released-amount-summary"'), 'Complete Release shows the scheduled amount instead of asking for it.');
 amount_assert(str_contains($page, "amountWrap.hidden = hasAmount;"), 'The amount field appears only when no amount was scheduled.');
@@ -57,15 +55,22 @@ $refused = static function (callable $action): string {
     return '';
 };
 
+// Schedule Release saves no amount: Complete Release asks for it.
 $scheduled = $insert($c, 'AMOUNT-1');
-amount_assert(str_contains($refused(fn () => pswdo_save_release_schedule_action($c, $scheduled, $account, '2026-10-21', '09:00', 'PSWDO Office', 10, '', 0.0)), 'amount'), 'A schedule without an amount is refused.');
-pswdo_save_release_schedule_action($c, $scheduled, $account, '2026-10-21', '09:00', 'PSWDO Office', 10, '', 5000.0);
-amount_assert($amountOf($scheduled) === '5000.00', 'The scheduled amount is saved.');
-$record = pswdo_fetch_release_schedule_record($c, $scheduled);
-amount_assert(is_array($record) && (float) ($record['amount_given'] ?? 0) === 5000.0, 'The release queue shows the scheduled amount.');
-pswdo_update_release_schedule_status_action($c, $scheduled, 'released', $account, '');
-amount_assert($amountOf($scheduled) === '5000.00', 'Confirm Release keeps the scheduled amount.');
-amount_assert($c->query("SELECT claim_status FROM aics_requests WHERE id = {$scheduled}")->fetch_row()[0] === 'claimed', 'Confirm Release completes the release.');
+pswdo_save_release_schedule_action($c, $scheduled, $account, '2026-10-21', '09:00', 'PSWDO Office', 10, '', 0.0);
+amount_assert($amountOf($scheduled) === null, 'A schedule saved an amount nobody entered.');
+amount_assert(str_contains($refused(fn () => pswdo_update_release_schedule_status_action($c, $scheduled, 'released', $account, '')), 'amount'), 'A release without any amount is completed.');
+pswdo_update_release_schedule_status_action($c, $scheduled, 'released', $account, '', 5000.0);
+amount_assert($amountOf($scheduled) === '5000.00', 'The amount entered at Complete Release is saved.');
+amount_assert($c->query("SELECT claim_status FROM aics_requests WHERE id = {$scheduled}")->fetch_row()[0] === 'claimed', 'Complete Release completes the release.');
+
+// An amount saved by an older schedule is kept when the release is rescheduled.
+$older = $insert($c, 'AMOUNT-3');
+pswdo_save_release_schedule_action($c, $older, $account, '2026-10-21', '09:00', 'PSWDO Office', 10, '', 4000.0);
+pswdo_save_release_schedule_action($c, $older, $account, '2026-10-22', '10:00', 'PSWDO Office', 10, '', 0.0);
+amount_assert($amountOf($older) === '4000.00', 'Rescheduling erased the saved amount.');
+pswdo_update_release_schedule_status_action($c, $older, 'released', $account, '');
+amount_assert($amountOf($older) === '4000.00', 'Complete Release did not keep the saved amount.');
 
 // Set Schedule for All saves no amount: Complete Release must ask for it.
 $bulk = $insert($c, 'AMOUNT-2');

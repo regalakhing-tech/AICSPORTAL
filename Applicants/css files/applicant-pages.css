@@ -5010,6 +5010,33 @@ body.account-banned-lockdown .sidebar-overlay {
   align-items: start;
 }
 
+/* Fields in one row share a label line and a control line, so a label that
+   wraps never pushes its box out of line with the box beside it. */
+.intake-shell-senior .form-grid > .field > label:not([class]) {
+  display: block;
+  text-wrap: pretty;
+}
+
+.intake-shell-senior .form-grid > .field > label:not([class]) > :is(.required-star, .field-optional-badge) {
+  margin-left: 2px;
+  vertical-align: middle;
+}
+
+/* Rows: label, control, then any hint or warning under the control. */
+@supports (grid-template-rows: subgrid) {
+  .intake-shell-senior .form-grid {
+    row-gap: 0;
+    margin-bottom: -15px;
+  }
+
+  .intake-shell-senior .form-grid > .field {
+    grid-row: span 3;
+    grid-template-rows: subgrid;
+    align-self: stretch;
+    padding-bottom: 15px;
+  }
+}
+
 .intake-shell-senior .intake-step.active,
 .intake-shell-senior #aics-intake-form {
   min-height: 0;
@@ -9206,65 +9233,6 @@ body.profile-id-viewer-open { overflow: hidden; }
   flex-shrink: 0;
 }
 
-/* ---------- Overall Document Progress Card ---------- */
-.status-page .status-progress-overview-card {
-  padding: 22px 26px;
-  border-radius: 20px;
-  border: 1.5px solid #e2e8f0;
-  background: #ffffff;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
-  margin-bottom: 24px;
-}
-
-.status-page .status-progress-overview-card .docs-progress-head {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 14px;
-}
-
-.status-page .status-progress-overview-card .docs-progress-icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 15px;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
-  display: grid;
-  place-items: center;
-  font-size: 22px;
-  color: #0284c7;
-  flex-shrink: 0;
-}
-
-.status-page .status-progress-overview-card .docs-progress-copy strong {
-  font-size: 16px;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.01em;
-}
-
-.status-page .status-progress-overview-card .docs-progress-copy span {
-  font-size: 14px;
-  color: #64748b;
-  font-weight: 500;
-}
-
-.status-page .status-progress-overview-card .progress-track-senior {
-  height: 10px;
-  background: #f1f5f9;
-  border-radius: 999px;
-  overflow: hidden;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
-}
-
-.status-page .status-progress-overview-card .progress-track-senior span {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #0284c7 0%, #10b981 100%);
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
-  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
 /* ---------- Request Card Block ---------- */
 .status-page .docs-request-block {
   background: #ffffff;
@@ -11247,6 +11215,8 @@ body .status-page .ai-gate-fix-button {
   white-space: nowrap;
 }
 body .status-page .ai-gate-fix-button:hover { background: #be123c; }
+body .status-page label.is-uploading { opacity: 0.7; }
+body .status-page .ai-gate-fix-button.is-uploading:hover { background: #e11d48; }
 body .status-page .ai-gate-fix-button:focus-within { outline: 3px solid #fda4af; outline-offset: 2px; }
 body .status-page .ai-gate-fix-button input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 
@@ -11311,6 +11281,14 @@ body .status-page .ai-gate-notice.ai-gate-eta.is-urgent > i { color: #dc2626; }
 body .status-page .ai-gate-notice.ai-gate-eta.is-high { background: #fffbeb; border-color: #fde68a; border-left-color: #d97706; color: #78350f; }
 body .status-page .ai-gate-notice.ai-gate-eta.is-high > i { color: #d97706; }
 body .status-page .ai-gate-notice.ai-gate-eta.is-overdue .ai-gate-eta-date { font-weight: 500; }
+/* After PSWDO decides, the same card says what to do next. Approved and
+   scheduled keep the green; waiting is blue; a missed date is amber. */
+body .status-page .ai-gate-stage-line { font-size: 13.5px; line-height: 1.5; }
+body .status-page .ai-gate-stage-line:first-of-type { margin-top: 4px; }
+body .status-page .ai-gate-notice.is-stage.is-waiting { background: #eff6ff; border-color: #bfdbfe; border-left-color: #2563eb; color: #1e3a8a; }
+body .status-page .ai-gate-notice.is-stage.is-waiting > i { color: #2563eb; }
+body .status-page .ai-gate-notice.is-stage.is-missed { background: #fffbeb; border-color: #fde68a; border-left-color: #d97706; color: #78350f; }
+body .status-page .ai-gate-notice.is-stage.is-missed > i { color: #d97706; }
 
 /* ==========================================================================
    Phone layout (<= 640px): app-like density for the applicant portal.
@@ -11391,16 +11369,18 @@ body .status-page .ai-gate-notice.ai-gate-eta.is-overdue .ai-gate-eta-date { fon
   .intake-progress-senior { display: none; }
   .stepper-senior.app-scroll-region .step-label { display: none; }
 
-  /* Cooldown notice on the status page: small icon beside the text, tag underneath. */
+  /* Cooldown notice on the status page: a small icon, the title and the next
+     date only; the policy sentence and the tag repeat the title. */
   body .status-page .senior-cooldown-banner {
-    flex-direction: row; flex-wrap: wrap; align-items: flex-start;
-    gap: 8px 12px; padding: 12px 14px; border-radius: 14px; border-left-width: 4px; margin-bottom: 16px;
+    flex-direction: row; flex-wrap: nowrap; align-items: center;
+    gap: 10px; padding: 10px 12px; border-radius: 12px; border-left-width: 4px; margin-bottom: 14px; box-shadow: none;
   }
-  body .status-page .cooldown-icon-badge { width: 32px; height: 32px; border-radius: 10px; font-size: 15px; }
-  body .status-page .cooldown-copy { flex: 1 1 calc(100% - 44px); }
-  body .status-page .cooldown-title { font-size: 14px; margin-bottom: 2px; }
-  body .status-page .cooldown-detail { font-size: 12.5px; line-height: 1.45; }
-  body .status-page .cooldown-tag { margin-left: 44px; padding: 4px 10px; font-size: 11.5px; }
+  body .status-page .cooldown-icon-badge { width: 28px; height: 28px; border-radius: 8px; font-size: 13px; box-shadow: none; }
+  body .status-page .cooldown-copy { flex: 1 1 auto; }
+  body .status-page .cooldown-title { font-size: 13px; line-height: 1.3; margin-bottom: 1px; }
+  body .status-page .cooldown-detail { font-size: 12px; line-height: 1.4; }
+  body .status-page .cooldown-policy,
+  body .status-page .cooldown-tag { display: none; }
 
   body .status-page .ai-gate-notice { gap: 10px; margin-bottom: 14px; padding: 11px 13px; border-radius: 12px; border-left-width: 4px; font-size: 13px; }
   body .status-page .ai-gate-notice > i { font-size: 15px; }
@@ -11526,6 +11506,33 @@ body .status-page .ai-gate-notice.ai-gate-eta.is-overdue .ai-gate-eta-date { fon
 
 .intake-shell-senior .choice-grid .choice-card:has(input:checked) {
   box-shadow: 0 2px 8px rgba(2, 132, 199, 0.16);
+}
+
+/* Beneficiary category: three per row once its panel is wide enough, and a
+   lone last card fills its row instead of leaving a gap beside it. */
+.intake-shell-senior .field-group:has(> .choice-grid-category) {
+  container-type: inline-size;
+}
+
+@container (min-width: 28rem) {
+  .intake-shell-senior .choice-grid.choice-grid-category {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.intake-shell-senior .choice-grid-category > .choice-card:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+/* Step 3: the two columns end on the same line. */
+@media (min-width: 901px) {
+  .intake-shell-senior .intake-step[data-step="2"] .step-layout-grid {
+    align-items: stretch;
+  }
+
+  .intake-shell-senior .intake-step[data-step="2"] .step-layout-grid > .step-panel-card {
+    align-self: stretch;
+  }
 }
 
 /* Assistance types: three per row (names fit on one or two lines), two on

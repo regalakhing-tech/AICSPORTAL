@@ -449,6 +449,8 @@ window.AICS_I18N_DICT = {
   "Unable to start a new application.": ["Hindi makapagsimula ng bagong aplikasyon.", "Indi makasugod sang bag-o nga aplikasyon."],
   "Unable to submit request. Please try again.": ["Hindi maisumite ang kahilingan. Subukan muli.", "Indi masumite ang pangayo. Palihog tilawi liwat."],
   "Unclaimed": ["Hindi pa Nakukuha", "Wala pa Nakuha"],
+  "Under PSWDO policy, an annual interval applies between assistance grants.": ["Ayon sa patakaran ng PSWDO, may taunang pagitan sa pagbibigay ng tulong.", "Suno sa palisiya sang PSWDO, may tinuig nga tunga sa paghatag sang bulig."],
+  "Your next eligible submission date is": ["Ang susunod mong petsa ng pagsumite ay", "Ang masunod mo nga petsa sang pagsumite amo ang"],
   "Under PSWDO policy, an annual interval applies between assistance grants. Your next eligible submission date is": ["Ayon sa patakaran ng PSWDO, may taunang pagitan sa pagbibigay ng tulong. Ang susunod mong petsa ng pagsumite ay", "Suno sa palisiya sang PSWDO, may tinuig nga tunga sa paghatag sang bulig. Ang masunod mo nga petsa sang pagsumite amo ang"],
   "Under Review": ["Sinusuri", "Ginarepaso"],
   "Unemployed": ["Walang Trabaho", "Wala sang Obra"],
@@ -518,12 +520,26 @@ window.AICS_I18N_DICT = {
   "Urgent": ["Urgent", "Urgent"],
   "High": ["Mataas", "Mataas"],
   "Standard": ["Karaniwan", "Kasagaran"],
+  "Approved for further screening": ["Aprubado para sa further screening", "Aprobado para sa further screening"],
+  "Visit the PSWDO Office": ["Pumunta sa PSWDO Office", "Magkadto sa PSWDO Office"],
+  "Any office day: Monday to Thursday, 8:00 AM - 11:00 AM or 1:00 PM - 4:00 PM.": ["Sa anumang araw ng opisina: Lunes hanggang Huwebes, 8:00 AM - 11:00 AM o 1:00 PM - 4:00 PM.", "Sa bisan ano nga adlaw sang opisina: Lunes tubtob Huwebes, 8:00 AM - 11:00 AM ukon 1:00 PM - 4:00 PM."],
+  "Bring the original copies of your requirements.": ["Dalhin ang orihinal na kopya ng inyong mga requirements.", "Dal-a ang orihinal nga kopya sang inyo mga requirements."],
+  "Further screening passed": ["Pumasa na sa further screening", "Nakapasar na sa further screening"],
+  "Wait for your release schedule": ["Hintayin ang inyong release schedule", "Hulata ang inyo release schedule"],
+  "PSWDO will text you the date, time and place to receive your assistance.": ["Ite-text kayo ng PSWDO ng petsa, oras at lugar ng pagkuha ng inyong tulong.", "I-text kamo sang PSWDO sang petsa, oras kag lugar sang pagbaton sang inyo bulig."],
+  "Release scheduled": ["Naka-schedule na ang release", "Naka-schedule na ang release"],
+  "Your assistance is ready": ["Handa na ang inyong tulong", "Handa na ang inyo bulig"],
+  "Bring your valid ID and your requirements. Please arrive on time.": ["Dalhin ang inyong valid ID at mga requirements. Pakidating sa takdang oras.", "Dal-a ang inyo valid ID kag mga requirements. Palihog mag-abot sa husto nga oras."],
+  "Release schedule missed": ["Hindi nadaluhan ang release schedule", "Wala natambungan ang release schedule"],
+  "Wait for a new schedule": ["Hintayin ang bagong schedule", "Hulata ang bag-o nga schedule"],
+  "PSWDO will text you a new date, time and place.": ["Ite-text kayo ng PSWDO ng bagong petsa, oras at lugar.", "I-text kamo sang PSWDO sang bag-o nga petsa, oras kag lugar."],
 };
 
 // Text with numbers, dates or names inside. {1} copies a captured part as it is;
 // {t1} translates the captured part with the list above when it can.
 window.AICS_I18N_PATTERNS = [
   [/^Applied:? (.+)$/, ['Nag-apply: {1}', 'Nag-aplay: {1}']],
+  [/^Place: (.+)$/, ['Lugar: {1}', 'Lugar: {1}']],
   [/^Updated: (.+)$/, ['Na-update: {1}', 'Na-update: {1}']],
   [/^Last update: (.+)$/, ['Huling update: {1}', 'Katapusan nga update: {1}']],
   [/^Last saved: (.+)$/, ['Huling na-save: {1}', 'Katapusan nga pag-save: {1}']],

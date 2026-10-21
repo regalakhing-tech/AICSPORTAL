@@ -228,6 +228,9 @@ foreach ($queueItems as $queueItem) {
                   >
                     <i class="fas fa-bullhorn"></i> Mass Notice
                   </button>
+                  <button type="button" class="btn-solid screening-mass-notice screening-bulk-approve js-approve-for-release" id="bulk-approve-release-btn" data-bulk="1" hidden>
+                    <i class="fas fa-circle-check" aria-hidden="true"></i> Approve Selected for Scheduling (<span id="bulk-approve-release-count">0</span>)
+                  </button>
                 <?php endif; ?>
               </form>
             </div>
@@ -253,12 +256,16 @@ foreach ($queueItems as $queueItem) {
             <div class="table-wrap">
               <table class="request-table screening-queue-table">
                 <colgroup>
+                  <?php if ($activeTab === 'for_screening'): ?><col class="screening-col-select"><?php endif; ?>
                   <col class="screening-col-reference"><col class="screening-col-person"><col class="screening-col-priority">
                   <col class="screening-col-assistance"><col class="screening-col-applied"><col class="screening-col-requirements">
                   <col class="screening-col-status"><col class="screening-col-confirmed-by"><col class="screening-col-confirmed-at"><col class="screening-col-actions">
                 </colgroup>
                 <thead>
                   <tr>
+                    <?php if ($activeTab === 'for_screening'): ?>
+                      <th class="request-select-cell"><input type="checkbox" id="select-all-screening" aria-label="Select all applicants"></th>
+                    <?php endif; ?>
                     <th>Reference</th>
                     <th>Applicant / Beneficiary</th>
                     <th>Priority</th>
@@ -273,7 +280,7 @@ foreach ($queueItems as $queueItem) {
                 </thead>
                 <tbody>
                   <tr class="queue-no-results-row" style="display:none;">
-                    <td colspan="10" style="text-align:center;padding:24px;color:#64748b;font-style:italic;">No applicants match your search.</td>
+                    <td colspan="<?= $activeTab === 'for_screening' ? 11 : 10 ?>" style="text-align:center;padding:24px;color:#64748b;font-style:italic;">No applicants match your search.</td>
                   </tr>
                   <?php foreach ($queueItems as $item): ?>
                     <?php
@@ -286,6 +293,11 @@ foreach ($queueItems as $queueItem) {
                       ])));
                     ?>
                     <tr data-search-text="<?= pswdo_h($searchText) ?>">
+                      <?php if ($activeTab === 'for_screening'): ?>
+                        <td class="request-select-cell">
+                          <input type="checkbox" class="js-screening-select" value="<?= (int) ($item['request_id'] ?? 0) ?>" aria-label="Select <?= pswdo_h((string) ($item['reference_no'] ?? 'applicant')) ?>">
+                        </td>
+                      <?php endif; ?>
                       <td>
                         <div class="reference-stack">
                           <strong><?= pswdo_h((string) ($item['reference_no'] ?? '-')) ?></strong>
@@ -333,19 +345,6 @@ foreach ($queueItems as $queueItem) {
                           >
                             <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> View details
                           </button>
-                          <button
-                            type="button"
-                            class="btn-outline screening-action-button screening-action-sms js-open-sms-modal"
-                            data-request-id="<?= (int) ($item['request_id'] ?? 0) ?>"
-                            data-reference-no="<?= pswdo_h((string) ($item['reference_no'] ?? '')) ?>"
-                            data-applicant-name="<?= pswdo_h((string) ($item['applicant_name'] ?? 'Applicant')) ?>"
-                            data-beneficiary-name="<?= pswdo_h((string) ($item['beneficiary_name'] ?? 'Applicant')) ?>"
-                            data-recipient-number="<?= pswdo_h(pswdo_applicant_sms_contact($item)) ?>"
-                            data-decision-status="<?= pswdo_h((string) ($item['decision_status'] ?? 'for_screening')) ?>"
-                            <?= pswdo_applicant_sms_contact($item) === '' ? 'disabled' : '' ?>
-                          >
-                            <i class="fas fa-message" aria-hidden="true"></i> Send SMS
-                          </button>
                           <?php if ($activeTab === 'for_screening'): ?>
                           <button
                             type="button"
@@ -371,35 +370,45 @@ foreach ($queueItems as $queueItem) {
   </div>
 
   <!-- Approve for Scheduling confirmation modal -->
-  <div class="sms-compose-modal" id="approve-release-modal" style="display:none;">
-    <div class="sms-compose-card" role="dialog" aria-modal="true" aria-labelledby="approve-release-title">
-      <div class="sms-compose-header">
-        <h3 id="approve-release-title"><i class="fas fa-check-circle" style="color:#059669;"></i> Approve for Scheduling</h3>
-        <button type="button" class="close-details-btn" id="close-approve-release-modal" aria-label="Close">
-          <i class="fas fa-times"></i>
-        </button>
+  <div class="sms-compose-modal approve-release-modal" id="approve-release-modal" style="display:none;">
+    <section class="approve-release-card" role="dialog" aria-modal="true" aria-labelledby="approve-release-title" aria-describedby="approve-release-lead">
+      <header class="approve-release-head">
+        <span class="approve-release-icon" aria-hidden="true"><i class="fas fa-calendar-check"></i></span>
+        <div class="approve-release-heading">
+          <h3 id="approve-release-title">Approve for Scheduling?</h3>
+          <p id="approve-release-lead">Further screening passed.</p>
+        </div>
+        <button type="button" class="approve-release-close" id="close-approve-release-modal" aria-label="Close"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+      </header>
+
+      <div class="approve-release-body">
+        <div class="approve-release-person">
+          <span class="approve-release-avatar" id="approve-release-avatar" aria-hidden="true"></span>
+          <span class="approve-release-person-text">
+            <strong id="approve-release-name"></strong>
+            <span id="approve-release-ref"></span>
+          </span>
+        </div>
+        <ul class="approve-release-steps">
+          <li><i class="fas fa-right-to-bracket" aria-hidden="true"></i><span><span id="approve-release-what">The application moves</span> to Release Scheduling, where you set the release date.</span></li>
+          <li><i class="fas fa-comment-sms" aria-hidden="true"></i><span><span id="approve-release-who">The applicant gets</span> an SMS to wait for the schedule.</span></li>
+        </ul>
       </div>
-      <div class="sms-compose-body">
-        <p style="margin:0 0 6px;">You are about to move this application to the <strong>Release Scheduling</strong> queue.</p>
-        <p id="approve-release-applicant" style="margin:0 0 18px;color:#475569;font-size:14px;"></p>
-        <p style="margin:0 0 18px;color:#475569;font-size:13px;">This action will change the applicant's status from <strong>Approved</strong> to <strong>For Release</strong>. The applicant will appear in Release Scheduling where you can set a release date and send a notice.</p>
-        <form method="post" action="workflow-action.php" id="approve-release-form">
-          <input type="hidden" name="csrf_token" value="<?= pswdo_h($csrfToken) ?>">
-          <input type="hidden" name="action_type" value="approve_for_release">
-          <input type="hidden" name="request_id" id="approve-release-request-id" value="">
-          <input type="hidden" name="return_page" value="prescreening">
-          <input type="hidden" name="return_queue_tab" value="<?= pswdo_h($activeTab) ?>">
-          <input type="hidden" name="return_date_from" value="<?= pswdo_h($dateFrom) ?>">
-          <input type="hidden" name="return_date_to" value="<?= pswdo_h($dateTo) ?>">
-          <input type="hidden" name="return_queue_sort" value="<?= pswdo_h($sortBy) ?>">
-          <input type="hidden" name="return_queue_group" value="<?= pswdo_h($sortGroup) ?>">
-          <div class="confirm-actions">
-            <button type="button" class="btn-outline" id="cancel-approve-release">Cancel</button>
-            <button type="submit" class="btn-solid" style="background:#059669;"><i class="fas fa-check-circle"></i> Confirm for Scheduling</button>
-          </div>
-        </form>
-      </div>
-    </div>
+
+      <form method="post" action="workflow-action.php" id="approve-release-form" class="approve-release-actions">
+        <input type="hidden" name="csrf_token" value="<?= pswdo_h($csrfToken) ?>">
+        <input type="hidden" name="action_type" id="approve-release-action-type" value="approve_for_release">
+        <input type="hidden" name="request_id" id="approve-release-request-id" value="">
+        <input type="hidden" name="return_page" value="prescreening">
+        <input type="hidden" name="return_queue_tab" value="<?= pswdo_h($activeTab) ?>">
+        <input type="hidden" name="return_date_from" value="<?= pswdo_h($dateFrom) ?>">
+        <input type="hidden" name="return_date_to" value="<?= pswdo_h($dateTo) ?>">
+        <input type="hidden" name="return_queue_sort" value="<?= pswdo_h($sortBy) ?>">
+        <input type="hidden" name="return_queue_group" value="<?= pswdo_h($sortGroup) ?>">
+        <button type="button" class="btn-outline" id="cancel-approve-release">Cancel</button>
+        <button type="submit" class="btn-solid approve-release-confirm"><i class="fas fa-check" aria-hidden="true"></i> Approve for Scheduling</button>
+      </form>
+    </section>
   </div>
 
   <div class="sms-compose-modal" id="sms-compose-modal">
@@ -576,18 +585,74 @@ foreach ($queueItems as $queueItem) {
       searchInput.focus();
     })();
 
-    // Approve for Scheduling modal
+    // Approve for Scheduling: one applicant from its row, or every selected
+    // applicant (like the mass notice, each gets their own SMS).
     (() => {
       const modal = document.getElementById('approve-release-modal');
+      const form = document.getElementById('approve-release-form');
       const requestIdInput = document.getElementById('approve-release-request-id');
-      const applicantLabel = document.getElementById('approve-release-applicant');
-      if (!(modal instanceof HTMLElement) || !(requestIdInput instanceof HTMLInputElement) || !(applicantLabel instanceof HTMLElement)) {
+      const actionTypeInput = document.getElementById('approve-release-action-type');
+      const nameLabel = document.getElementById('approve-release-name');
+      const refLabel = document.getElementById('approve-release-ref');
+      const avatar = document.getElementById('approve-release-avatar');
+      const whatLabel = document.getElementById('approve-release-what');
+      const whoLabel = document.getElementById('approve-release-who');
+      if (!(modal instanceof HTMLElement) || !(form instanceof HTMLFormElement) || !(requestIdInput instanceof HTMLInputElement) || !(actionTypeInput instanceof HTMLInputElement) || !(nameLabel instanceof HTMLElement) || !(refLabel instanceof HTMLElement) || !(avatar instanceof HTMLElement)) {
         return;
       }
 
-      function openModal(requestId, referenceNo, applicantName) {
-        requestIdInput.value = String(requestId);
-        applicantLabel.textContent = referenceNo + ' — ' + applicantName;
+      const selectAll = document.getElementById('select-all-screening');
+      const boxes = Array.from(document.querySelectorAll('.js-screening-select'));
+      const bulkButton = document.getElementById('bulk-approve-release-btn');
+      const bulkCount = document.getElementById('bulk-approve-release-count');
+      const chosen = () => boxes.filter((box) => box instanceof HTMLInputElement && box.checked && box.closest('tr')?.style.display !== 'none');
+
+      function syncSelection() {
+        const total = chosen().length;
+        if (bulkButton instanceof HTMLElement) bulkButton.hidden = total === 0;
+        if (bulkCount instanceof HTMLElement) bulkCount.textContent = String(total);
+        if (selectAll instanceof HTMLInputElement) {
+          selectAll.checked = boxes.length > 0 && total === boxes.length;
+          selectAll.indeterminate = total > 0 && total < boxes.length;
+        }
+      }
+      if (selectAll instanceof HTMLInputElement) {
+        selectAll.addEventListener('change', () => {
+          boxes.forEach((box) => { if (box instanceof HTMLInputElement && box.closest('tr')?.style.display !== 'none') box.checked = selectAll.checked; });
+          syncSelection();
+        });
+      }
+      boxes.forEach((box) => box.addEventListener('change', syncSelection));
+
+      function openModal(button) {
+        form.querySelectorAll('input[name="request_ids[]"]').forEach((input) => input.remove());
+        const isBulk = button.getAttribute('data-bulk') === '1';
+        if (isBulk) {
+          const selected = chosen();
+          if (selected.length === 0) return;
+          selected.forEach((box) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'request_ids[]';
+            input.value = box.value;
+            form.appendChild(input);
+          });
+          actionTypeInput.value = 'bulk_approve_for_release';
+          requestIdInput.value = '';
+          nameLabel.textContent = selected.length + ' applicant' + (selected.length === 1 ? '' : 's') + ' selected';
+          refLabel.textContent = 'Each one is texted separately.';
+          avatar.textContent = String(selected.length);
+        } else {
+          const name = button.getAttribute('data-applicant-name') || 'Applicant';
+          actionTypeInput.value = 'approve_for_release';
+          requestIdInput.value = button.getAttribute('data-request-id') ?? '';
+          nameLabel.textContent = name;
+          refLabel.textContent = button.getAttribute('data-reference-no') ?? '';
+          const parts = name.split(/\s+/).filter(Boolean);
+          avatar.textContent = ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+        }
+        if (whatLabel instanceof HTMLElement) whatLabel.textContent = isBulk ? 'The applications move' : 'The application moves';
+        if (whoLabel instanceof HTMLElement) whoLabel.textContent = isBulk ? 'Each applicant gets' : 'The applicant gets';
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
       }
@@ -596,16 +661,11 @@ foreach ($queueItems as $queueItem) {
         modal.style.display = 'none';
         document.body.style.overflow = '';
         requestIdInput.value = '';
-        applicantLabel.textContent = '';
+        form.querySelectorAll('input[name="request_ids[]"]').forEach((input) => input.remove());
       }
 
       document.querySelectorAll('.js-approve-for-release').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const requestId = btn.getAttribute('data-request-id') ?? '';
-          const referenceNo = btn.getAttribute('data-reference-no') ?? '';
-          const applicantName = btn.getAttribute('data-applicant-name') ?? 'Applicant';
-          openModal(requestId, referenceNo, applicantName);
-        });
+        btn.addEventListener('click', () => openModal(btn));
       });
 
       const cancelBtn = document.getElementById('cancel-approve-release');
@@ -613,11 +673,14 @@ foreach ($queueItems as $queueItem) {
       if (cancelBtn instanceof HTMLElement) cancelBtn.addEventListener('click', closeModal);
       if (closeBtn instanceof HTMLElement) closeBtn.addEventListener('click', closeModal);
 
-      const approveForm = document.getElementById('approve-release-form');
+      const approveForm = form;
       if (approveForm instanceof HTMLFormElement) {
         approveForm.addEventListener('submit', (event) => {
-          const requestId = requestIdInput.value.trim();
-          if (!/^\d+$/.test(requestId)) {
+          const isBulk = actionTypeInput.value === 'bulk_approve_for_release';
+          const hasTarget = isBulk
+            ? approveForm.querySelector('input[name="request_ids[]"]') !== null
+            : /^\d+$/.test(requestIdInput.value.trim());
+          if (!hasTarget) {
             event.preventDefault();
             return;
           }
