@@ -223,6 +223,22 @@ if ($returnCandidate !== '') {
             </div>
           </section>
 
+          <section class="profile-language-card" data-language-picker data-save-url="language-save.php" aria-labelledby="profile-language-title">
+            <div class="profile-language-heading">
+              <div>
+                <h3 id="profile-language-title">Language</h3>
+                <p>Choose the language for the content of your pages. The menu stays in English.</p>
+              </div>
+              <i class="fas fa-language" aria-hidden="true"></i>
+            </div>
+            <div class="profile-language-options" role="radiogroup" aria-labelledby="profile-language-title">
+              <button type="button" role="radio" aria-checked="false" data-language-option="en" lang="en" data-no-translate>English</button>
+              <button type="button" role="radio" aria-checked="false" data-language-option="tl" lang="fil" data-no-translate>Tagalog</button>
+              <button type="button" role="radio" aria-checked="false" data-language-option="hil" lang="hil" data-no-translate>Hiligaynon</button>
+            </div>
+            <p class="profile-language-status" data-language-status role="status" aria-live="polite"></p>
+          </section>
+
           <div class="profile-tip-card">
             <div class="profile-tip-icon">
               <i class="fas fa-lightbulb"></i>

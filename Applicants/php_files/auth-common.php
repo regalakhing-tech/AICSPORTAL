@@ -151,6 +151,7 @@ function aics_ensure_auth_schema(mysqli $connection): void
     $connection->query("ALTER TABLE aics_applicant_profiles ADD COLUMN IF NOT EXISTS municipality VARCHAR(120) DEFAULT NULL AFTER province");
     $connection->query("ALTER TABLE aics_applicant_profiles ADD COLUMN IF NOT EXISTS barangay VARCHAR(120) DEFAULT NULL AFTER municipality");
     $connection->query("ALTER TABLE aics_applicant_profiles ADD COLUMN IF NOT EXISTS address_line VARCHAR(255) DEFAULT NULL AFTER barangay");
+    $connection->query("ALTER TABLE aics_applicant_profiles ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(8) DEFAULT NULL AFTER complete_address");
     $connection->query("ALTER TABLE aics_accounts MODIFY COLUMN email VARCHAR(180) DEFAULT NULL");
     $connection->query("ALTER TABLE aics_accounts ADD COLUMN IF NOT EXISTS session_invalidate_at TIMESTAMP NULL DEFAULT NULL AFTER updated_at");
     $connection->query("ALTER TABLE aics_accounts ADD COLUMN IF NOT EXISTS auth_revision INT UNSIGNED NOT NULL DEFAULT 0 AFTER session_invalidate_at");
@@ -166,6 +167,43 @@ function aics_ensure_auth_schema(mysqli $connection): void
     $connection->query("INSERT IGNORE INTO aics_account_statuses (status_code, status_name) VALUES ('banned', 'Banned')");
 
     aics_ensure_login_attempts_schema($connection);
+}
+
+/** Languages the applicant pages can show: English, Tagalog, Hiligaynon. @return list<string> */
+function aics_applicant_languages(): array
+{
+    return ['en', 'tl', 'hil'];
+}
+
+function aics_normalize_applicant_language(?string $value): string
+{
+    $value = strtolower(trim((string) $value));
+    return in_array($value, aics_applicant_languages(), true) ? $value : '';
+}
+
+/** The applicant's saved page language, or '' when none was chosen yet. */
+function aics_applicant_language(mysqli $connection, int $accountId): string
+{
+    if ($accountId <= 0) return '';
+    $stmt = $connection->prepare('SELECT preferred_language FROM aics_applicant_profiles WHERE account_id = ? LIMIT 1');
+    if (!$stmt) return '';
+    $stmt->bind_param('i', $accountId);
+    $stmt->execute();
+    $row = $stmt->get_result()?->fetch_assoc();
+    $stmt->close();
+    return aics_normalize_applicant_language((string) ($row['preferred_language'] ?? ''));
+}
+
+function aics_save_applicant_language(mysqli $connection, int $accountId, string $language): bool
+{
+    $language = aics_normalize_applicant_language($language);
+    if ($accountId <= 0 || $language === '') return false;
+    $stmt = $connection->prepare('UPDATE aics_applicant_profiles SET preferred_language = ? WHERE account_id = ?');
+    if (!$stmt) return false;
+    $stmt->bind_param('si', $language, $accountId);
+    $ok = $stmt->execute();
+    $stmt->close();
+    return $ok;
 }
 
 function aics_normalize_mobile_number(?string $value): ?string

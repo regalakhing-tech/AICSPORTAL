@@ -11531,3 +11531,99 @@ body .status-page .ai-gate-notice.is-eta > i { color: #059669; }
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- Page language (My Profile) ---------- */
+/* Content stays hidden for a moment while it is translated, so it never flashes in English. */
+html.aics-i18n-pending .content-area,
+html.aics-i18n-pending .preview-modal-overlay {
+  visibility: hidden;
+}
+
+.profile-language-card {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #f8fbff;
+}
+
+.profile-language-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.profile-language-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.profile-language-heading p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.profile-language-heading > i {
+  flex: none;
+  font-size: 20px;
+  color: #0284c7;
+}
+
+/* Three buttons in a row when they fit; on narrow screens they wrap and stretch
+   instead of squeezing the names. */
+.profile-language-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.profile-language-options button {
+  flex: 1 1 104px;
+}
+
+.profile-language-options button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  white-space: nowrap;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.profile-language-options button:hover {
+  border-color: #7dd3fc;
+  background: #f0f9ff;
+}
+
+.profile-language-options button.is-active {
+  border-color: #0284c7;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.profile-language-options button:focus-visible {
+  outline: 3px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.profile-language-status {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: #15803d;
+}
+
+.profile-language-status:empty {
+  display: none;
+}
