@@ -18,7 +18,7 @@ feedback_assert(str_contains($queueBody, 'aics_ai_gate_after_applicant_save('), 
 feedback_assert(str_contains((string) file_get_contents($root . '/Applicants/php_files/dashboard-data-lib.php'), 'aics_ai_gate_sync_for_account('), 'The applicant dashboard must run the AICS AI gate.');
 $status = (string) file_get_contents($root . '/Applicants/php_files/application-status.php');
 feedback_assert(str_contains($status, 'aics_ai_gate_sync_for_account('), 'The status page must run the AICS AI gate.');
-foreach (['ai-gate-hold-banner', 'AICS AI is checking your documents.', 'Your documents are being reviewed before they go to PSWDO.', 'Expected processing time: about', 'aics_ai_gate_applicant_items(', '?page=cancel-request'] as $needle) {
+foreach (['ai-gate-hold-banner', 'AICS AI is checking your documents.', 'Your documents are being reviewed before they go to PSWDO.', 'Expected processing', 'aics_ai_gate_eta_summary(', 'The PSWDO office is open Monday to Thursday.', 'aics_ai_gate_applicant_items(', '?page=cancel-request'] as $needle) {
     feedback_assert(str_contains($status, $needle), "Status page is missing: {$needle}");
 }
 feedback_assert(stripos($status, 'gemini') === false, 'Applicant text says AICS AI, never Gemini.');

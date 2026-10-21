@@ -82,9 +82,9 @@ $tests['testPassReleasesWithEta'] = function () use ($c): void {
     [$id] = gate_fixture($c, 'likely_valid');
     $result = aics_ai_gate_sync($c, $id);
     gate_db_assert($result['released'] === 1, 'released count');
-    gate_db_assert(gate_value($c, "SELECT CONCAT(ai_gate_status, '/', ai_gate_priority, '/', ai_gate_eta_days) FROM aics_requests WHERE id = {$id}") === 'released/STANDARD/7', 'released with ETA');
+    gate_db_assert(gate_value($c, "SELECT CONCAT(ai_gate_status, '/', ai_gate_priority, '/', ai_gate_eta_days) FROM aics_requests WHERE id = {$id}") === 'released/STANDARD/3', 'released with ETA');
     gate_db_assert(gate_count($c, 'aics_ai_gate_events', $id, "event_type = 'ai_release'") === 1, 'release event');
-    gate_db_assert(gate_count($c, 'aics_request_notifications', $id, "notification_stage = 'AICS AI: Documents checked' AND message_text LIKE '%about 7 day(s).'") === 1, 'passed notice');
+    gate_db_assert(gate_count($c, 'aics_request_notifications', $id, "notification_stage = 'AICS AI: Documents checked' AND message_text LIKE '%Expected processing time: 1–3 office days (by %).'") === 1, 'passed notice');
     gate_db_assert(aics_ai_gate_is_released($c, $id), 'is_released');
 };
 
@@ -206,7 +206,7 @@ $tests['testAdminActions'] = function () use ($c): void {
     gate_db_assert(aics_ai_gate_admin_release($c, $b, (int) $adminId), 'admin release');
     gate_db_assert(aics_ai_gate_is_released($c, $b), 'released by admin');
     gate_db_assert(gate_count($c, 'aics_ai_gate_events', $b, "event_type = 'admin_release'") === 1, 'admin release logged');
-    gate_db_assert(gate_count($c, 'aics_request_notifications', $b, "notification_stage = 'Sent to PSWDO for review' AND message_text LIKE '%Expected processing time: about 7 day(s).'") === 1, 'admin release notice');
+    gate_db_assert(gate_count($c, 'aics_request_notifications', $b, "notification_stage = 'Sent to PSWDO for review' AND message_text LIKE '%Expected processing time: 1–3 office days (by %).'") === 1, 'admin release notice');
     gate_db_assert(!aics_ai_gate_admin_release($c, $b, (int) $adminId), 'cannot release twice');
 
     [$d, , $reviewId] = gate_fixture($c, 'failed', ['gate_retry_count' => 4]);

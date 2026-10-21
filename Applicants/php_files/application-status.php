@@ -85,6 +85,8 @@ try {
                 r.beneficiary_complete_name,
                 r.ai_gate_status,
                 r.ai_gate_eta_days,
+                r.ai_gate_priority,
+                r.ai_gate_updated_at,
                 rs.scheduled_date,
                 rs.scheduled_time,
                 rs.venue,
@@ -141,6 +143,7 @@ try {
                 'amount_given'    => $row['amount_given'] !== null ? (float) $row['amount_given'] : null,
                 'gate_status'     => (string) ($row['ai_gate_status'] ?? 'released'),
                 'gate_eta_days'   => (int) ($row['ai_gate_eta_days'] ?? 0),
+                'gate_eta'        => aics_ai_gate_eta_summary((string) ($row['ai_gate_priority'] ?? ''), (string) ($row['ai_gate_updated_at'] ?? '')),
                 'gate_items'      => [],
             ];
         }
@@ -1634,10 +1637,23 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                   <i class="fas fa-user-shield" aria-hidden="true"></i>
                   <span>Your documents are being reviewed before they go to PSWDO.</span>
                 </div>
-              <?php elseif ((int) ($req['gate_eta_days'] ?? 0) > 0 && !in_array($statusBadge, ['ok', 'danger'], true)): ?>
-                <div class="ai-gate-notice is-eta" role="status">
+              <?php elseif (is_array($req['gate_eta'] ?? null) && !in_array($statusBadge, ['ok', 'danger'], true)): ?>
+                <?php $gateEta = $req['gate_eta']; ?>
+                <div class="ai-gate-notice is-eta ai-gate-eta is-<?= status_h(strtolower((string) $gateEta['priority'])) ?><?= $gateEta['overdue'] ? ' is-overdue' : '' ?>" role="status">
                   <i class="fas fa-calendar-check" aria-hidden="true"></i>
-                  <span>Expected processing time: about <?= (int) $req['gate_eta_days'] ?> day(s)</span>
+                  <div class="ai-gate-eta-body">
+                    <span class="ai-gate-eta-label">Expected processing</span>
+                    <strong class="ai-gate-eta-span"><?= status_h((string) $gateEta['span']) ?></strong>
+                    <?php if ($gateEta['overdue']): ?>
+                      <span class="ai-gate-eta-date">Taking longer than expected. PSWDO is still reviewing your request.</span>
+                    <?php else: ?>
+                      <span class="ai-gate-eta-date">By <?= status_h((string) $gateEta['due_label']) ?></span>
+                    <?php endif; ?>
+                    <span class="ai-gate-eta-meta">
+                      <span class="ai-gate-eta-priority">Priority: <?= status_h((string) $gateEta['priority_label']) ?></span>
+                      <span class="ai-gate-eta-hours">The PSWDO office is open Monday to Thursday.</span>
+                    </span>
+                  </div>
                 </div>
               <?php endif; ?>
 

@@ -86,14 +86,86 @@ function aics_ai_gate_decide(array $progress, ?int $maxRetries = null): array
     return $decision('released', 'passed');
 }
 
-/** Expected processing days for a priority indicator. */
+/** Days the PSWDO office is open (ISO weekday numbers): Monday to Thursday. */
+const AICS_OFFICE_WEEKDAYS = [1, 2, 3, 4];
+
+/**
+ * Most office days PSWDO takes for a Smart Priority: URGENT 1, HIGH 1–2,
+ * STANDARD 1–3. Processing always starts on the next office day.
+ */
 function aics_ai_gate_eta_days(string $indicator): int
 {
     return match (strtoupper(trim($indicator))) {
         'URGENT' => aics_ai_gate_env_int('AICS_ETA_URGENT_DAYS', 1),
-        'HIGH' => aics_ai_gate_env_int('AICS_ETA_HIGH_DAYS', 3),
-        default => aics_ai_gate_env_int('AICS_ETA_STANDARD_DAYS', 7),
+        'HIGH' => aics_ai_gate_env_int('AICS_ETA_HIGH_DAYS', 2),
+        default => aics_ai_gate_env_int('AICS_ETA_STANDARD_DAYS', 3),
     };
+}
+
+function aics_ai_gate_now(): DateTimeImmutable
+{
+    return new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
+}
+
+/** The office day that is $officeDays office days after $from. The day of $from never counts. */
+function aics_ai_gate_office_day_after(DateTimeImmutable $from, int $officeDays): DateTimeImmutable
+{
+    $day = $from->setTime(0, 0);
+    for ($left = max(1, $officeDays); $left > 0;) {
+        $day = $day->modify('+1 day');
+        if (in_array((int) $day->format('N'), AICS_OFFICE_WEEKDAYS, true)) $left--;
+    }
+    return $day;
+}
+
+/** "1 office day", "1–2 office days", "1–3 office days". */
+function aics_ai_gate_eta_span(int $etaDays): string
+{
+    $etaDays = max(1, $etaDays);
+    return $etaDays === 1 ? '1 office day' : '1–' . $etaDays . ' office days';
+}
+
+/** "1–2 office days (by Monday, Oct 26)", counted from $from. */
+function aics_ai_gate_eta_text(int $etaDays, ?DateTimeImmutable $from = null): string
+{
+    $due = aics_ai_gate_office_day_after($from ?? aics_ai_gate_now(), $etaDays);
+    return aics_ai_gate_eta_span($etaDays) . ' (by ' . $due->format('l, M j') . ')';
+}
+
+function aics_ai_gate_priority_label(string $indicator): string
+{
+    return match (strtoupper(trim($indicator))) {
+        'URGENT' => 'Urgent',
+        'HIGH' => 'High',
+        default => 'Standard',
+    };
+}
+
+/**
+ * Expected processing for a priority, counted from when PSWDO received the
+ * request (or its priority last changed). Null without a priority or time.
+ *
+ * @return array{priority:string, priority_label:string, span:string, due:DateTimeImmutable, due_label:string, due_short:string, overdue:bool}|null
+ */
+function aics_ai_gate_eta_summary(?string $indicator, ?string $receivedAt, ?DateTimeImmutable $now = null): ?array
+{
+    $indicator = strtoupper(trim((string) $indicator));
+    if (!in_array($indicator, ['URGENT', 'HIGH', 'STANDARD'], true) || trim((string) $receivedAt) === '') return null;
+    $zone = new DateTimeZone('Asia/Manila');
+    $received = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', trim((string) $receivedAt), $zone);
+    if (!$received instanceof DateTimeImmutable) return null;
+    $days = aics_ai_gate_eta_days($indicator);
+    $due = aics_ai_gate_office_day_after($received, $days);
+    $today = ($now ?? aics_ai_gate_now())->setTimezone($zone)->setTime(0, 0);
+    return [
+        'priority' => $indicator,
+        'priority_label' => aics_ai_gate_priority_label($indicator),
+        'span' => aics_ai_gate_eta_span($days),
+        'due' => $due,
+        'due_label' => $due->format('l, M j'),
+        'due_short' => $due->format('D, M j'),
+        'overdue' => $today > $due,
+    ];
 }
 
 /** Plain reason shown to the applicant for one document. */
@@ -115,13 +187,18 @@ function aics_ai_gate_stage_title(string $stage): string
         'ai_check_passed' => 'AICS AI: Documents checked',
         'ai_check_admin_release' => 'Sent to PSWDO for review',
         'ai_check_urgent' => 'AICS AI: Marked urgent',
+        'ai_priority_update' => 'AICS AI: Priority updated',
         default => 'AICS AI update',
     };
 }
 
-/** Applicant notice text (exact copy from the design spec), at most 600 characters. */
-function aics_ai_gate_applicant_message(string $stage, string $referenceNo, array $items, int $etaDays, string $indicator): string
+/**
+ * Applicant notice text, at most 600 characters. The expected processing time
+ * counts office days from $from (now when omitted).
+ */
+function aics_ai_gate_applicant_message(string $stage, string $referenceNo, array $items, int $etaDays, string $indicator, ?DateTimeImmutable $from = null): string
 {
+    $eta = static fn (): string => aics_ai_gate_eta_text($etaDays, $from);
     $text = match ($stage) {
         'ai_check_hold' => (static function () use ($referenceNo, $items): string {
             $parts = [];
@@ -133,9 +210,11 @@ function aics_ai_gate_applicant_message(string $stage, string $referenceNo, arra
                 . implode('; ', $parts) . '. Upload a clear replacement in Manage Applications. It will be checked again automatically.';
         })(),
         'ai_check_admin_review' => 'Request ' . $referenceNo . ' is being reviewed before it goes to PSWDO. You will be notified when it moves forward.',
-        'ai_check_passed' => 'AICS AI checked the documents for request ' . $referenceNo . '. PSWDO will now review it. Expected processing time: about ' . $etaDays . ' day(s).'
+        'ai_check_passed' => 'AICS AI checked the documents for request ' . $referenceNo . '. PSWDO will now review it. Expected processing time: ' . $eta() . '.'
             . (strtoupper($indicator) === 'URGENT' ? ' Your request was marked urgent.' : ''),
-        'ai_check_admin_release' => 'Request ' . $referenceNo . ' is now with PSWDO for review. Expected processing time: about ' . $etaDays . ' day(s).',
+        'ai_check_admin_release' => 'Request ' . $referenceNo . ' is now with PSWDO for review. Expected processing time: ' . $eta() . '.',
+        'ai_check_urgent' => 'AICS AI marked request ' . $referenceNo . ' as urgent. Expected processing time: ' . $eta() . '.',
+        'ai_priority_update' => 'AICS AI updated the priority of request ' . $referenceNo . ' to ' . aics_ai_gate_priority_label($indicator) . '. Expected processing time: ' . $eta() . '.',
         default => throw new InvalidArgumentException('Unknown AICS AI gate notice.'),
     };
     return mb_strimwidth($text, 0, 600, '…');
@@ -146,6 +225,24 @@ function aics_ai_gate_active_sql(string $alias = ''): string
 {
     $column = ($alias !== '' ? $alias . '.' : '') . 'request_status';
     return "LOWER(TRIM(COALESCE({$column}, ''))) NOT IN ('cancelled', 'canceled')";
+}
+
+/** SQL condition for requests PSWDO has not finished (no released, denied or cancelled ones). */
+function aics_ai_gate_open_sql(string $alias = ''): string
+{
+    $column = ($alias !== '' ? $alias . '.' : '') . 'request_status';
+    return "LOWER(TRIM(COALESCE({$column}, ''))) NOT IN ('released', 'not approved', 'not_approved', 'rejected', 'denied', 'completed', 'closed', 'cancelled', 'canceled')";
+}
+
+/**
+ * SQL condition: the saved AICS AI urgency analysis is missing or older than
+ * the request (a document was uploaded, or the applicant edited it, after it).
+ */
+function aics_ai_gate_urgency_stale_sql(string $alias = 'r'): string
+{
+    return "({$alias}.urgency_analyzed_at IS NULL"
+        . " OR {$alias}.urgency_analyzed_at < COALESCE((SELECT MAX(sd.uploaded_at) FROM aics_request_documents sd WHERE sd.request_id = {$alias}.id), '1000-01-01')"
+        . " OR EXISTS (SELECT 1 FROM aics_ai_gate_events se WHERE se.request_id = {$alias}.id AND se.event_type IN ('applicant_edit', 'applicant_reupload') AND se.created_at > {$alias}.urgency_analyzed_at))";
 }
 
 /** SQL condition that keeps PSWDO queries to released requests. */
@@ -344,9 +441,31 @@ function aics_ai_gate_notify(mysqli $connection, int $requestId, string $stage, 
     $stmt->close();
 }
 
+/**
+ * The AICS AI urgency PSWDO saved for this request (URGENT, HIGH or STANDARD),
+ * or '' when there is none or the request changed after it was analysed.
+ */
+function aics_ai_gate_saved_urgency(mysqli $connection, int $requestId): string
+{
+    try {
+        $stmt = $connection->prepare("SELECT UPPER(TRIM(r.urgency_indicator)) FROM aics_requests r WHERE r.id = ? AND COALESCE(r.urgency_basis, '') <> '' AND NOT " . aics_ai_gate_urgency_stale_sql('r'));
+        if (!$stmt) return '';
+        $stmt->bind_param('i', $requestId);
+        $stmt->execute();
+        $indicator = (string) ($stmt->get_result()?->fetch_row()[0] ?? '');
+        $stmt->close();
+    } catch (Throwable) {
+        return '';
+    }
+    return in_array($indicator, ['URGENT', 'HIGH', 'STANDARD'], true) ? $indicator : '';
+}
+
 /** The Smart Priority indicator PSWDO shows for this request: URGENT, HIGH or STANDARD. */
 function aics_ai_gate_priority_indicator(mysqli $connection, int $requestId): string
 {
+    // The saved analysis is what PSWDO shows; recomputing could differ once the daily cache expires.
+    $saved = aics_smart_priority_analysis_enabled() ? aics_ai_gate_saved_urgency($connection, $requestId) : '';
+    if ($saved !== '') return $saved;
     $stmt = $connection->prepare("SELECT r.client_categories_json, t.assistance_code FROM aics_requests r
         LEFT JOIN aics_request_assistance ra ON ra.request_id = r.id
         LEFT JOIN aics_assistance_types t ON t.id = ra.assistance_type_id
@@ -436,7 +555,7 @@ function aics_ai_gate_release(mysqli $connection, array $request, string $from, 
         'no_documents' => 'No documents needed an AICS AI check.',
         default => 'Released to PSWDO by an administrator.',
     };
-    aics_ai_gate_log_event($connection, $requestId, $eventType, null, null, $detail . ' Priority ' . $indicator . ', about ' . $eta . ' day(s).', $actorAccountId);
+    aics_ai_gate_log_event($connection, $requestId, $eventType, null, null, $detail . ' Priority ' . $indicator . ', ' . aics_ai_gate_eta_text($eta) . '.', $actorAccountId);
     aics_ai_gate_notify($connection, $requestId, $stage, aics_ai_gate_applicant_message($stage, (string) $request['reference_no'], [], $eta, $indicator));
     return true;
 }
@@ -833,23 +952,59 @@ function aics_ai_gate_fix_instruction(array $doc): string
 }
 
 /**
- * After release the background job may find the medical case urgent: mark the
- * request urgent (about 1 day) and tell the applicant once. Only requests
- * released by the AICS AI gate are changed.
+ * Make the applicant's priority and expected processing time match the
+ * priority PSWDO sees. It can go up or down (an edit or a new document can
+ * change the AICS AI result). The applicant is told once per change and the
+ * expected time counts from the change. Only open requests released by the
+ * AICS AI gate are changed.
  */
-function aics_ai_gate_note_priority(mysqli $connection, int $requestId, string $indicator): bool
+function aics_ai_gate_sync_priority(mysqli $connection, int $requestId, string $indicator): bool
 {
-    if (strtoupper(trim($indicator)) !== 'URGENT') return false;
+    $indicator = strtoupper(trim($indicator));
+    if (!in_array($indicator, ['URGENT', 'HIGH', 'STANDARD'], true)) return false;
     aics_ai_gate_ensure_schema($connection);
-    $eta = aics_ai_gate_eta_days('URGENT');
-    $stmt = $connection->prepare("UPDATE aics_requests SET ai_gate_priority = 'URGENT', ai_gate_eta_days = ? WHERE id = ? AND ai_gate_status = 'released' AND ai_gate_updated_at IS NOT NULL AND COALESCE(ai_gate_priority, '') <> 'URGENT'");
-    $stmt->bind_param('ii', $eta, $requestId);
+    $eta = aics_ai_gate_eta_days($indicator);
+    $stmt = $connection->prepare("UPDATE aics_requests SET ai_gate_priority = ?, ai_gate_eta_days = ?, ai_gate_updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND ai_gate_status = 'released' AND ai_gate_updated_at IS NOT NULL AND COALESCE(ai_gate_priority, '') <> ? AND " . aics_ai_gate_open_sql());
+    if (!$stmt) throw new RuntimeException('Unable to update the request priority.');
+    $stmt->bind_param('siis', $indicator, $eta, $requestId, $indicator);
     $stmt->execute();
     $changed = $stmt->affected_rows === 1;
     $stmt->close();
     if (!$changed) return false;
     $reference = (string) ($connection->query('SELECT reference_no FROM aics_requests WHERE id = ' . (int) $requestId)?->fetch_row()[0] ?? '');
-    aics_ai_gate_log_event($connection, $requestId, 'ai_priority_urgent', null, null, 'AICS AI found the medical case urgent. Expected processing time: about ' . $eta . ' day(s).', null);
-    aics_ai_gate_notify($connection, $requestId, 'ai_check_urgent', 'AICS AI marked request ' . $reference . ' as urgent. Expected processing time: about ' . $eta . ' day(s).');
+    $stage = $indicator === 'URGENT' ? 'ai_check_urgent' : 'ai_priority_update';
+    aics_ai_gate_log_event($connection, $requestId, $indicator === 'URGENT' ? 'ai_priority_urgent' : 'ai_priority_update', null, $indicator,
+        'Priority is now ' . aics_ai_gate_priority_label($indicator) . ', the same as PSWDO. Expected processing time: ' . aics_ai_gate_eta_text($eta) . '.', null);
+    aics_ai_gate_notify($connection, $requestId, $stage, aics_ai_gate_applicant_message($stage, $reference, [], $eta, $indicator));
     return true;
+}
+
+/**
+ * Background repair: applicant priorities that differ from the saved PSWDO
+ * priority are made equal, and stored expected days follow the current rules.
+ * A request edited after its analysis waits for the new analysis instead.
+ * Returns the number of requests whose priority changed.
+ */
+function aics_ai_gate_reconcile_priorities(mysqli $connection, int $limit = 50): int
+{
+    aics_ai_gate_ensure_schema($connection);
+    $urgent = aics_ai_gate_eta_days('URGENT');
+    $high = aics_ai_gate_eta_days('HIGH');
+    $standard = aics_ai_gate_eta_days('STANDARD');
+    $expected = "CASE ai_gate_priority WHEN 'URGENT' THEN {$urgent} WHEN 'HIGH' THEN {$high} ELSE {$standard} END";
+    $connection->query("UPDATE aics_requests SET ai_gate_eta_days = {$expected} WHERE ai_gate_priority IS NOT NULL AND ai_gate_eta_days IS NOT NULL AND ai_gate_eta_days <> {$expected}");
+    if (!aics_smart_priority_analysis_enabled()) return 0;
+    aics_ensure_urgency_indicator_columns($connection);
+    $result = $connection->query("SELECT r.id, UPPER(TRIM(r.urgency_indicator)) AS indicator FROM aics_requests r
+        WHERE r.ai_gate_status = 'released' AND r.ai_gate_updated_at IS NOT NULL AND " . aics_ai_gate_open_sql('r') . "
+          AND UPPER(TRIM(COALESCE(r.urgency_indicator, ''))) IN ('URGENT', 'HIGH', 'STANDARD')
+          AND COALESCE(r.ai_gate_priority, '') <> UPPER(TRIM(r.urgency_indicator))
+          AND COALESCE(r.urgency_basis, '') <> '' AND NOT " . aics_ai_gate_urgency_stale_sql('r') . '
+        ORDER BY r.id LIMIT ' . max(1, $limit));
+    $changed = 0;
+    foreach ($result ? $result->fetch_all(MYSQLI_ASSOC) : [] as $row) {
+        if (aics_ai_gate_sync_priority($connection, (int) $row['id'], (string) $row['indicator'])) $changed++;
+    }
+    return $changed;
 }

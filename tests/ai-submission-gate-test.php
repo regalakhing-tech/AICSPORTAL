@@ -48,19 +48,20 @@ gate_assert(aics_ai_gate_decide($p([$doc('failed', 4)]))['reason'] === 'ai_unava
 putenv('AICS_AI_GATE_MAX_RETRIES=2'); gate_assert(aics_ai_gate_decide($p([$doc('failed', 2)]))['reason'] === 'ai_unavailable', 'retry limit env override'); putenv('AICS_AI_GATE_MAX_RETRIES');
 gate_assert(aics_ai_gate_retry_backoff_minutes(0) === 1 && aics_ai_gate_retry_backoff_minutes(1) === 5 && aics_ai_gate_retry_backoff_minutes(2) === 15 && aics_ai_gate_retry_backoff_minutes(3) === 30 && aics_ai_gate_retry_backoff_minutes(9) === 30, 'retry backoff');
 
-gate_assert(aics_ai_gate_eta_days('URGENT') === 1 && aics_ai_gate_eta_days('HIGH') === 3 && aics_ai_gate_eta_days('STANDARD') === 7, 'default ETA days');
-gate_assert(aics_ai_gate_eta_days('unknown') === 7, 'unknown indicator uses STANDARD');
-putenv('AICS_ETA_HIGH_DAYS=2'); gate_assert(aics_ai_gate_eta_days('HIGH') === 2, 'env override'); putenv('AICS_ETA_HIGH_DAYS');
+gate_assert(aics_ai_gate_eta_days('URGENT') === 1 && aics_ai_gate_eta_days('HIGH') === 2 && aics_ai_gate_eta_days('STANDARD') === 3, 'default ETA office days');
+gate_assert(aics_ai_gate_eta_days('unknown') === 3, 'unknown indicator uses STANDARD');
+putenv('AICS_ETA_HIGH_DAYS=4'); gate_assert(aics_ai_gate_eta_days('HIGH') === 4, 'env override'); putenv('AICS_ETA_HIGH_DAYS');
+$thursday = new DateTimeImmutable('2026-10-22 10:00', new DateTimeZone('Asia/Manila'));
 
 $hold = aics_ai_gate_applicant_message('ai_check_hold', 'AICS-2026-0001', [$doc('needs_reupload')], 0, 'STANDARD');
 gate_assert($hold === 'AICS AI found a problem with 1 document(s) in request AICS-2026-0001: Medical Abstract or Medical Certificate (blurry, cut off, or incomplete). Upload a clear replacement in Manage Applications. It will be checked again automatically.', 'hold copy');
 gate_assert(str_contains(aics_ai_gate_applicant_message('ai_check_hold', 'X', [$doc('needs_staff_review')], 0, 'STANDARD'), 'Medical Abstract or Medical Certificate (needs a clearer copy)'), 'admin re-upload reason');
 gate_assert(str_contains(aics_ai_gate_applicant_message('ai_check_hold', 'X', [$doc('flagged_inconsistency')], 0, 'STANDARD'), '(does not match your application or looks edited)'), 'inconsistency reason');
 gate_assert(aics_ai_gate_applicant_message('ai_check_admin_review', 'AICS-2026-0001', [], 0, 'STANDARD') === 'Request AICS-2026-0001 is being reviewed before it goes to PSWDO. You will be notified when it moves forward.', 'admin review copy');
-$urgent = aics_ai_gate_applicant_message('ai_check_passed', 'AICS-2026-0001', [], 1, 'URGENT');
-gate_assert($urgent === 'AICS AI checked the documents for request AICS-2026-0001. PSWDO will now review it. Expected processing time: about 1 day(s). Your request was marked urgent.', 'urgent copy');
-gate_assert(aics_ai_gate_applicant_message('ai_check_passed', 'R', [], 7, 'STANDARD') === 'AICS AI checked the documents for request R. PSWDO will now review it. Expected processing time: about 7 day(s).', 'standard passed copy');
-gate_assert(aics_ai_gate_applicant_message('ai_check_admin_release', 'AICS-2026-0001', [], 7, 'STANDARD') === 'Request AICS-2026-0001 is now with PSWDO for review. Expected processing time: about 7 day(s).', 'admin release copy');
+$urgent = aics_ai_gate_applicant_message('ai_check_passed', 'AICS-2026-0001', [], 1, 'URGENT', $thursday);
+gate_assert($urgent === 'AICS AI checked the documents for request AICS-2026-0001. PSWDO will now review it. Expected processing time: 1 office day (by Monday, Oct 26). Your request was marked urgent.', 'urgent copy');
+gate_assert(aics_ai_gate_applicant_message('ai_check_passed', 'R', [], 3, 'STANDARD', $thursday) === 'AICS AI checked the documents for request R. PSWDO will now review it. Expected processing time: 1–3 office days (by Wednesday, Oct 28).', 'standard passed copy');
+gate_assert(aics_ai_gate_applicant_message('ai_check_admin_release', 'AICS-2026-0001', [], 3, 'STANDARD', $thursday) === 'Request AICS-2026-0001 is now with PSWDO for review. Expected processing time: 1–3 office days (by Wednesday, Oct 28).', 'admin release copy');
 $many = array_fill(0, 40, ['document_type' => 'billing_statement', 'status' => 'flagged_inconsistency', 'review_id' => 1]);
 gate_assert(mb_strlen(aics_ai_gate_applicant_message('ai_check_hold', 'X', $many, 0, 'STANDARD')) <= 600, 'message fits VARCHAR(600)');
 gate_assert(stripos($hold . $urgent, 'gemini') === false, 'branding');

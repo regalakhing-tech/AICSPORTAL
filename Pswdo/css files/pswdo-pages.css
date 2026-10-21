@@ -6493,6 +6493,34 @@ body.is-embedded .request-details-body {
   overflow-wrap: anywhere;
 }
 
+/* Expected processing (office days, Monday to Thursday) under the priority. */
+.priority-eta {
+  display: block;
+  margin-top: 4px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.priority-eta.is-overdue,
+.priority-eta-detail.is-overdue strong {
+  color: #b91c1c;
+}
+
+.priority-eta-detail {
+  margin: 0;
+  color: #334155;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.priority-eta-detail small {
+  display: block;
+  color: #64748b;
+  font-size: 11.5px;
+}
+
 .modal-doc-table {
   width: 100%;
   border-collapse: collapse;

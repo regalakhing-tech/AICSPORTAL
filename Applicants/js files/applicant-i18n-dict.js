@@ -13,6 +13,7 @@ window.AICS_I18N_DICT = {
   "AICS AI: Being reviewed": ["AICS AI: Sinusuri", "AICS AI: Ginarepaso"],
   "AICS AI: Documents checked": ["AICS AI: Nasuri ang mga dokumento", "AICS AI: Na-check ang mga dokumento"],
   "AICS AI: Marked urgent": ["AICS AI: Minarkahang urgent", "AICS AI: Ginmarkahan nga urgent"],
+  "AICS AI: Priority updated": ["AICS AI: Na-update ang prayoridad", "AICS AI: Na-update ang prioridad"],
   "AICS AI update": ["Update ng AICS AI", "Update sang AICS AI"],
   "AICS Assistance Application": ["Aplikasyon sa AICS Assistance", "Aplikasyon sa AICS Assistance"],
   "AICS Assistance Request": ["Kahilingan sa AICS Assistance", "Pangayo sa AICS Assistance"],
@@ -510,7 +511,13 @@ window.AICS_I18N_DICT = {
   "₱50,000 and above": ["₱50,000 pataas", "₱50,000 pataas"],
   "). For urgent concerns, please coordinate directly with the PSWDO office.": ["). Para sa mga apurahang usapin, direktang makipag-ugnayan sa tanggapan ng PSWDO.", "). Para sa mga dinalian nga kabalaka, direkta nga makig-angot sa opisina sang PSWDO."],
   "Applicant did not arrive and was returned to Needs Schedule.": ["Hindi dumating ang aplikante at ibinalik ito sa Needs Schedule.", "Wala nag-abot ang aplikante kag ginbalik ini sa Needs Schedule."],
-  "Your application is approved and now queued for screening.": ["Aprubado na ang iyong aplikasyon at nakapila na para sa screening.", "Aprobado na ang imo aplikasyon kag nakapila na para sa screening."]
+  "Your application is approved and now queued for screening.": ["Aprubado na ang iyong aplikasyon at nakapila na para sa screening.", "Aprobado na ang imo aplikasyon kag nakapila na para sa screening."],
+  "Expected processing": ["Tinatayang pagproseso", "Ginbanabana nga pagproseso"],
+  "Taking longer than expected. PSWDO is still reviewing your request.": ["Mas matagal kaysa inaasahan. Sinusuri pa rin ng PSWDO ang iyong kahilingan.", "Mas madugay sang ginpaabot. Ginarepaso pa sang PSWDO ang imo pangayo."],
+  "The PSWDO office is open Monday to Thursday.": ["Bukas ang opisina ng PSWDO mula Lunes hanggang Huwebes.", "Bukas ang opisina sang PSWDO halin Lunes tubtob Huwebes."],
+  "Urgent": ["Urgent", "Urgent"],
+  "High": ["Mataas", "Mataas"],
+  "Standard": ["Karaniwan", "Kasagaran"],
 };
 
 // Text with numbers, dates or names inside. {1} copies a captured part as it is;
@@ -563,5 +570,14 @@ window.AICS_I18N_PATTERNS = [
   [/^Request (AICS-[\w-]+) is being reviewed before it goes to PSWDO\. You will be notified when it moves forward\.$/, ['Sinusuri ang kahilingang {1} bago ito ipasa sa PSWDO. Aabisuhan ka kapag umusad na ito.', 'Ginarepaso ang pangayo nga {1} antes ini ipasa sa PSWDO. Pahibal-on ka kon magpadayon na ini.']],
   [/^AICS AI checked the documents for request (AICS-[\w-]+)\. PSWDO will now review it\. Expected processing time: about (\d+) day\(s\)\. Your request was marked urgent\.$/, ['Nasuri na ng AICS AI ang mga dokumento ng kahilingang {1}. Susuriin na ito ng PSWDO. Tinatayang tagal ng pagproseso: mga {2} araw. Minarkahang urgent ang iyong kahilingan.', 'Na-check na sang AICS AI ang mga dokumento sang pangayo nga {1}. Repasohon na ini sang PSWDO. Ginbanabana nga tion sang pagproseso: mga {2} ka adlaw. Ginmarkahan nga urgent ang imo pangayo.']],
   [/^AICS AI checked the documents for request (AICS-[\w-]+)\. PSWDO will now review it\. Expected processing time: about (\d+) day\(s\)\.$/, ['Nasuri na ng AICS AI ang mga dokumento ng kahilingang {1}. Susuriin na ito ng PSWDO. Tinatayang tagal ng pagproseso: mga {2} araw.', 'Na-check na sang AICS AI ang mga dokumento sang pangayo nga {1}. Repasohon na ini sang PSWDO. Ginbanabana nga tion sang pagproseso: mga {2} ka adlaw.']],
-  [/^Request (AICS-[\w-]+) is now with PSWDO for review\. Expected processing time: about (\d+) day\(s\)\.$/, ['Nasa PSWDO na ang kahilingang {1} para suriin. Tinatayang tagal ng pagproseso: mga {2} araw.', 'Ara na sa PSWDO ang pangayo nga {1} para repasohon. Ginbanabana nga tion sang pagproseso: mga {2} ka adlaw.']]
+  [/^Request (AICS-[\w-]+) is now with PSWDO for review\. Expected processing time: about (\d+) day\(s\)\.$/, ['Nasa PSWDO na ang kahilingang {1} para suriin. Tinatayang tagal ng pagproseso: mga {2} araw.', 'Ara na sa PSWDO ang pangayo nga {1} para repasohon. Ginbanabana nga tion sang pagproseso: mga {2} ka adlaw.']],
+  [/^(1(?:–\d+)?) office days?$/, ['{1} araw ng trabaho', '{1} ka adlaw sang trabaho']],
+  [/^By ([A-Z][a-z]+day, [A-Z][a-z]{2} \d{1,2})$/, ['Hanggang {1}', 'Tubtob {1}']],
+  [/^Priority: (Urgent|High|Standard)$/, ['Prayoridad: {t1}', 'Prioridad: {t1}']],
+  [/^AICS AI checked the documents for request (AICS-[\w-]+)\. PSWDO will now review it\. Expected processing time: (1(?:–\d+)?) office days? \(by (.+)\)\. Your request was marked urgent\.$/, ['Nasuri na ng AICS AI ang mga dokumento ng kahilingang {1}. Susuriin na ito ng PSWDO. Tinatayang tagal ng pagproseso: {2} araw ng trabaho (hanggang {3}). Minarkahang urgent ang iyong kahilingan.', 'Na-check na sang AICS AI ang mga dokumento sang pangayo nga {1}. Repasohon na ini sang PSWDO. Ginbanabana nga tion sang pagproseso: {2} ka adlaw sang trabaho (tubtob {3}). Ginmarkahan nga urgent ang imo pangayo.']],
+  [/^AICS AI checked the documents for request (AICS-[\w-]+)\. PSWDO will now review it\. Expected processing time: (1(?:–\d+)?) office days? \(by (.+)\)\.$/, ['Nasuri na ng AICS AI ang mga dokumento ng kahilingang {1}. Susuriin na ito ng PSWDO. Tinatayang tagal ng pagproseso: {2} araw ng trabaho (hanggang {3}).', 'Na-check na sang AICS AI ang mga dokumento sang pangayo nga {1}. Repasohon na ini sang PSWDO. Ginbanabana nga tion sang pagproseso: {2} ka adlaw sang trabaho (tubtob {3}).']],
+  [/^Request (AICS-[\w-]+) is now with PSWDO for review\. Expected processing time: (1(?:–\d+)?) office days? \(by (.+)\)\.$/, ['Nasa PSWDO na ang kahilingang {1} para suriin. Tinatayang tagal ng pagproseso: {2} araw ng trabaho (hanggang {3}).', 'Ara na sa PSWDO ang pangayo nga {1} para repasohon. Ginbanabana nga tion sang pagproseso: {2} ka adlaw sang trabaho (tubtob {3}).']],
+  [/^AICS AI marked request (AICS-[\w-]+) as urgent\. Expected processing time: (1(?:–\d+)?) office days? \(by (.+)\)\.$/, ['Minarkahan ng AICS AI na urgent ang kahilingang {1}. Tinatayang tagal ng pagproseso: {2} araw ng trabaho (hanggang {3}).', 'Ginmarkahan sang AICS AI nga urgent ang pangayo nga {1}. Ginbanabana nga tion sang pagproseso: {2} ka adlaw sang trabaho (tubtob {3}).']],
+  [/^AICS AI updated the priority of request (AICS-[\w-]+) to (Urgent|High|Standard)\. Expected processing time: (1(?:–\d+)?) office days? \(by (.+)\)\.$/, ['In-update ng AICS AI ang prayoridad ng kahilingang {1} sa {t2}. Tinatayang tagal ng pagproseso: {3} araw ng trabaho (hanggang {4}).', 'Gin-update sang AICS AI ang prioridad sang pangayo nga {1} sa {t2}. Ginbanabana nga tion sang pagproseso: {3} ka adlaw sang trabaho (tubtob {4}).']],
+  [/^AICS AI marked request (AICS-[\w-]+) as urgent\. Expected processing time: about (\d+) day\(s\)\.$/, ['Minarkahan ng AICS AI na urgent ang kahilingang {1}. Tinatayang tagal ng pagproseso: mga {2} araw.', 'Ginmarkahan sang AICS AI nga urgent ang pangayo nga {1}. Ginbanabana nga tion sang pagproseso: mga {2} ka adlaw.']]
 ];

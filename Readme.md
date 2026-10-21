@@ -247,10 +247,12 @@ PSWDO only receives requests whose documents passed the AICS AI check:
 
 | AI result | Where the request goes |
 |---|---|
-| Every document valid | **PSWDO**. The applicant is told the expected processing time: about 1 day (urgent), 3 days (senior citizen / PWD medical), 7 days (others) |
+| Every document valid | **PSWDO**. The applicant is told the expected processing time from Smart Priority: 1 office day (urgent), 1–2 office days (high: senior citizen / PWD medical), 1–3 office days (standard). Office days are Monday to Thursday, so a request released on Thursday (or Friday to Sunday) is processed from Monday |
 | Blurry, cut off, wrong or edited document | **Back to the applicant** with the document and reason. Re-uploading starts a new check automatically. A photo the AI found only hard to read also goes back to the applicant |
 | AI not sure whether the details match or were changed | **Admin** (AICS AI Screening page): release to PSWDO or ask for a re-upload |
 | AI failed, stalled, or only local OCR ran | Retried automatically with waits of 1, 5, 15 and 30 minutes, then **Admin** with a warning. Never PSWDO |
+
+The applicant always sees the same priority as PSWDO. When an edit or a new document changes the AICS AI urgency result, `tools/smart-priority-refresh.php` analyses the request again, updates both sides, tells the applicant the new priority and expected time, and counts the office days again from that change. While the edited request is checked again, both sides keep the last priority.
 
 `tools/ai-gate-sync.php` starts queued checks (at most `AICS_AI_MAX_WORKERS` at once), retries failures and applies decisions. On Railway the container runs it every minute and the worker runs it after each check. On XAMPP, applicant, PSWDO and admin page loads run it; for a busy local install you can also run it on a schedule:
 
@@ -266,7 +268,7 @@ C:\xampp\php\php.exe tools\ai-gate-sync.php --health   # AI health summary
 | `AICS_AI_GATE_SCHEDULER` | `1` in the Docker image | Set when a scheduler runs `ai-gate-sync.php`; PSWDO page loads then skip the gate pass |
 | `AICS_AI_GATE_MAX_RETRIES` | `4` | Automatic retries per document before the admin decides |
 | `AICS_AI_GATE_ALERT_MINUTES` | `30` | Waiting time before the admin page warns |
-| `AICS_ETA_URGENT_DAYS` / `AICS_ETA_HIGH_DAYS` / `AICS_ETA_STANDARD_DAYS` | `1` / `3` / `7` | Expected processing time shown to applicants |
+| `AICS_ETA_URGENT_DAYS` / `AICS_ETA_HIGH_DAYS` / `AICS_ETA_STANDARD_DAYS` | `1` / `2` / `3` | Most office days (Monday to Thursday) shown to applicants and PSWDO as the expected processing time |
 | `AICS_PHP_EXECUTABLE` | (unset) | PHP CLI for the worker to run the gate after each check, e.g. `C:\xampp\php\php.exe` |
 
 The optional ADCD-Net tamper-detection service, calibration, and the full list of settings are covered in [ai_processor/README.md](ai_processor/README.md), [ai_processor/DEPLOYMENT.md](ai_processor/DEPLOYMENT.md), and [ai_processor/tamper_detection/ADCD-NET-OPERATIONS.md](ai_processor/tamper_detection/ADCD-NET-OPERATIONS.md).

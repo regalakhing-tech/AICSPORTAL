@@ -1419,7 +1419,19 @@ function persist_structured_priority_and_urgency(mysqli $connection, int $reques
     $urgencyResponse = null;
     $isMedicalAssistance = in_array('medical', (array) ($payload['assistance_type'] ?? []), true);
     $urgencyIndicator = $isMedicalAssistance ? 'REQUIRES_STAFF_REVIEW' : 'STANDARD';
-    $requestStmt = $connection->prepare('UPDATE aics_requests SET urgency_response = ?, urgency_indicator = ? WHERE id = ? LIMIT 1');
+    if ($isMedicalAssistance) {
+        // An edit keeps the last AICS AI priority, so PSWDO and the applicant still
+        // match, until the background job analyses the edited request again.
+        $currentStmt = $connection->prepare('SELECT UPPER(TRIM(COALESCE(urgency_indicator, \'\'))) FROM aics_requests WHERE id = ? LIMIT 1');
+        if (!$currentStmt) throw new RuntimeException('Unable to read the urgency indicator.');
+        $currentStmt->bind_param('i', $requestId);
+        $currentStmt->execute();
+        $current = (string) ($currentStmt->get_result()?->fetch_row()[0] ?? '');
+        $currentStmt->close();
+        if (in_array($current, ['URGENT', 'HIGH', 'STANDARD'], true)) $urgencyIndicator = $current;
+    }
+    // Clearing the saved analysis makes the background job analyse the request again.
+    $requestStmt = $connection->prepare('UPDATE aics_requests SET urgency_response = ?, urgency_indicator = ?, urgency_basis = NULL, urgency_analyzed_at = NULL WHERE id = ? LIMIT 1');
     if (!$requestStmt) throw new RuntimeException('Unable to save the urgency indicator.');
     $requestStmt->bind_param('ssi', $urgencyResponse, $urgencyIndicator, $requestId);
     $requestStmt->execute(); $requestStmt->close();

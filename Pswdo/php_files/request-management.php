@@ -225,6 +225,7 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                       $duplicateBadge = pswdo_duplicate_badge_meta($possibleDuplicate ? 'possible duplicate' : 'no duplicate');
                       $priorityUrgency = (string) ($request['priority']['urgency_indicator'] ?? 'REQUIRES_STAFF_REVIEW');
                       $priorityIndicator = pswdo_request_management_indicator((string) ($request['client_categories_json'] ?? '[]'), $priorityUrgency, (string) ($request['assistance_code'] ?? ''));
+                      $priorityEta = aics_ai_gate_eta_summary($priorityIndicator['label'], (string) ($request['gate_received_at'] ?? ''));
                       $aiAttentionCount = (int) ($request['ai_attention_count'] ?? 0);
                       $aiRequestState = (string) ($request['ai_request_state'] ?? 'empty');
                       $aiRequestLabel = (string) ($request['ai_request_label'] ?? 'No verifiable files');
@@ -257,7 +258,12 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                           <small class="request-staff-state"><?= pswdo_h($staffState) ?></small>
                         </div>
                       </td>
-                      <td><span class="priority-chip <?= pswdo_h($priorityIndicator['class']) ?>"><?= pswdo_h($priorityIndicator['label']) ?></span></td>
+                      <td>
+                        <span class="priority-chip <?= pswdo_h($priorityIndicator['class']) ?>"><?= pswdo_h($priorityIndicator['label']) ?></span>
+                        <?php if ($priorityEta !== null): ?>
+                          <small class="priority-eta<?= $priorityEta['overdue'] ? ' is-overdue' : '' ?>" title="Expected processing: <?= pswdo_h($priorityEta['span']) ?>"><?= $priorityEta['overdue'] ? 'Overdue · ' : 'By ' ?><?= pswdo_h($priorityEta['due_short']) ?></small>
+                        <?php endif; ?>
+                      </td>
                       <td>
                         <span class="pill <?= pswdo_h($duplicateBadge['class']) ?>"><i class="fas <?= pswdo_h($duplicateBadge['icon']) ?>"></i> <?= pswdo_h($duplicateBadge['label']) ?></span>
                       </td>
@@ -348,6 +354,7 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
       $classificationWarning = $classificationReason !== null;
       $priorityUrgency = (string) ($request['priority']['urgency_indicator'] ?? 'REQUIRES_STAFF_REVIEW');
       $priorityIndicator = pswdo_request_management_indicator((string) ($request['client_categories_json'] ?? '[]'), $priorityUrgency, (string) ($request['assistance_code'] ?? ''));
+      $priorityEta = aics_ai_gate_eta_summary($priorityIndicator['label'], (string) ($request['gate_received_at'] ?? ''));
       $priorityUrgencyLabel = aics_normalize_medical_urgency($priorityUrgency) === 'REQUIRES_STAFF_REVIEW'
           ? 'Pending verification'
           : pswdo_medical_urgency_label($priorityUrgency);
@@ -427,6 +434,14 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
           <div class="request-detail-item priority-indicator-card">
             <span>Indicator</span>
             <span class="priority-chip <?= pswdo_h($priorityIndicator['class']) ?>"><?= pswdo_h($priorityIndicator['label']) ?></span>
+            <?php if ($priorityEta !== null): ?>
+              <span>Expected processing</span>
+              <p class="priority-eta-detail<?= $priorityEta['overdue'] ? ' is-overdue' : '' ?>">
+                <strong><?= pswdo_h($priorityEta['span']) ?></strong>
+                <?= $priorityEta['overdue'] ? '· overdue since' : '· by' ?> <?= pswdo_h($priorityEta['due_label']) ?>
+                <small>Office days are Monday to Thursday.</small>
+              </p>
+            <?php endif; ?>
             <span>Findings / explanation</span>
             <p class="priority-indicator-explanation"><?= pswdo_h($priorityExplanation) ?></p>
             <?php if ($priorityNeedsEvidenceNote): ?><small>Medical document evidence could not be reliably evaluated.</small><?php endif; ?>

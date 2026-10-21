@@ -11298,6 +11298,20 @@ body .status-page .ai-gate-notice.is-review > i { color: #d97706; }
 body .status-page .ai-gate-notice.is-eta { background: #ecfdf5; border-color: #a7f3d0; border-left-color: #059669; color: #064e3b; }
 body .status-page .ai-gate-notice.is-eta > i { color: #059669; }
 
+/* Expected processing card: span, last office day, priority and office days. */
+body .status-page .ai-gate-eta-body { display: flex; flex-direction: column; gap: 2px; }
+body .status-page .ai-gate-eta-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.8; }
+body .status-page .ai-gate-notice strong.ai-gate-eta-span { margin: 0; font-size: 18px; line-height: 1.3; }
+body .status-page .ai-gate-eta-date { font-weight: 600; }
+body .status-page .ai-gate-eta-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 6px; font-size: 13px; }
+body .status-page .ai-gate-eta-priority { padding: 2px 10px; border-radius: 999px; border: 1px solid currentColor; font-weight: 700; font-size: 12px; }
+body .status-page .ai-gate-eta-hours { opacity: 0.85; }
+body .status-page .ai-gate-notice.ai-gate-eta.is-urgent { background: #fef2f2; border-color: #fecaca; border-left-color: #dc2626; color: #7f1d1d; }
+body .status-page .ai-gate-notice.ai-gate-eta.is-urgent > i { color: #dc2626; }
+body .status-page .ai-gate-notice.ai-gate-eta.is-high { background: #fffbeb; border-color: #fde68a; border-left-color: #d97706; color: #78350f; }
+body .status-page .ai-gate-notice.ai-gate-eta.is-high > i { color: #d97706; }
+body .status-page .ai-gate-notice.ai-gate-eta.is-overdue .ai-gate-eta-date { font-weight: 500; }
+
 /* ==========================================================================
    Phone layout (<= 640px): app-like density for the applicant portal.
    Kept last so it overrides the larger single-column mobile sizes above.

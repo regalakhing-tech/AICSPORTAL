@@ -67,10 +67,12 @@ $eventLabels = [
     'ai_hold' => 'Sent back to applicant', 'ai_release' => 'Sent to PSWDO', 'ai_retry' => 'Checked again automatically',
     'ai_admin_review' => 'Sent to admin', 'applicant_reupload' => 'Applicant uploaded', 'applicant_edit' => 'Applicant edited',
     'admin_release' => 'Admin sent to PSWDO', 'admin_reupload_request' => 'Admin asked for re-upload', 'admin_retry' => 'Admin asked for a new check',
+    'ai_priority_urgent' => 'Marked urgent', 'ai_priority_update' => 'Priority updated',
 ];
 $statusLabels = [
     'needs_reupload' => 'Blurry or incomplete', 'flagged_inconsistency' => 'Mismatch or edited', 'needs_staff_review' => 'Not confirmed',
     'failed' => 'Check failed', 'likely_valid' => 'Valid', 'completed' => 'Valid', 'processing' => 'Checking',
+    'URGENT' => 'Urgent', 'HIGH' => 'High priority', 'STANDARD' => 'Standard priority',
 ];
 
 $loadError = '';

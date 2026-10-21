@@ -4,8 +4,9 @@ declare(strict_types=1);
 /**
  * CLI-only background job: run the AICS AI medical urgency (Smart Priority)
  * analysis for requests with no saved findings (or with changed documents) and
- * save the findings, so PSWDO pages never wait for it or re-check it. Urgent
- * results upgrade the request and tell the applicant.
+ * save the findings, so PSWDO pages never wait for it or re-check it. The
+ * applicant's priority and expected processing time then follow PSWDO (up or
+ * down), and the applicant is told when it changes.
  *
  *   php tools/smart-priority-refresh.php            analyse up to 3 requests
  *   php tools/smart-priority-refresh.php --quiet    print only when something ran
@@ -25,7 +26,7 @@ const SMART_PRIORITY_REFRESH_SECONDS = 240;
 $quiet = in_array('--quiet', array_slice($argv, 1), true);
 $deadline = microtime(true) + SMART_PRIORITY_REFRESH_SECONDS;
 $analysed = [];
-$urgent = [];
+$updated = 0;
 
 try {
     $connection = aics_db_connect();
@@ -40,20 +41,21 @@ try {
         $check = aics_smart_priority_for_request($connection, (int) $row['id'], $categories, 'medical', false);
         // A recent failed analysis is retried once its short cache expires.
         if (empty($check['pending']) && ($check['final'] ?? false) !== true) continue;
-        // Runs the AICS AI analysis (or uses a cached one) and saves the findings.
+        // Runs the AICS AI analysis (or uses a cached one), saves the findings and
+        // gives the applicant the same priority.
         pswdo_refresh_request_scoring($connection, $row, null, true);
         if (!empty($check['pending'])) $analysed[] = (string) $row['reference_no'];
         else $saved++;
-        $indicator = (string) ($connection->query('SELECT urgency_indicator FROM aics_requests WHERE id = ' . (int) $row['id'])?->fetch_row()[0] ?? '');
-        if (aics_ai_gate_note_priority($connection, (int) $row['id'], $indicator)) $urgent[] = (string) $row['reference_no'];
     }
     if ($analysed !== [] || $saved > 0) pswdo_recalculate_priority_ranks($connection);
+    // Applicant priorities that still differ from PSWDO (older requests) are fixed here.
+    $updated = aics_ai_gate_reconcile_priorities($connection);
     $connection->close();
 } catch (Throwable $exception) {
     fwrite(STDERR, 'Smart Priority refresh failed: ' . $exception::class . "\n");
     exit(1);
 }
 
-if ($quiet && $analysed === [] && $saved === 0) exit(0);
+if ($quiet && $analysed === [] && $saved === 0 && $updated === 0) exit(0);
 echo 'Smart Priority refresh: analysed=' . count($analysed) . ($analysed !== [] ? ' (' . implode(', ', $analysed) . ')' : '') . ' saved=' . $saved
-    . ' urgent=' . count($urgent) . ($urgent !== [] ? ' (' . implode(', ', $urgent) . ')' : '') . "\n";
+    . ' priority_updates=' . $updated . "\n";

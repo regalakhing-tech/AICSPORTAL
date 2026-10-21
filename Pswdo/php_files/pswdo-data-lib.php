@@ -771,6 +771,7 @@ function pswdo_fetch_request_queue(mysqli $connection, array $filters = []): arr
             r.assistance_types_json,
             r.urgency_response,
             r.urgency_indicator,
+            r.ai_gate_updated_at,
             at.assistance_code,
             at.assistance_name,
             COALESCE(NULLIF(TRIM(r.applicant_email), ''), a.email) AS applicant_email,
@@ -948,6 +949,7 @@ function pswdo_fetch_request_queue(mysqli $connection, array $filters = []): arr
             'client_categories_label' => pswdo_client_categories_label((string) ($row['client_categories_json'] ?? '[]')),
             'urgency_response' => trim((string) ($row['urgency_response'] ?? '')),
             'urgency_indicator' => trim((string) ($row['urgency_indicator'] ?? '')) !== '' ? (string) $row['urgency_indicator'] : 'Not assessed',
+            'gate_received_at' => (string) ($row['ai_gate_updated_at'] ?? ''),
             'assistance_code' => $assistanceCode,
             'assistance_label' => trim((string) ($row['assistance_name'] ?? '')) !== ''
                 ? (string) $row['assistance_name']
@@ -1639,6 +1641,8 @@ function pswdo_refresh_request_scoring(mysqli $connection, array $request, ?int 
     $priStmt->bind_param('isissi', $requestId, $urgency['indicator'], $priority['score'], $priority['label'], $basis, $updatedByAccountId);
     $priStmt->execute();
     $priStmt->close();
+    // A new finished analysis: the applicant sees the same priority and expected time as PSWDO.
+    if ($save || !$analysisEnabled) aics_ai_gate_sync_priority($connection, $requestId, (string) $urgency['indicator']);
 }
 
 /** @return array{score:int,label:string} */
@@ -1664,7 +1668,7 @@ function pswdo_refresh_smart_priorities(mysqli $connection): void
 
 /**
  * Medical requests PSWDO can see whose AICS AI urgency findings were never saved,
- * or whose documents changed after the saved analysis. Newest first.
+ * or whose documents or details changed after the saved analysis. Newest first.
  *
  * @return list<array<string, mixed>>
  */
@@ -1676,7 +1680,7 @@ function pswdo_fetch_requests_needing_urgency_analysis(mysqli $connection, int $
         LEFT JOIN aics_assistance_types at ON at.id = ra.assistance_type_id
         WHERE " . aics_ai_gate_visible_sql('r') . " AND " . aics_ai_gate_active_sql('r') . "
           AND LOWER(TRIM(r.request_status)) NOT IN ('released', 'not approved', 'not_approved', 'rejected', 'denied', 'completed', 'closed', 'cancelled')
-          AND (r.urgency_analyzed_at IS NULL OR r.urgency_analyzed_at < (SELECT MAX(d.uploaded_at) FROM aics_request_documents d WHERE d.request_id = r.id))
+          AND " . aics_ai_gate_urgency_stale_sql('r') . "
         ORDER BY r.id DESC");
     $rows = [];
     while (count($rows) < $limit && ($row = $result?->fetch_assoc())) {
