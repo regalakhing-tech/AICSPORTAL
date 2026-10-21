@@ -1487,6 +1487,26 @@ body.modal-open {
   display: grid;
 }
 
+/* One column that never grows past the dashboard: wide tables scroll inside their card. */
+.dashboard-tab-panels,
+.dashboard-tab-panel.active {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dashboard-tab-panels > *,
+.dashboard-tab-panel.active > * {
+  min-width: 0;
+}
+
+/* Routine tables wrap their text to fit a laptop screen; only phones scroll them. */
+.dashboard-tab-panel[data-tab-panel="governance"] .data-table {
+  min-width: 520px;
+}
+
+.dashboard-tab-panel[data-tab-panel="governance"] .data-table .pill {
+  white-space: normal;
+}
+
 .activity-toolbar {
   display: flex;
   align-items: center;
@@ -3848,6 +3868,16 @@ body.admin-app-page {
   .top-crumbs > span,
   .top-crumbs > i {
     display: none;
+  }
+
+  /* Small phones: the rate badge goes under the text so the words keep their width. */
+  .admin-app-page .criteria-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .admin-app-page .criteria-item > .pill {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 
