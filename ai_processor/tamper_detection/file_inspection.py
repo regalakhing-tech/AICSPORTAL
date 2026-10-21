@@ -102,6 +102,47 @@ _DESIGN_APPS = re.compile(
 _XMP_CREATOR = re.compile(r'CreatorTool(?:="([^"]{1,300})"|>([^<]{1,300})<)')
 
 
+# IPTC digital source types that mean "made or changed by generative AI". Camera
+# captures ('digitalCapture', 'computationalCapture') are deliberately absent.
+_AI_SOURCE = re.compile(rb'(?i)digitalsourcetype/(trainedAlgorithmicMedia|compositeWithTrainedAlgorithmicMedia|'
+                        rb'compositeSynthetic|algorithmicMedia)\b')
+_AI_MAKERS = (
+    (re.compile(rb'(?i)Google (?:C2PA|Generative AI)|Made with Google AI|SynthID|Imagen'), 'Google generative AI'),
+    (re.compile(rb'(?i)OpenAI|ChatGPT|DALL.?E'), 'OpenAI (ChatGPT)'),
+    (re.compile(rb'(?i)Adobe Firefly'), 'Adobe Firefly'),
+    (re.compile(rb'(?i)Microsoft Designer|Bing Image Creator'), 'Microsoft Designer'),
+    (re.compile(rb'(?i)Meta AI'), 'Meta AI'),
+    (re.compile(rb'(?i)Midjourney'), 'Midjourney'),
+)
+_PROVENANCE_SCAN_BYTES = 6_000_000
+
+
+def _ai_provenance(raw: bytes) -> dict | None:
+    """Read the content credential (C2PA manifest or IPTC/XMP tag) that AI image
+    tools such as Gemini, ChatGPT, and Firefly embed. Only the tool's own
+    declaration counts; a missing credential proves nothing."""
+    window = raw if len(raw) <= _PROVENANCE_SCAN_BYTES else raw[:_PROVENANCE_SCAN_BYTES - 1_000_000] + raw[-1_000_000:]
+    match = _AI_SOURCE.search(window)
+    if match is None:
+        return None
+    kind = match.group(1).decode('ascii').lower()
+    tool = next((name for pattern, name in _AI_MAKERS if pattern.search(window)), 'a generative AI tool')
+    return {
+        'state': 'edited' if kind.startswith('composite') else 'generated',
+        'tool': tool,
+        'standard': 'C2PA' if re.search(rb'(?i)c2pa', window) else 'IPTC',
+        'watermark': 'SynthID' if b'SynthID' in window else None,
+    }
+
+
+def _provenance_indicator(provenance: dict) -> dict:
+    action = 'edited with' if provenance['state'] == 'edited' else 'created by'
+    watermark = ' and an invisible SynthID AI watermark' if provenance.get('watermark') else ''
+    return {'type': 'ai_generated_content', 'confidence_band': 'high',
+            'reason': (f"The file carries a {provenance['standard']} content credential{watermark} saying it was "
+                       f"{action} {provenance['tool']}, not taken with a camera or scanner.")}
+
+
 def _exif_text(value, limit: int) -> str | None:
     """Printable text up to the first control character (broken EXIF often
     continues with raw TIFF bytes such as 'MM*')."""
@@ -187,6 +228,16 @@ def inspect_file(path: Path) -> dict:
                 result['facts'].update(_image_facts(image))
                 created = _timestamp(result['facts']['creation_date'] or '')
                 modified = _timestamp(result['facts']['modification_date'] or '')
+            with path.open('rb') as handle:
+                raw = handle.read(_PROVENANCE_SCAN_BYTES + 1)
+                if len(raw) > _PROVENANCE_SCAN_BYTES:
+                    handle.seek(-1_000_000, os.SEEK_END)
+                    raw = raw[:_PROVENANCE_SCAN_BYTES - 1_000_000] + handle.read()
+        provenance = _ai_provenance(raw)
+        if provenance:
+            result['facts']['ai_provenance'] = provenance
+            result['decision'] = 'review'
+            result['indicators'].append(_provenance_indicator(provenance))
         if created and modified and modified < created:
             result['indicators'].append({'type': 'metadata_date_conflict', 'confidence_band': 'low',
                                          'reason': 'File creation and modification timestamps are out of order.'})

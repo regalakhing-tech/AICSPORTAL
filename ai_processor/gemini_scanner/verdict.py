@@ -4,6 +4,7 @@ Checks follow the paper's definition of AI-Enhanced Document Verification:
 incomplete, inconsistent, unreadable, altered, or potentially tampered.
 Results are advisory; staff make every decision.
 """
+import re
 from copy import deepcopy
 from datetime import datetime
 
@@ -124,10 +125,64 @@ def _field_comparison(expected: str, scan: dict, beneficiary: dict, type_ok: boo
     return rows
 
 
+_CURRENCY = re.compile(r'(?i)^(?:php|p|\u20b1)\.?')
+_GROUPED = re.compile(r'^\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?$|^\d+(?:\.\d{1,2})?$')
+TOTAL_TOLERANCE = 1.0  # pesos; printed rounding
+
+
+def _amount(text) -> float | None:
+    """A printed peso amount ('P 1,190.00', '(500.00)', '-200') as a number, or None."""
+    value = re.sub(r'\s+', '', str(text or ''))
+    negative = value.startswith('(') and value.endswith(')') or value.startswith('-')
+    value = value.strip('()-')
+    value = _CURRENCY.sub('', value).strip(',.')
+    if not _GROUPED.match(value):
+        return None
+    number = float(value.replace(',', ''))
+    return -number if negative else number
+
+
+def _peso(value: float) -> str:
+    return f'\u20b1{value:,.2f}'
+
+
+def _total_mismatches(scan: dict) -> list[str]:
+    """Printed totals that do not equal the sum of their amounts. The AI reading
+    only copies the numbers; the arithmetic is done here. A gap equal to one
+    listed amount is more likely a line the reading skipped or repeated, so it
+    is not reported."""
+    problems = []
+    for item in scan.get('totals') or []:
+        lines = [_amount(line) for line in item.get('line_amounts') or []]
+        stated = _amount(item.get('stated_total'))
+        if stated is None or len(lines) < 2 or any(line is None for line in lines):
+            continue
+        computed = round(sum(lines), 2)
+        gap = abs(computed - stated)
+        balance = round(lines[0] - sum(abs(line) for line in lines[1:]), 2)  # total less payments or discounts
+        if (gap <= TOTAL_TOLERANCE or abs(balance - stated) <= TOTAL_TOLERANCE
+                or any(abs(gap - abs(line)) <= 0.01 for line in lines) or abs(computed - 2 * stated) <= 0.01):
+            continue
+        label = str(item.get('label') or 'the total').strip()
+        problems.append(f'The amounts under {label} add up to {_peso(computed)}, but the printed total is {_peso(stated)}.')
+    return problems
+
+
+def _totals_candidate(scan: dict) -> tuple[str, str, str] | None:
+    problems = _total_mismatches(scan)
+    if not problems:
+        return None
+    if len(problems) == 1:
+        return 'review', problems[0], 'amounts'
+    return 'fail', f'{len(problems)} printed totals do not add up. ' + ' '.join(problems[:2]), 'amounts'
+
+
 def _forensic_review(combined: dict) -> str:
     """'chronology', 'visual', or '' for the combined local tamper decision."""
     if not isinstance(combined, dict) or combined.get('decision') != 'review':
         return ''
+    if combined.get('review_basis') == 'generative_ai_provenance':
+        return ''  # a file-origin fact, applied by _apply_file_origin()
     return 'chronology' if combined.get('review_basis') == 'deterministic_chronology_conflict' else 'visual'
 
 
@@ -196,6 +251,52 @@ def _apply_edited_text(checks: dict, edited: dict | None) -> None:
         checks['untampered'] = _check('untampered', edited['state'], edited['reason'])
 
 
+def _provenance_reason(combined: dict) -> str:
+    """Reason from the AI tool's own content credential, or '' when there is none."""
+    combined = combined if isinstance(combined, dict) else {}
+    marked = next((item for item in combined.get('indicators') or []
+                   if isinstance(item, dict) and item.get('type') == 'ai_generated_content'), None)
+    if marked and str(marked.get('reason') or '').strip():
+        return str(marked['reason']).strip()
+    facts = ((combined.get('auxiliary') or {}).get('file') or {}).get('ai_provenance')
+    if isinstance(facts, dict) and facts.get('state') in {'generated', 'edited'}:
+        action = 'edited with' if facts['state'] == 'edited' else 'created by'
+        return (f"The file carries a content credential saying it was {action} "
+                f"{facts.get('tool') or 'a generative AI tool'}, not taken with a camera or scanner.")
+    return ''
+
+
+def _design_app_name(combined: dict) -> str:
+    file_facts = ((combined if isinstance(combined, dict) else {}).get('auxiliary') or {}).get('file') or {}
+    return str(file_facts.get('editing_software') or 'a design app') if file_facts.get('design_app') is True else ''
+
+
+def _apply_file_origin(checks: dict, combined: dict, ai_untampered_state: str) -> str:
+    """Where the file came from. An AI content credential is the generator's own
+    declaration, so it fails the tampering check by itself. A design-app export
+    (Canva, Photoshop) asks staff to look; together with a visual sign from the
+    AI reading it fails. Returns 'provenance', 'design_app', or ''."""
+    provenance = _provenance_reason(combined)
+    if provenance:
+        checks['untampered'] = _check('untampered', 'fail', provenance)
+        return 'provenance'
+    app = _design_app_name(combined)
+    if not app:
+        return ''
+    current = checks['untampered']
+    if app in current['reason']:
+        return 'design_app'
+    note = (f'The file was saved from {app}, a design app. A direct phone photo or scan of a paper '
+            'document is not, so names, dates, or amounts may have been typed on.')
+    if current['state'] == 'pass':
+        checks['untampered'] = _check('untampered', 'review', note)
+    elif current['state'] == 'review' and ai_untampered_state in {'review', 'fail'}:
+        checks['untampered'] = _check('untampered', 'fail', f"{current['reason']} {note}")
+    else:
+        checks['untampered'] = _check('untampered', current['state'], f"{current['reason']} {note}")
+    return 'design_app'
+
+
 def _gemini_checks(expected: str, scan: dict, beneficiary: dict, combined: dict):
     type_state, type_decision, type_reason = _type_assessment(expected, scan)
     type_ok = type_decision == 'match'
@@ -207,6 +308,9 @@ def _gemini_checks(expected: str, scan: dict, beneficiary: dict, combined: dict)
         candidates += [(row['state'], row['note'], 'identity') for row in rows if row['state'] in {'review', 'fail'}]
     if type_ok and scan['checks']['consistent']['state'] in {'review', 'fail'}:
         candidates.append((scan['checks']['consistent']['state'], scan['checks']['consistent']['reason'], 'internal'))
+    totals = _totals_candidate(scan) if type_decision != 'wrong_slot' else None
+    if totals:
+        candidates.append(totals)
     if forensic == 'chronology':
         candidates.append(('fail', 'The signature or issue date conflicts with repeated event dates on the document.',
                            'internal'))
@@ -246,18 +350,35 @@ def _edited_date_verdict(edited: dict | None, checks: dict) -> dict | None:
     return None
 
 
+def _origin_verdict(origin: str, checks: dict) -> dict | None:
+    if origin == 'provenance' and checks['untampered']['state'] == 'fail':
+        return {'headline': 'Made with generative AI', 'reason': checks['untampered']['reason'],
+                'action': 'Ask the applicant for a photo or scan of the original paper document, '
+                          'or check the original at the office before deciding.'}
+    if origin == 'design_app' and checks['untampered']['state'] == 'review':
+        return {'headline': 'Saved from a design app', 'reason': checks['untampered']['reason'],
+                'action': 'Compare every name, date, and amount with the original paper document before deciding.'}
+    return None
+
+
 def _gemini_verdict(status: str, checks: dict, cause: str, expected: str, scan: dict,
-                    edited: dict | None = None, owner: str = 'beneficiary') -> dict:
+                    edited: dict | None = None, owner: str = 'beneficiary', origin: str = '') -> dict:
     expected_label = document_label(expected)
     edited_date = _edited_date_verdict(edited, checks)
+    origin_text = _origin_verdict(origin, checks)
     if checks['readable']['state'] == 'fail':
         headline, reason = 'Document is not readable', checks['readable']['reason']
         action = 'Ask the applicant to upload a clearer photo or scan of the document.'
     elif edited_date:
         return edited_date
+    elif origin == 'provenance' and origin_text:
+        return origin_text
     elif checks['consistent']['state'] == 'fail' and cause == 'type':
         headline, reason = 'Wrong document uploaded', checks['consistent']['reason']
         action = f'Ask the applicant to upload the {expected_label}.'
+    elif checks['consistent']['state'] == 'fail' and cause == 'amounts':
+        headline, reason = 'Totals do not add up', checks['consistent']['reason']
+        action = 'Add up the amounts on the original document and confirm them with the issuer before deciding.'
     elif checks['consistent']['state'] == 'fail' and cause == 'identity':
         headline, reason = 'Name does not match the application', checks['consistent']['reason']
         action = f'Compare the original document with the {owner} record before deciding.'
@@ -272,6 +393,8 @@ def _gemini_verdict(status: str, checks: dict, cause: str, expected: str, scan: 
         missing = checks['complete']['missing']
         headline, reason = 'Document is incomplete', checks['complete']['reason']
         action = 'Ask the applicant to upload the complete document' + (f' (missing: {", ".join(missing)}).' if missing else '.')
+    elif origin_text:
+        return origin_text
     elif status == 'needs_staff_review':
         first = next(checks[key] for key in ('consistent', 'complete', 'readable', 'unaltered', 'untampered')
                      if checks[key]['state'] == 'review')
@@ -376,12 +499,15 @@ def apply_verdict(result: dict, expected_type: str, gemini_result: dict, combine
         checks = _local_checks(findings, combined_tamper)
         edited = _edited_text_evidence(combined_tamper, 'pass')
         _apply_edited_text(checks, edited)
+        origin = _apply_file_origin(checks, combined_tamper, 'pass')
         if checks['untampered']['state'] == 'fail':
             status = 'flagged_inconsistency'
+        elif checks['untampered']['state'] == 'review' and status == 'likely_valid':
+            status = 'needs_staff_review'
         if checks['consistent']['state'] == 'fail' and _forensic_review(combined_tamper) == 'chronology':
             status = 'flagged_inconsistency'
         text = _local_verdict(status, findings, gemini_result)
-        text.update(_edited_date_verdict(edited, checks) or {})
+        text.update(_edited_date_verdict(edited, checks) or _origin_verdict(origin, checks) or {})
         findings['thesis_checks'] = checks
         findings['field_comparison'] = []
         if owner == 'applicant':
@@ -397,8 +523,9 @@ def apply_verdict(result: dict, expected_type: str, gemini_result: dict, combine
     checks, rows, type_decision, type_reason, cause = _gemini_checks(expected, scan, beneficiary or {}, combined_tamper)
     edited = _edited_text_evidence(combined_tamper, scan['checks']['untampered']['state'])
     _apply_edited_text(checks, edited)
+    origin = _apply_file_origin(checks, combined_tamper, scan['checks']['untampered']['state'])
     status = _status_from_checks(checks)
-    text = _gemini_verdict(status, checks, cause, expected, scan, edited, owner)
+    text = _gemini_verdict(status, checks, cause, expected, scan, edited, owner, origin)
     detected = scan['document_type']
     detected_label = (document_label(detected) if detected not in {'other', 'unknown'}
                       else (scan.get('document_title', '').title() or 'Not identified'))

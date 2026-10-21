@@ -70,6 +70,21 @@ def _indicator(value, page_count: int) -> dict | None:
     }
 
 
+def _totals(value) -> list[dict]:
+    """Printed totals and the amounts they should add up to, copied as text."""
+    totals = []
+    for item in value[:6] if isinstance(value, list) else []:
+        if not isinstance(item, dict):
+            continue
+        stated = _text(item.get('stated_total'), 40)
+        source = item.get('line_amounts') if isinstance(item.get('line_amounts'), list) else []
+        lines = [line for line in (_text(entry, 40) for entry in source[:40]) if line]
+        if stated and lines:
+            totals.append({'label': _neutral(_text(item.get('label'), 80), ''), 'stated_total': stated,
+                           'line_amounts': lines})
+    return totals
+
+
 def normalize_scan(raw, page_count: int) -> dict:
     """Return a bounded scan dict; raise ValueError for a non-object response."""
     if not isinstance(raw, dict):
@@ -109,5 +124,6 @@ def normalize_scan(raw, page_count: int) -> dict:
             'detected': sample_detected,
             'reason': _neutral(_text(sample.get('reason'), 200), 'The image may be a sample or copied picture.') if sample_detected else '',
         },
+        'totals': _totals(raw.get('totals')),
         'summary': summary,
     }

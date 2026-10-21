@@ -53,6 +53,10 @@ def aggregate_tamper_evidence(external_result: dict, chronology: dict,
     signature_indicators = [item for result in local_results if result.get('family') == 'metadata'
                             for item in result.get('indicators', []) if isinstance(item, dict)
                             and item.get('type') in {'invalid_pdf_signature', 'pdf_changed_after_signing'}]
+    # The AI tool's own content credential (C2PA / IPTC): a declaration, not a guess.
+    provenance_indicators = [item for result in local_results if result.get('family') == 'metadata'
+                             for item in result.get('indicators', []) if isinstance(item, dict)
+                             and item.get('type') == 'ai_generated_content']
     adcd = adcd_result.get('providers', {}).get('adcd_net', {}) if isinstance(adcd_result, dict) else {}
     adcd_review = adcd.get('status') == 'completed' and adcd.get('decision') == 'review'
 
@@ -77,19 +81,22 @@ def aggregate_tamper_evidence(external_result: dict, chronology: dict,
     local_copied_region = any(item.get('type') == 'copy_move_region' and item.get('confidence_band') == 'high'
                               for item in local_visual)
     corroborated = chronology_visual or paired_visual or adcd_corroborated or localized_high
-    review = strong_chronology or bool(signature_indicators) or corroborated or local_copied_region
+    review = (strong_chronology or bool(signature_indicators) or bool(provenance_indicators)
+              or corroborated or local_copied_region)
     review_basis = ('cryptographic_signature_problem' if signature_indicators
+                    else 'generative_ai_provenance' if provenance_indicators
                     else 'deterministic_chronology_conflict' if strong_chronology
                     else 'corroborated_visual_evidence' if corroborated
                     else ('local_copied_region' if local_copied_region else 'none'))
 
     families = []
     for name, present in (('gemini_visual', bool(gemini)), ('semantic_chronology', bool(chronology_indicators)),
-                          ('local_regional', bool(regional_indicators)), ('local_visual', bool(local_visual)), ('adcd_net', adcd_review)):
+                          ('local_regional', bool(regional_indicators)), ('local_visual', bool(local_visual)), ('adcd_net', adcd_review),
+                          ('file_provenance', bool(provenance_indicators))):
         if present:
             families.append(name)
     indicators = []
-    for source, items in (('gemini', gemini), ('chronology', chronology_indicators), ('local_regional', regional_indicators), ('local_visual', local_visual), ('metadata', signature_indicators)):
+    for source, items in (('gemini', gemini), ('chronology', chronology_indicators), ('local_regional', regional_indicators), ('local_visual', local_visual), ('metadata', signature_indicators + provenance_indicators)):
         for item in items:
             saved = {key: item[key] for key in ('type', 'page', 'source_page', 'box_2d', 'source_box_2d', 'confidence_band', 'reason') if key in item}
             saved['source'] = source
@@ -106,7 +113,7 @@ def aggregate_tamper_evidence(external_result: dict, chronology: dict,
         'label': ('Document date inconsistency — staff review required' if strong_chronology
                   else ('Suspected alteration — staff review required' if review
                         else 'No corroborated alteration signal')),
-        'confidence_band': ('high' if strong_chronology or (review and len(families) >= 3)
+        'confidence_band': ('high' if strong_chronology or provenance_indicators or (review and len(families) >= 3)
                             else ('moderate' if review else 'low')),
         'evidence_families': families,
         'indicators': indicators[:20],
@@ -127,6 +134,8 @@ def aggregate_tamper_evidence(external_result: dict, chronology: dict,
         result['date_conflict'] = deepcopy(chronology['date_conflict'])
     if signature_indicators:
         result['label'] = 'PDF signature requires staff review'
+    elif provenance_indicators:
+        result['label'] = 'Made or edited with generative AI — staff review required'
     if adcd.get('status') == 'completed':
         result['aggregate'] = {key: adcd[key] for key in ('tampered_pixel_ratio', 'max_tamper_probability', 'mean_tamper_probability', 'processing_time_seconds') if key in adcd}
         result['pages'] = list(adcd.get('pages', []))
@@ -151,6 +160,8 @@ def apply_tamper_recommendation(result: dict, combined: dict) -> dict:
               'Independent checks found possible document changes that require staff inspection.')
     if combined.get('review_basis') == 'cryptographic_signature_problem':
         reason = 'The PDF signature did not verify or a later file revision needs staff inspection.'
+    elif combined.get('review_basis') == 'generative_ai_provenance':
+        reason = 'The file says it was made or edited with a generative AI tool, so it is not a direct photo or scan.'
     if reason not in reasons:
         reasons.append(reason)
     findings['reasons'] = reasons

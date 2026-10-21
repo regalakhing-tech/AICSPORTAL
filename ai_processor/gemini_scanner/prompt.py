@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from .catalog import DOCUMENT_CATALOG, IDENTITY_ROLES, document_label, normalize_code
 
-PROMPT_VERSION = 'gemini-document-scanner-v3'
+PROMPT_VERSION = 'gemini-document-scanner-v4'
 CHECK_KEYS = ('complete', 'consistent', 'readable', 'unaltered', 'untampered')
 CHECK_STATES = ('pass', 'review', 'fail')
 INDICATOR_TYPES = (
@@ -78,6 +78,18 @@ Work in this order and return JSON that matches the response schema exactly.
      from a website (for example a watermark, a website address, an advertisement, a card shown on
      a stand or display, or "SAMPLE" or "SPECIMEN" printed on it), and describe it in
      sample_or_specimen.
+     Also check whether the whole image was made or remade by an AI image generator. Such an image
+     can look like a real photo at first glance. Look closely at the printed parts that a real
+     form or system printout gets exactly right: a printed heading or field label with a wrong,
+     misspelled, or nonsense word (for example "DEPARTMENT OF ACCOUNT" for "STATEMENT OF
+     ACCOUNT"); a field label that does not fit its value (a doctor's name beside "City/Status");
+     small print whose letters smear or melt into each other while nearby text of the same size is
+     sharp; a seal, logo, or rubber stamp whose ring text or wording is garbled; handwriting that
+     dissolves into scribbles in the middle of a word; stray characters inside a printed number
+     (",3,500.00", "P 1, 190.00"); and table lines that wander, merge, or end mid-cell. Use review
+     for one clear sign and fail when three or more are clear, using type other_visual_anomaly
+     boxed around each sign. Text cut off at the page edge, by a fold, or by a shadow, and messy
+     but real handwriting, are normal.
    Signatures, initials, and handwritten entries in a different ink colour from the printed text
    are normal on forms and IDs and are not tampering.
    A single weak or ambiguous signal is review, not fail. Normal photocopy noise, shadows, folds,
@@ -91,7 +103,15 @@ Work in this order and return JSON that matches the response schema exactly.
    around the document itself. Use type sample_or_watermark for samples and watermarks. At most 12
    indicators.
 
-6. summary is one or two neutral sentences describing what the document is and the main thing staff
+6. totals: when the document prints money amounts with a total or subtotal (bills, statements of
+   account, receipts, quotations, funeral contracts, priced prescriptions), copy up to 6 printed
+   totals or subtotals. For each, copy stated_total exactly as printed and, in line_amounts, every
+   amount in the same column that this total is meant to add up, in printed order, exactly as
+   printed (a subtotal counts as one line of a grand total; leave out blank cells). Do not add,
+   correct, or compute anything; the system does the arithmetic. Use an empty list when the
+   document has no printed total or the amounts cannot be read.
+
+7. summary is one or two neutral sentences describing what the document is and the main thing staff
    should check.
 
 Never use the words forged, forgery, fake, fraud, fraudulent, or authentic. Describe what you see
@@ -204,12 +224,26 @@ def response_schema() -> dict:
                 'required': ['detected', 'reason'],
                 'propertyOrdering': ['detected', 'reason'],
             },
+            'totals': {
+                'type': 'array',
+                'maxItems': 6,
+                'items': {
+                    'type': 'object',
+                    'properties': {
+                        'label': {'type': 'string'},
+                        'stated_total': {'type': 'string'},
+                        'line_amounts': {'type': 'array', 'items': {'type': 'string'}, 'maxItems': 40},
+                    },
+                    'required': ['label', 'stated_total', 'line_amounts'],
+                    'propertyOrdering': ['label', 'stated_total', 'line_amounts'],
+                },
+            },
             'summary': {'type': 'string'},
         },
         'required': ['document_title', 'document_type', 'type_confidence', 'primary_person',
                      'beneficiary_name_found', 'document_date', 'issuer', 'checks', 'indicators',
-                     'sample_or_specimen', 'summary'],
+                     'sample_or_specimen', 'totals', 'summary'],
         'propertyOrdering': ['document_title', 'document_type', 'type_confidence', 'primary_person',
                              'beneficiary_name_found', 'document_date', 'issuer', 'checks', 'indicators',
-                             'sample_or_specimen', 'summary'],
+                             'sample_or_specimen', 'totals', 'summary'],
     }

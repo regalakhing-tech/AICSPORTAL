@@ -70,6 +70,194 @@ def _configure_processor_logging():
 _configure_processor_logging()
 logger = logging.getLogger(__name__)
 
+def analyze_document(path, expected_type, reference_context, sibling_fields, timings=None, stage=None,
+                     review_id=None, log_ref='', document_id=None):
+    """Run every check on one document file and return its review result.
+
+    The worker passes the database stage callback and review_id; the offline
+    evaluation (tools/ai_screening_eval.py) passes neither, so nothing is saved
+    and the result is exactly what the worker would have stored.
+    """
+    timings = timings or StageTimings()
+    stage = stage or (lambda name, percent: None)
+    expected_type = str(expected_type)
+    reference_context = reference_context or {}
+    if path.suffix.lower() == '.pdf': logger.info('PDF rendering started %s', log_ref)
+    page_loading_started = timings.start()
+    images = load_images(path, SETTINGS.max_pdf_pages, SETTINGS.poppler_path, SETTINGS.pdf_timeout_seconds, document_id)
+    timings.finish('page_loading', page_loading_started)
+    if path.suffix.lower() == '.pdf': logger.info('PDF rendered %s', log_ref)
+    ocr_started = timings.start()
+    photo_evidence = expected_type == 'damaged_house_photo'
+    if photo_evidence:
+        logger.info('Photo evidence handling %s', log_ref)
+        text, ocr_conf, ocr_metadata = '', 0.0, {'ocr_boxes_by_page': []}
+        classification, detected, type_conf, fields = {'decision': 'not_applicable'}, None, 0, {}
+    else:
+        stage('ocr', 35)
+        logger.info('OCR started %s', log_ref)
+        text, ocr_conf, ocr_metadata = extract_document_text(images, SETTINGS.tesseract_path, SETTINGS.ocr_timeout_seconds)
+        profile_definition = get_profile(expected_type)
+        consensus_evidence = None
+        if profile_definition is not None:
+            candidate_results = []
+            for candidate in (ocr_metadata or {}).get('field_candidates', []):
+                if not isinstance(candidate, dict) or not str(candidate.get('text') or '').strip():
+                    continue
+                boxes = [box for page in candidate.get('pages', []) if isinstance(page, dict)
+                         for box in page.get('ocr_boxes', []) if isinstance(box, list)]
+                candidate_results.append(OcrResult(str(candidate.get('candidate') or 'bounded'),
+                                                   str(candidate.get('text') or ''),
+                                                   float(candidate.get('mean_confidence') or 0),
+                                                   candidate, boxes))
+            if candidate_results:
+                consensus_evidence = select_ocr_evidence(candidate_results, profile_definition)
+                text, ocr_conf = consensus_evidence.text, consensus_evidence.confidence
+                ocr_metadata['selected_document_candidate'] = consensus_evidence.candidate_name
+                ocr_metadata['candidate_score'] = {
+                    'anchor_coverage': consensus_evidence.score.anchor_coverage,
+                    'required_field_coverage': consensus_evidence.score.required_field_coverage,
+                    'coherent_line_ratio': consensus_evidence.score.coherent_line_ratio,
+                }
+        logger.info('OCR completed %s', log_ref)
+        classification = classify_document(text, expected_type)
+        classification = classify_ocr_candidates(text, expected_type, ocr_metadata, primary=classification)
+        detected = classification['detected_type']
+        type_conf = 90 if classification['confidence_band'] == 'high' else (55 if classification['confidence_band'] == 'moderate' else 20)
+        fields = extract(text, expected_type, ocr_metadata)
+        if consensus_evidence is not None:
+            for key, evidence_field in consensus_evidence.fields.items():
+                if isinstance(evidence_field, dict) and evidence_field.get('reason_if_unreliable') == 'conflicting_ocr_candidates':
+                    fields[key] = evidence_field
+        # A bounded, safe-field fallback may use a high-confidence profile;
+        # Valid IDs also require independent family-marker and anchor proof.
+        profile_fields = {'valid_id': ('name', 'birth_date', 'address'), 'med_cert': ('patient_name', 'birth_date'), 'billing_statement': ('patient_name',), 'death_cert': ('deceased_name',), 'funeral_contract': ('deceased_name',), 'report_police_med': ('subject_name',), 'school_assessment': ('client_name',), 'registration_form': ('client_name',), 'school_id': ('client_name',), 'mdrrmo_cert': ('client_name',), 'eclip_cert': ('client_name',), 'crisis_situation_cert': ('client_name',)}.get(expected_type, ())
+        weak = {key for key in profile_fields if fields.get(key, {}).get('status') != 'extracted'}
+        profile, eligible_weak, roi_eligibility = resolve_safe_roi_fields(expected_type, classification, ocr_metadata, weak)
+        ocr_metadata['roi_eligibility'] = roi_eligibility
+        if profile and eligible_weak:
+            ocr_metadata = retry_philid_field_rois(images, ocr_metadata, SETTINGS.tesseract_path, eligible_weak, SETTINGS.ocr_timeout_seconds, profile)
+            fields = extract(text, expected_type, ocr_metadata)
+    timings.finish('ocr_and_extraction', ocr_started)
+    verification_started = timings.start()
+    quality = analyze_document_quality(images, SETTINGS.blur_threshold, text, ocr_conf, fields)
+    stage('verifying', 65)
+    logger.info('Verification evaluated %s', log_ref)
+    result = evaluate(expected_type, detected, type_conf, quality, fields,
+                      reference_context.get('full_name'), sibling_fields,
+                      reference_context.get('date_of_birth'), classification, reference_context,
+                      profile_calibrated=profile_is_calibrated(get_profile(expected_type), CALIBRATION_REPORT))
+    timings.finish('local_verification', verification_started)
+    stage('external_review', 75)
+    # Gemini vision is the primary reader of the document images.
+    gemini_started = timings.start()
+    try:
+        gemini_result = scan_document(SETTINGS, path, images, expected_type, reference_context)
+    except Exception:
+        logger.exception('Gemini document scan unavailable %s', log_ref)
+        gemini_result = {'status': 'unavailable', 'error_code': 'GEMINI_INTERNAL_ERROR'}
+    timings.finish('gemini_scan', gemini_started)
+    logger.info('Gemini scan finished %s status=%s error=%s', log_ref,
+                gemini_result.get('status'), gemini_result.get('error_code'))
+    external_started = timings.start()
+    if gemini_result.get('status') == 'completed':
+        external_result = {'status': 'not_needed', 'reason': 'gemini_primary_completed',
+                           'payload_mode': 'image', 'elapsed_ms': 0, 'attempts': 0}
+    else:
+        try:
+            external_result = review_document(
+                SETTINGS, path, images, expected_type, text, fields, result,
+                classification, reference_context,
+            )
+        except Exception:
+            logger.exception('External AI advisory unavailable %s', log_ref)
+            external_result = {
+                'status': 'unavailable',
+                'reason': 'provider_internal_error',
+                'error_code': 'EXTERNAL_AI_INTERNAL_ERROR',
+                'payload_mode': 'text',
+                'elapsed_ms': 0,
+                'attempts': 0,
+            }
+    timings.finish('external_ai', external_started)
+    external_result = enforce_beneficiary_comparisons(
+        external_result, reference_context,
+        document_type_matches=classification.get('decision') != 'wrong_slot',
+    )
+    result['findings'] = attach_external_assessment(
+        result.get('findings'), external_result, str(external_result.get('reason') or '')
+    )
+    result = apply_external_recommendation(result, external_result,
+                                           reference_context.get('reference_owner', 'beneficiary'))
+    if external_result.get('status') == 'completed' and external_result.get('payload_mode') == 'image':
+        visual_result = external_result
+    else:
+        visual_result = as_visual_result(gemini_result)
+    if external_result.get('status') == 'completed':
+        result['model_service'] = 'hybrid_local_external'
+        result['model_version'] = 'component-assessments-v2+external-v1'
+    stage('tamper_scan', 88)
+    tamper_started = timings.start()
+    chronology_started = timings.start()
+    try:
+        chronology_result = analyze_chronology(expected_type, ocr_metadata, fields, images)
+    except Exception:
+        logger.exception('Chronology analysis unavailable %s', log_ref)
+        chronology_result = {'status': 'unavailable', 'family': 'semantic_chronology',
+                             'decision': 'clear', 'indicators': []}
+    timings.finish('chronology_analysis', chronology_started)
+    regional_started = timings.start()
+    try:
+        regional_result = analyze_regional_inconsistency(images, ocr_metadata)
+    except Exception:
+        logger.exception('Regional image analysis unavailable %s', log_ref)
+        regional_result = {'status': 'unavailable', 'family': 'local_regional',
+                           'decision': 'clear', 'indicators': []}
+    timings.finish('regional_analysis', regional_started)
+    local_results = []
+    for family, check in (('metadata', lambda: inspect_file(path)),
+                          ('qr', lambda: inspect_qr(images)),
+                          ('local_visual', lambda: analyze_image_forensics(images, ocr_metadata))):
+        try:
+            local_results.append(check())
+        except Exception:
+            logger.exception('Optional forensic check unavailable %s family=%s', log_ref, family)
+            local_results.append({'status': 'unavailable', 'family': family, 'decision': 'clear',
+                                  'indicators': [], 'facts': {}})
+    adcd_settings = SETTINGS
+    if not SETTINGS.adcd_enabled and adcd_service_ready(SETTINGS):
+        adcd_settings = replace(SETTINGS, adcd_enabled=True)
+    logger.info('ADCD analysis starting %s enabled=%s service_url=%s pages=%s ocr_pages=%s', log_ref, adcd_settings.adcd_enabled, SETTINGS.adcd_service_url, len(images), len((ocr_metadata or {}).get('ocr_boxes_by_page', [])))
+    try:
+        tamper_result = analyze_tampering(images, adcd_settings, ocr_metadata)
+        if review_id is not None:
+            tamper_result = persist_private_artifacts(tamper_result, review_id, SETTINGS)
+    except Exception:
+        logger.exception('ADCD analysis unavailable %s', log_ref)
+        tamper_result = {'providers': {'adcd_net': {'status': 'unavailable',
+                                                    'error': 'ADCD_SERVICE_UNAVAILABLE',
+                                                    'pages': [], 'mask_available': False}}}
+    timings.finish('alteration_analysis', tamper_started)
+    tamper_provider = tamper_result.get('providers', {}).get('adcd_net', {}) if isinstance(tamper_result, dict) else {}
+    logger.info('ADCD analysis finished %s status=%s error=%s page_count=%s', log_ref, tamper_provider.get('status'), tamper_provider.get('error'), len(tamper_provider.get('pages', [])) if isinstance(tamper_provider.get('pages', []), list) else 0)
+    combined_tamper = aggregate_tamper_evidence(
+        visual_result, chronology_result, regional_result, tamper_result,
+        local_results=local_results,
+    )
+    if review_id is not None:
+        combined_tamper['original_pages'] = persist_review_pages(images, review_id, SETTINGS)
+    result['findings'] = attach_combined_finding(result.get('findings'), combined_tamper)
+    result = apply_tamper_recommendation(result, combined_tamper)
+    result = apply_verdict(result, expected_type, gemini_result, combined_tamper, reference_context)
+    performance = dict(result['findings'].get('performance') or {})
+    performance['stage_ms'] = timings.as_dict()
+    performance['total_ms'] = timings.total_ms()
+    performance['external_cache_hit'] = bool(external_result.get('cache_hit', False))
+    performance['external_payload_mode'] = str(external_result.get('payload_mode') or 'text')
+    result['findings']['performance'] = performance
+    return result
+
+
 def process_one(dry_run=False, document_id=None):
     timings = StageTimings()
     db = connect(SETTINGS)
@@ -80,202 +268,35 @@ def process_one(dry_run=False, document_id=None):
         return False
     review_id = job['id']
     document_id = job.get('document_id')
-    logger.info('AI worker started review_id=%s document_id=%s', review_id, document_id)
+    log_ref = f'review_id={review_id} document_id={document_id}'
+    logger.info('AI worker started %s', log_ref)
     try:
         update_stage(db, review_id, 'preprocessing', 10)
-        logger.info('Document resolving review_id=%s document_id=%s', review_id, document_id)
+        logger.info('Document resolving %s', log_ref)
         path = resolve_path(SETTINGS.project_root, SETTINGS.upload_root, job['file_path'], document_id)
-        logger.info('Document resolved review_id=%s document_id=%s', review_id, document_id)
-        if path.suffix.lower() == '.pdf': logger.info('PDF rendering started review_id=%s document_id=%s', review_id, document_id)
-        page_loading_started = timings.start()
-        images = load_images(path, SETTINGS.max_pdf_pages, SETTINGS.poppler_path, SETTINGS.pdf_timeout_seconds, document_id)
-        timings.finish('page_loading', page_loading_started)
-        if path.suffix.lower() == '.pdf': logger.info('PDF rendered review_id=%s document_id=%s', review_id, document_id)
+        logger.info('Document resolved %s', log_ref)
         expected_type = str(job['expected_document_type'])
-        ocr_started = timings.start()
-        photo_evidence = expected_type == 'damaged_house_photo'
-        if photo_evidence:
-            logger.info('Photo evidence handling review_id=%s document_id=%s', review_id, document_id)
-            text, ocr_conf, ocr_metadata = '', 0.0, {'ocr_boxes_by_page': []}
-            classification, detected, type_conf, fields = {'decision': 'not_applicable'}, None, 0, {}
-        else:
-            update_stage(db, review_id, 'ocr', 35)
-            logger.info('OCR started review_id=%s document_id=%s', review_id, document_id)
-            text, ocr_conf, ocr_metadata = extract_document_text(images, SETTINGS.tesseract_path, SETTINGS.ocr_timeout_seconds)
-            profile_definition = get_profile(expected_type)
-            consensus_evidence = None
-            if profile_definition is not None:
-                candidate_results = []
-                for candidate in (ocr_metadata or {}).get('field_candidates', []):
-                    if not isinstance(candidate, dict) or not str(candidate.get('text') or '').strip():
-                        continue
-                    boxes = [box for page in candidate.get('pages', []) if isinstance(page, dict)
-                             for box in page.get('ocr_boxes', []) if isinstance(box, list)]
-                    candidate_results.append(OcrResult(str(candidate.get('candidate') or 'bounded'),
-                                                       str(candidate.get('text') or ''),
-                                                       float(candidate.get('mean_confidence') or 0),
-                                                       candidate, boxes))
-                if candidate_results:
-                    consensus_evidence = select_ocr_evidence(candidate_results, profile_definition)
-                    text, ocr_conf = consensus_evidence.text, consensus_evidence.confidence
-                    ocr_metadata['selected_document_candidate'] = consensus_evidence.candidate_name
-                    ocr_metadata['candidate_score'] = {
-                        'anchor_coverage': consensus_evidence.score.anchor_coverage,
-                        'required_field_coverage': consensus_evidence.score.required_field_coverage,
-                        'coherent_line_ratio': consensus_evidence.score.coherent_line_ratio,
-                    }
-            logger.info('OCR completed review_id=%s document_id=%s', review_id, document_id)
-            classification = classify_document(text, expected_type)
-            classification = classify_ocr_candidates(text, expected_type, ocr_metadata, primary=classification)
-            detected = classification['detected_type']
-            type_conf = 90 if classification['confidence_band'] == 'high' else (55 if classification['confidence_band'] == 'moderate' else 20)
-            fields = extract(text, expected_type, ocr_metadata)
-            if consensus_evidence is not None:
-                for key, evidence_field in consensus_evidence.fields.items():
-                    if isinstance(evidence_field, dict) and evidence_field.get('reason_if_unreliable') == 'conflicting_ocr_candidates':
-                        fields[key] = evidence_field
-            # A bounded, safe-field fallback may use a high-confidence profile;
-            # Valid IDs also require independent family-marker and anchor proof.
-            profile_fields = {'valid_id': ('name', 'birth_date', 'address'), 'med_cert': ('patient_name', 'birth_date'), 'billing_statement': ('patient_name',), 'death_cert': ('deceased_name',), 'funeral_contract': ('deceased_name',), 'report_police_med': ('subject_name',), 'school_assessment': ('client_name',), 'registration_form': ('client_name',), 'school_id': ('client_name',), 'mdrrmo_cert': ('client_name',), 'eclip_cert': ('client_name',), 'crisis_situation_cert': ('client_name',)}.get(expected_type, ())
-            weak = {key for key in profile_fields if fields.get(key, {}).get('status') != 'extracted'}
-            profile, eligible_weak, roi_eligibility = resolve_safe_roi_fields(expected_type, classification, ocr_metadata, weak)
-            ocr_metadata['roi_eligibility'] = roi_eligibility
-            if profile and eligible_weak:
-                ocr_metadata = retry_philid_field_rois(images, ocr_metadata, SETTINGS.tesseract_path, eligible_weak, SETTINGS.ocr_timeout_seconds, profile)
-                fields = extract(text, expected_type, ocr_metadata)
-        timings.finish('ocr_and_extraction', ocr_started)
-        verification_started = timings.start()
-        quality = analyze_document_quality(images, SETTINGS.blur_threshold, text, ocr_conf, fields)
-        update_stage(db, review_id, 'verifying', 65)
-        logger.info('Verification evaluated review_id=%s document_id=%s', review_id, document_id)
         verification_context = get_request_verification_context(job)
         reference_context = select_reference_context(expected_type, verification_context, SETTINGS.valid_id_owner_mode)
         sibling_fields = prior_fields(db, job['request_id'], job['document_id'])
         if SETTINGS.valid_id_owner_mode != 'legacy' and expected_type != 'valid_id':
             # The applicant's ID must not become a beneficiary identity anchor.
             sibling_fields = [item for item in sibling_fields if item.get('_document_type') != 'valid_id']
-        result = evaluate(expected_type, detected, type_conf, quality, fields,
-                          reference_context.get('full_name'), sibling_fields,
-                          reference_context.get('date_of_birth'), classification, reference_context,
-                          profile_calibrated=profile_is_calibrated(get_profile(expected_type), CALIBRATION_REPORT))
-        timings.finish('local_verification', verification_started)
-        update_stage(db, review_id, 'external_review', 75)
-        # Gemini vision is the primary reader of the document images.
-        gemini_started = timings.start()
-        try:
-            gemini_result = scan_document(SETTINGS, path, images, expected_type, reference_context)
-        except Exception:
-            logger.exception('Gemini document scan unavailable review_id=%s document_id=%s', review_id, document_id)
-            gemini_result = {'status': 'unavailable', 'error_code': 'GEMINI_INTERNAL_ERROR'}
-        timings.finish('gemini_scan', gemini_started)
-        logger.info('Gemini scan finished review_id=%s document_id=%s status=%s error=%s', review_id, document_id,
-                    gemini_result.get('status'), gemini_result.get('error_code'))
-        external_started = timings.start()
-        if gemini_result.get('status') == 'completed':
-            external_result = {'status': 'not_needed', 'reason': 'gemini_primary_completed',
-                               'payload_mode': 'image', 'elapsed_ms': 0, 'attempts': 0}
+        result = analyze_document(path, expected_type, reference_context, sibling_fields, timings,
+                                  lambda name, percent: update_stage(db, review_id, name, percent),
+                                  review_id, log_ref, document_id)
+        if dry_run: print({'review_id':review_id, 'document_id':job['document_id'], 'expected':job['expected_document_type'], 'detected':result.get('detected_document_type'), 'status':result['status']})
         else:
-            try:
-                external_result = review_document(
-                    SETTINGS, path, images, expected_type, text, fields, result,
-                    classification, reference_context,
-                )
-            except Exception:
-                logger.exception('External AI advisory unavailable review_id=%s document_id=%s', review_id, document_id)
-                external_result = {
-                    'status': 'unavailable',
-                    'reason': 'provider_internal_error',
-                    'error_code': 'EXTERNAL_AI_INTERNAL_ERROR',
-                    'payload_mode': 'text',
-                    'elapsed_ms': 0,
-                    'attempts': 0,
-                }
-        timings.finish('external_ai', external_started)
-        external_result = enforce_beneficiary_comparisons(
-            external_result, reference_context,
-            document_type_matches=classification.get('decision') != 'wrong_slot',
-        )
-        result['findings'] = attach_external_assessment(
-            result.get('findings'), external_result, str(external_result.get('reason') or '')
-        )
-        result = apply_external_recommendation(result, external_result,
-                                               reference_context.get('reference_owner', 'beneficiary'))
-        if external_result.get('status') == 'completed' and external_result.get('payload_mode') == 'image':
-            visual_result = external_result
-        else:
-            visual_result = as_visual_result(gemini_result)
-        if external_result.get('status') == 'completed':
-            result['model_service'] = 'hybrid_local_external'
-            result['model_version'] = 'component-assessments-v2+external-v1'
-        update_stage(db, review_id, 'tamper_scan', 88)
-        tamper_started = timings.start()
-        chronology_started = timings.start()
-        try:
-            chronology_result = analyze_chronology(expected_type, ocr_metadata, fields, images)
-        except Exception:
-            logger.exception('Chronology analysis unavailable review_id=%s document_id=%s', review_id, document_id)
-            chronology_result = {'status': 'unavailable', 'family': 'semantic_chronology',
-                                 'decision': 'clear', 'indicators': []}
-        timings.finish('chronology_analysis', chronology_started)
-        regional_started = timings.start()
-        try:
-            regional_result = analyze_regional_inconsistency(images, ocr_metadata)
-        except Exception:
-            logger.exception('Regional image analysis unavailable review_id=%s document_id=%s', review_id, document_id)
-            regional_result = {'status': 'unavailable', 'family': 'local_regional',
-                               'decision': 'clear', 'indicators': []}
-        timings.finish('regional_analysis', regional_started)
-        local_results = []
-        for family, check in (('metadata', lambda: inspect_file(path)),
-                              ('qr', lambda: inspect_qr(images)),
-                              ('local_visual', lambda: analyze_image_forensics(images, ocr_metadata))):
-            try:
-                local_results.append(check())
-            except Exception:
-                logger.exception('Optional forensic check unavailable review_id=%s family=%s', review_id, family)
-                local_results.append({'status': 'unavailable', 'family': family, 'decision': 'clear',
-                                      'indicators': [], 'facts': {}})
-        adcd_settings = SETTINGS
-        if not SETTINGS.adcd_enabled and adcd_service_ready(SETTINGS):
-            adcd_settings = replace(SETTINGS, adcd_enabled=True)
-        logger.info('ADCD analysis starting review_id=%s document_id=%s enabled=%s service_url=%s pages=%s ocr_pages=%s', review_id, document_id, adcd_settings.adcd_enabled, SETTINGS.adcd_service_url, len(images), len((ocr_metadata or {}).get('ocr_boxes_by_page', [])))
-        try:
-            tamper_result = analyze_tampering(images, adcd_settings, ocr_metadata)
-            tamper_result = persist_private_artifacts(tamper_result, review_id, SETTINGS)
-        except Exception:
-            logger.exception('ADCD analysis unavailable review_id=%s document_id=%s', review_id, document_id)
-            tamper_result = {'providers': {'adcd_net': {'status': 'unavailable',
-                                                        'error': 'ADCD_SERVICE_UNAVAILABLE',
-                                                        'pages': [], 'mask_available': False}}}
-        timings.finish('alteration_analysis', tamper_started)
-        tamper_provider = tamper_result.get('providers', {}).get('adcd_net', {}) if isinstance(tamper_result, dict) else {}
-        logger.info('ADCD analysis finished review_id=%s document_id=%s status=%s error=%s page_count=%s', review_id, document_id, tamper_provider.get('status'), tamper_provider.get('error'), len(tamper_provider.get('pages', [])) if isinstance(tamper_provider.get('pages', []), list) else 0)
-        combined_tamper = aggregate_tamper_evidence(
-            visual_result, chronology_result, regional_result, tamper_result,
-            local_results=local_results,
-        )
-        combined_tamper['original_pages'] = persist_review_pages(images, review_id, SETTINGS)
-        result['findings'] = attach_combined_finding(result.get('findings'), combined_tamper)
-        result = apply_tamper_recommendation(result, combined_tamper)
-        result = apply_verdict(result, expected_type, gemini_result, combined_tamper, reference_context)
-        performance = dict(result['findings'].get('performance') or {})
-        performance['stage_ms'] = timings.as_dict()
-        performance['total_ms'] = timings.total_ms()
-        performance['external_cache_hit'] = bool(external_result.get('cache_hit', False))
-        performance['external_payload_mode'] = str(external_result.get('payload_mode') or 'text')
-        result['findings']['performance'] = performance
-        if dry_run: print({'review_id':review_id, 'document_id':job['document_id'], 'expected':job['expected_document_type'], 'detected':detected, 'status':result['status']})
-        else:
-            logger.info('Saving AI result review_id=%s document_id=%s', review_id, document_id)
+            logger.info('Saving AI result %s', log_ref)
             finish(db, review_id, result)
-            logger.info('AI result saved review_id=%s document_id=%s', review_id, document_id)
-        logger.info('AI worker completed review_id=%s document_id=%s status=%s', review_id, document_id, result['status'])
+            logger.info('AI result saved %s', log_ref)
+        logger.info('AI worker completed %s status=%s', log_ref, result['status'])
     except RuntimeError as exc:
         if not dry_run: _record_failure(db, review_id, str(exc))
-        logger.error('AI worker failed review_id=%s document_id=%s code=%s', review_id, document_id, exc)
+        logger.error('AI worker failed %s code=%s', log_ref, exc)
     except Exception:
         if not dry_run: _record_failure(db, review_id, 'AI_PROCESSOR_ERROR')
-        logger.exception('AI worker failed review_id=%s document_id=%s', review_id, document_id)
+        logger.exception('AI worker failed %s', log_ref)
     finally: db.close()
     return True
 

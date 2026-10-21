@@ -107,6 +107,7 @@ function pswdo_ai_indicator_label(string $type): string
         'sample_or_watermark' => 'Sample image',
         'metadata_date_conflict', 'file_format_mismatch' => 'File details',
         'invalid_pdf_signature', 'pdf_changed_after_signing' => 'PDF signature',
+        'ai_generated_content' => 'Made with AI',
         default => 'Check this area',
     };
 }

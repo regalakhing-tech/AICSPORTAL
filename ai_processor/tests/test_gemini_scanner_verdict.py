@@ -256,10 +256,24 @@ class EditedTextVerdictTests(unittest.TestCase):
         self.assertEqual(result['findings']['thesis_checks']['untampered']['state'], 'fail')
         self.assertEqual(result['findings']['verdict']['headline'], 'Possible document changes found')
 
-    def test_canva_export_alone_is_only_mentioned(self):
+    def test_canva_export_alone_asks_staff_to_review(self):
+        # Every Canva-edited test document passed the AI reading; the export record
+        # is the only sign, and no camera photo or scanner writes it.
         result = _run(tamper=_tamper([], design_app=True))
-        self.assertEqual(result['findings']['thesis_checks']['untampered']['state'], 'pass')
-        self.assertEqual(result['status'], 'likely_valid')
+        untampered = result['findings']['thesis_checks']['untampered']
+        self.assertEqual(untampered['state'], 'review')
+        self.assertIn('Canva', untampered['reason'])
+        self.assertEqual(result['status'], 'needs_staff_review')
+        self.assertEqual(result['findings']['verdict']['headline'], 'Saved from a design app')
+
+    def test_canva_export_with_ai_visual_sign_is_flagged(self):
+        scan = _scan(checks={'untampered': {'state': 'review', 'reason': 'The amount uses a different font.', 'missing': []}})
+        result = _run(scan, tamper=_tamper([], design_app=True))
+        untampered = result['findings']['thesis_checks']['untampered']
+        self.assertEqual(untampered['state'], 'fail')
+        self.assertIn('different font', untampered['reason'])
+        self.assertIn('Canva', untampered['reason'])
+        self.assertEqual(result['status'], 'flagged_inconsistency')
 
     def test_local_fallback_also_flags_edited_date(self):
         result = _run(tamper=_tamper([DATE_CONFLICT, OVERLAY], chronology=True, design_app=True),

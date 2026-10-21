@@ -117,16 +117,20 @@ def sanitize_combined_finding(result: object) -> dict:
         'confidence_band': str(result.get('confidence_band') or 'low')
         if result.get('confidence_band') in {'low', 'moderate', 'high'} else 'low',
         'evidence_families': [str(value) for value in result.get('evidence_families', [])
-                              if str(value) in {'gemini_visual', 'semantic_chronology', 'local_regional', 'local_visual', 'adcd_net'}][:5],
+                              if str(value) in {'gemini_visual', 'semantic_chronology', 'local_regional', 'local_visual', 'adcd_net',
+                                                 'file_provenance'}][:6],
         'indicators': [],
         'providers': {},
     }
     review_basis = str(result.get('review_basis') or 'none')
-    if review_basis not in {'none', 'deterministic_chronology_conflict', 'corroborated_visual_evidence', 'local_copied_region', 'cryptographic_signature_problem'}:
+    if review_basis not in {'none', 'deterministic_chronology_conflict', 'corroborated_visual_evidence', 'local_copied_region',
+                            'cryptographic_signature_problem', 'generative_ai_provenance'}:
         review_basis = 'none'
     safe['review_basis'] = review_basis
     if decision == 'review' and review_basis == 'cryptographic_signature_problem':
         safe['label'] = 'PDF signature requires staff review'
+    if decision == 'review' and review_basis == 'generative_ai_provenance':
+        safe['label'] = 'Made or edited with generative AI — staff review required'
     if decision == 'review' and review_basis == 'deterministic_chronology_conflict':
         safe['label'] = 'Document date inconsistency — staff review required'
         conflict = result.get('date_conflict')
@@ -148,7 +152,7 @@ def sanitize_combined_finding(result: object) -> dict:
         'value_context_conflict', 'copy_move_region', 'repeated_visual_region',
         'erasure_or_cover_region', 'handwritten_correction', 'sample_or_watermark', 'digital_text_overlay',
         'file_format_mismatch', 'metadata_date_conflict',
-        'invalid_pdf_signature', 'pdf_changed_after_signing',
+        'invalid_pdf_signature', 'pdf_changed_after_signing', 'ai_generated_content',
     }
     for item in result.get('indicators', [])[:20]:
         if not isinstance(item, dict) or item.get('type') not in allowed_types:
@@ -195,6 +199,14 @@ def sanitize_combined_finding(result: object) -> dict:
         allowed_file['saved_with_adobe'] = file_facts['saved_with_adobe']
     if isinstance(file_facts.get('design_app'), bool):
         allowed_file['design_app'] = file_facts['design_app']
+    provenance = file_facts.get('ai_provenance') if isinstance(file_facts.get('ai_provenance'), dict) else None
+    if provenance and provenance.get('state') in {'generated', 'edited'}:
+        allowed_file['ai_provenance'] = {
+            'state': provenance['state'],
+            'tool': str(provenance.get('tool') or 'a generative AI tool')[:60],
+            'standard': 'C2PA' if provenance.get('standard') == 'C2PA' else 'IPTC',
+            'watermark': 'SynthID' if provenance.get('watermark') == 'SynthID' else None,
+        }
     signature = file_facts.get('pdf_signature') if isinstance(file_facts.get('pdf_signature'), dict) else None
     if signature:
         allowed_file['pdf_signature'] = {'state': signature.get('state') if signature.get('state') in
