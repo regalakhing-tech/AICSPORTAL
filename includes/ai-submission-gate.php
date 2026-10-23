@@ -18,6 +18,9 @@ require_once __DIR__ . '/beneficiary-priority.php';
 const AICS_AI_GATE_BLOCKING_STATUSES = ['needs_reupload', 'flagged_inconsistency'];
 const AICS_AI_GATE_PASSED_STATUSES = ['likely_valid', 'completed'];
 const AICS_AI_GATE_SYNC_BATCH = 50;
+// Longest a passed Medical request waits for its Smart Priority check before it
+// goes to PSWDO with the default priority (the check then updates it later).
+const AICS_AI_GATE_PRIORITY_WAIT_MINUTES = 5;
 
 function aics_ai_gate_env_int(string $name, int $default, int $minimum = 1): int
 {
@@ -460,24 +463,69 @@ function aics_ai_gate_saved_urgency(mysqli $connection, int $requestId): string
     return in_array($indicator, ['URGENT', 'HIGH', 'STANDARD'], true) ? $indicator : '';
 }
 
-/** The Smart Priority indicator PSWDO shows for this request: URGENT, HIGH or STANDARD. */
-function aics_ai_gate_priority_indicator(mysqli $connection, int $requestId): string
+/** @return array{0:list<string>,1:string} beneficiary categories and assistance code of a request */
+function aics_ai_gate_priority_inputs(mysqli $connection, int $requestId): array
 {
-    // The saved analysis is what PSWDO shows; recomputing could differ once the daily cache expires.
-    $saved = aics_smart_priority_analysis_enabled() ? aics_ai_gate_saved_urgency($connection, $requestId) : '';
-    if ($saved !== '') return $saved;
     $stmt = $connection->prepare("SELECT r.client_categories_json, t.assistance_code FROM aics_requests r
         LEFT JOIN aics_request_assistance ra ON ra.request_id = r.id
         LEFT JOIN aics_assistance_types t ON t.id = ra.assistance_type_id
         WHERE r.id = ? ORDER BY (t.assistance_code = 'medical') DESC LIMIT 1");
-    if (!$stmt) return 'STANDARD';
+    if (!$stmt) return [[], ''];
     $stmt->bind_param('i', $requestId);
     $stmt->execute();
     $row = $stmt->get_result()?->fetch_assoc() ?: [];
     $stmt->close();
     $categories = json_decode((string) ($row['client_categories_json'] ?? '[]'), true);
     $categories = is_array($categories) ? array_map(static fn ($value): string => strtolower(trim((string) $value)), $categories) : [];
-    $assistance = (string) ($row['assistance_code'] ?? '');
+    return [$categories, (string) ($row['assistance_code'] ?? '')];
+}
+
+/**
+ * True when a request whose documents passed may go to PSWDO now: its Smart
+ * Priority is known (or there is nothing to analyse), so the applicant and
+ * PSWDO see the same priority from the start. $analyse (the background job)
+ * runs and saves the analysis first; a failed analysis still releases, with
+ * the default priority. Page loads never analyse: with a background job they
+ * wait for it (at most AICS_AI_GATE_PRIORITY_WAIT_MINUTES), without one they
+ * release as before.
+ */
+function aics_ai_gate_priority_ready(mysqli $connection, array $request, ?callable $analyse): bool
+{
+    $requestId = (int) $request['id'];
+    if (!aics_smart_priority_analysis_enabled() || aics_ai_gate_saved_urgency($connection, $requestId) !== '') return true;
+    [$categories, $assistance] = aics_ai_gate_priority_inputs($connection, $requestId);
+    if (!aics_smart_priority_qualifies($categories, $assistance)) return true;
+    if ($analyse !== null) {
+        // Saved before release (a cached result is reused), so PSWDO shows it at once.
+        try {
+            $analyse($requestId);
+        } catch (Throwable $exception) {
+            error_log('AICS AI Smart Priority before release failed for request_id=' . $requestId . ': ' . $exception::class);
+        }
+        return true;
+    }
+    try {
+        $check = aics_smart_priority_for_request($connection, $requestId, $categories, $assistance, false);
+    } catch (Throwable) {
+        return true;
+    }
+    if (empty($check['pending']) || getenv('AICS_AI_GATE_SCHEDULER') !== '1') return true;
+    if ((string) ($request['ai_gate_reason'] ?? '') !== 'prioritizing') {
+        $stmt = $connection->prepare("UPDATE aics_requests SET ai_gate_reason = 'prioritizing', ai_gate_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND ai_gate_status = 'pending'");
+        if ($stmt) { $stmt->bind_param('i', $requestId); $stmt->execute(); $stmt->close(); }
+        return false;
+    }
+    $waited = (int) ($connection->query('SELECT TIMESTAMPDIFF(MINUTE, ai_gate_updated_at, CURRENT_TIMESTAMP) FROM aics_requests WHERE id = ' . $requestId)?->fetch_row()[0] ?? 0);
+    return $waited >= AICS_AI_GATE_PRIORITY_WAIT_MINUTES;
+}
+
+/** The Smart Priority indicator PSWDO shows for this request: URGENT, HIGH or STANDARD. */
+function aics_ai_gate_priority_indicator(mysqli $connection, int $requestId): string
+{
+    // The saved analysis is what PSWDO shows; recomputing could differ once the daily cache expires.
+    $saved = aics_smart_priority_analysis_enabled() ? aics_ai_gate_saved_urgency($connection, $requestId) : '';
+    if ($saved !== '') return $saved;
+    [$categories, $assistance] = aics_ai_gate_priority_inputs($connection, $requestId);
     try {
         // Release never waits for AICS AI urgency: a cached analysis is used if there
         // is one; tools/smart-priority-refresh.php upgrades urgent requests later.
@@ -560,8 +608,11 @@ function aics_ai_gate_release(mysqli $connection, array $request, string $from, 
     return true;
 }
 
-/** Apply a decision to one request; totals count transitions made by this caller. */
-function aics_ai_gate_apply(mysqli $connection, array $request, array $decision, array &$totals): void
+/**
+ * Apply a decision to one request; totals count transitions made by this caller.
+ * $analyse (background job only) runs the Smart Priority analysis before release.
+ */
+function aics_ai_gate_apply(mysqli $connection, array $request, array $decision, array &$totals, ?callable $analyse = null): void
 {
     $requestId = (int) $request['id'];
     $from = (string) $request['ai_gate_status'];
@@ -575,6 +626,7 @@ function aics_ai_gate_apply(mysqli $connection, array $request, array $decision,
         return;
     }
     if ($state === 'released') {
+        if ($reason === 'passed' && !aics_ai_gate_priority_ready($connection, $request, $analyse)) return;
         $stage = $reason === 'no_documents' ? 'ai_check_admin_release' : 'ai_check_passed';
         if (aics_ai_gate_release($connection, $request, $from, $reason, $stage, 'ai_release', null)) $totals['released']++;
         return;
@@ -590,7 +642,7 @@ function aics_ai_gate_apply(mysqli $connection, array $request, array $decision,
 }
 
 /** Drive one pending request: start or retry its AI checks, then apply the decision. */
-function aics_ai_gate_process_request(mysqli $connection, array $request, int &$slots, array &$totals, bool $drive = true): void
+function aics_ai_gate_process_request(mysqli $connection, array $request, int &$slots, array &$totals, bool $drive = true, ?callable $analyse = null): void
 {
     $requestId = (int) $request['id'];
     if ($drive) $totals['dispatched'] += aics_ai_gate_dispatch($connection, $requestId, $slots);
@@ -611,17 +663,18 @@ function aics_ai_gate_process_request(mysqli $connection, array $request, int &$
             $decision = aics_ai_gate_decide(aics_ai_gate_request_documents($connection, $requestId));
         }
     }
-    aics_ai_gate_apply($connection, $request, $decision, $totals);
+    aics_ai_gate_apply($connection, $request, $decision, $totals, $analyse);
 }
 
 /**
  * Drive pending requests (oldest first) and apply AICS AI decisions. Safe to
  * call from many places at once: every transition is a conditional UPDATE.
  * With $drive = false it only decides (no AI worker is started or retried).
+ * $analyse (the background job) runs Smart Priority before a Medical release.
  *
  * @return array{released:int, held:int, admin_review:int, dispatched:int, retried:int}
  */
-function aics_ai_gate_sync(mysqli $connection, ?int $requestId = null, bool $drive = true, int $batch = AICS_AI_GATE_SYNC_BATCH): array
+function aics_ai_gate_sync(mysqli $connection, ?int $requestId = null, bool $drive = true, int $batch = AICS_AI_GATE_SYNC_BATCH, ?callable $analyse = null): array
 {
     $totals = ['released' => 0, 'held' => 0, 'admin_review' => 0, 'dispatched' => 0, 'retried' => 0];
     aics_ai_gate_ensure_schema($connection);
@@ -635,7 +688,7 @@ function aics_ai_gate_sync(mysqli $connection, ?int $requestId = null, bool $dri
     $slots = $drive ? max(0, aics_ai_gate_max_workers() - aics_ai_gate_busy_workers($connection)) : 0;
     foreach ($requests as $request) {
         try {
-            aics_ai_gate_process_request($connection, $request, $slots, $totals, $drive);
+            aics_ai_gate_process_request($connection, $request, $slots, $totals, $drive, $analyse);
         } catch (Throwable $exception) {
             error_log('AICS AI gate sync failed for request_id=' . (int) $request['id'] . ': ' . $exception->getMessage());
         }
@@ -888,7 +941,7 @@ function aics_ai_gate_page_sync(mysqli $connection): void
 function aics_ai_gate_applicant_progress(mysqli $connection, int $requestId): array
 {
     aics_ai_gate_ensure_schema($connection);
-    $stmt = $connection->prepare('SELECT ai_gate_status, ai_gate_eta_days FROM aics_requests WHERE id = ?');
+    $stmt = $connection->prepare('SELECT ai_gate_status, ai_gate_reason, ai_gate_eta_days FROM aics_requests WHERE id = ?');
     $stmt->bind_param('i', $requestId);
     $stmt->execute();
     $request = $stmt->get_result()?->fetch_assoc() ?: [];
@@ -913,6 +966,8 @@ function aics_ai_gate_applicant_progress(mysqli $connection, int $requestId): ar
     }
     return [
         'state' => (string) ($request['ai_gate_status'] ?? 'pending'),
+        // 'priority': every document passed; AICS AI is checking how urgent the request is.
+        'phase' => ($request['ai_gate_reason'] ?? '') === 'prioritizing' ? 'priority' : 'documents',
         'eta_days' => (int) ($request['ai_gate_eta_days'] ?? 0),
         'total' => count($documents),
         'checked' => count(array_filter($documents, static fn (array $doc): bool => $doc['state'] === 'done')),

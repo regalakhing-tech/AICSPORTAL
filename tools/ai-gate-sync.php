@@ -21,6 +21,7 @@ if (PHP_SAPI !== 'cli') {
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/ai-submission-gate.php';
 require_once __DIR__ . '/../Applicants/php_files/auth-common.php';
+require_once __DIR__ . '/../Pswdo/php_files/pswdo-data-lib.php';
 
 $arguments = array_slice($argv, 1);
 $requestId = null;
@@ -55,7 +56,15 @@ try {
             . "\n";
         exit(0);
     }
-    $totals = aics_ai_gate_sync($connection, $requestId, true, 500);
+    // A Medical request is analysed by Smart Priority before it goes to PSWDO, so
+    // the applicant and PSWDO see the same priority from the start.
+    $analysed = 0;
+    $analyse = static function (int $id) use ($connection, &$analysed): void {
+        $analysed++;
+        pswdo_analyse_request_priority($connection, $id);
+    };
+    $totals = aics_ai_gate_sync($connection, $requestId, true, 500, $analyse);
+    if ($analysed > 0) pswdo_recalculate_priority_ranks($connection);
     if (in_array('--quiet', $arguments, true) && array_sum($totals) === 0) exit(0);
     echo 'AICS AI gate: ' . implode(' ', array_map(static fn (string $key, int $value): string => $key . '=' . $value, array_keys($totals), $totals)) . "\n";
     exit(0);

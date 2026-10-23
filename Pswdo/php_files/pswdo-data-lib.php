@@ -1703,6 +1703,29 @@ function pswdo_fetch_requests_needing_urgency_analysis(mysqli $connection, int $
     return $rows;
 }
 
+/**
+ * Run and save the AICS AI Smart Priority analysis of one request (background
+ * job only: it can take several seconds). Used by tools/ai-gate-sync.php so a
+ * Medical request reaches PSWDO with its final priority.
+ */
+function pswdo_analyse_request_priority(mysqli $connection, int $requestId): void
+{
+    $stmt = $connection->prepare("SELECT r.id, r.reference_no, r.client_categories_json, r.assistance_types_json, at.assistance_code
+        FROM aics_requests r
+        LEFT JOIN (SELECT request_id, MIN(assistance_type_id) AS assistance_type_id FROM aics_request_assistance GROUP BY request_id) ra ON ra.request_id = r.id
+        LEFT JOIN aics_assistance_types at ON at.id = ra.assistance_type_id
+        WHERE r.id = ? LIMIT 1");
+    if (!$stmt) return;
+    $stmt->bind_param('i', $requestId);
+    $stmt->execute();
+    $row = $stmt->get_result()?->fetch_assoc();
+    $stmt->close();
+    if (!is_array($row)) return;
+    $assistance = trim((string) ($row['assistance_code'] ?? ''));
+    $row['assistance_code'] = $assistance !== '' ? $assistance : pswdo_extract_first_assistance_from_json((string) ($row['assistance_types_json'] ?? '[]'));
+    pswdo_refresh_request_scoring($connection, $row, null, true);
+}
+
 function pswdo_normalize_name_for_match(string $name): string
 {
     $clean = strtolower(trim($name));

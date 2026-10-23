@@ -4018,7 +4018,9 @@ initApplicantDashboard();
         return item;
       }));
       const note = card.querySelector("[data-ai-note]");
-      if (note && Date.now() - startedAt > 10 * 60 * 1000) {
+      if (note && data.phase === "priority") {
+        note.textContent = "All documents passed. AICS AI is now checking how urgent your request is. This takes about a minute.";
+      } else if (note && Date.now() - startedAt > 10 * 60 * 1000) {
         note.textContent = "This is taking longer than usual. You can close this page. We will send you a notification when the check is done.";
       }
     };
