@@ -1,5 +1,14 @@
 let currentSignupStep = 1;
 
+// Shared computers: remove AICS Guide chats kept in this tab from earlier sign-ins.
+(() => {
+  try {
+    Object.keys(window.sessionStorage)
+      .filter((key) => key.startsWith('aics-chat-'))
+      .forEach((key) => window.sessionStorage.removeItem(key));
+  } catch (_) { /* storage may be unavailable */ }
+})();
+
 function aicsEscapeHtml(str) {
   if (typeof str !== 'string') return '';
   const div = document.createElement('div');

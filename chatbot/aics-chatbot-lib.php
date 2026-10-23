@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 
+// The widget sends at most 8 messages of up to 800 characters; anything far
+// larger is refused before it is parsed.
+const AICS_CHATBOT_MAX_BODY_BYTES = 32768;
+const AICS_CHATBOT_MAX_MESSAGES = 20;
+
 function aics_chatbot_refusal(): string
 {
     return 'I can only help with AICS services, requirements, applications, documents, and status guidance.';
@@ -277,6 +282,9 @@ function aics_chatbot_validate_messages(mixed $messages): array
     if (!is_array($messages)) {
         throw new InvalidArgumentException('Messages must be an array.');
     }
+    if (count($messages) > AICS_CHATBOT_MAX_MESSAGES) {
+        throw new InvalidArgumentException('Too many messages.');
+    }
 
     $validated = [];
     foreach ($messages as $message) {
@@ -434,6 +442,9 @@ function aics_chatbot_handle(array $request, array &$rateState, ?callable $trans
     if (!str_starts_with($contentType, 'application/json')) {
         return aics_chatbot_result(415, 'The chatbot accepts JSON requests only.');
     }
+    if (strlen((string) ($request['raw_body'] ?? '')) > AICS_CHATBOT_MAX_BODY_BYTES) {
+        return aics_chatbot_result(413, 'The message is too long.');
+    }
 
     try {
         $body = json_decode((string) ($request['raw_body'] ?? ''), true, 32, JSON_THROW_ON_ERROR);
@@ -500,6 +511,11 @@ function aics_chatbot_handle(array $request, array &$rateState, ?callable $trans
         static fn ($timestamp): bool => is_int($timestamp) && $timestamp > $now - 600
     ));
     if (count($rateState['requests']) >= 15) {
+        return aics_chatbot_result(429, 'Too many requests. Please wait a few minutes before trying again.');
+    }
+    // Server-side limit (chatbot/rate-limit.php), which a new cookie cannot reset.
+    $rateGate = $request['rate_gate'] ?? null;
+    if (is_callable($rateGate) && $rateGate() !== true) {
         return aics_chatbot_result(429, 'Too many requests. Please wait a few minutes before trying again.');
     }
     $rateState['requests'][] = $now;

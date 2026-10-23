@@ -1,0 +1,12 @@
+# AICS Guide: browsers only need chat.php, chatbot.css and chatbot.js. The other
+# PHP files are libraries included by the portal, and setup-local.php is for the
+# local XAMPP computer only.
+<FilesMatch "\.(php|md)$">
+  Require all denied
+</FilesMatch>
+<Files "chat.php">
+  Require all granted
+</Files>
+<Files "setup-local.php">
+  Require local
+</Files>

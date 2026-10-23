@@ -612,6 +612,11 @@ function aics_set_user_session(int $accountId, string $email, string $roleCode, 
     aics_start_session();
     $previousAccountId = (int) ($_SESSION['aics_account_id'] ?? 0);
     $previousRevision = (int) ($_SESSION['aics_auth_revision'] ?? 0);
+    // Another account on the same browser starts a new AICS Guide chat (new token,
+    // so the previous applicant's chat history and selected application are not reused).
+    if ($previousAccountId !== $accountId) {
+        unset($_SESSION['aics_applicant_chat_csrf'], $_SESSION['aics_applicant_chat_rate']);
+    }
     $_SESSION['aics_account_id'] = $accountId;
     $_SESSION['aics_email'] = $email;
     $_SESSION['aics_role_code'] = $roleCode;

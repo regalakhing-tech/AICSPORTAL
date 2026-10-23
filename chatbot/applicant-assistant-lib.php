@@ -142,6 +142,7 @@ function aics_chatbot_handle_applicant(array $request, array &$rateState, callab
 {
     if (strtoupper((string) ($request['method'] ?? '')) !== 'POST') return aics_chatbot_result(405, 'Please send chatbot messages using POST.');
     if (!str_starts_with(strtolower(trim((string) ($request['content_type'] ?? ''))), 'application/json')) return aics_chatbot_result(415, 'The chatbot accepts JSON requests only.');
+    if (strlen((string) ($request['raw_body'] ?? '')) > AICS_CHATBOT_MAX_BODY_BYTES) return aics_chatbot_result(413, 'The message is too long.');
     try { $body = json_decode((string) ($request['raw_body'] ?? ''), true, 32, JSON_THROW_ON_ERROR); }
     catch (JsonException) { return aics_chatbot_result(400, 'The request contains invalid JSON.'); }
     if (!is_array($body) || !array_key_exists('messages', $body)) return aics_chatbot_result(400, 'The messages field is required.');
@@ -158,8 +159,10 @@ function aics_chatbot_handle_applicant(array $request, array &$rateState, callab
     if (($rateState['identity'] ?? null) !== $identity || !is_array($rateState['requests'] ?? null)) $rateState = ['identity' => $identity, 'requests' => []];
     $rateState['requests'] = array_values(array_filter($rateState['requests'], static fn ($timestamp): bool => is_int($timestamp) && $timestamp > $now - 600));
     if (count($rateState['requests']) >= 15) return aics_chatbot_result(429, 'Too many requests. Please wait a few minutes before trying again.');
+    // Server-side limit per account and address (chatbot/rate-limit.php); signing in again does not reset it.
+    $rateGate = $request['rate_gate'] ?? null;
+    if (is_callable($rateGate) && $rateGate() !== true) return aics_chatbot_result(429, 'Too many requests. Please wait a few minutes before trying again.');
     $rateState['requests'][] = $now;
-
 
     $reference = aics_chatbot_extract_reference($latest);
     if ($reference === '' && !preg_match('/\b(?:latest|newest|recent)\b/i', $latest)) $reference = (string) ($rateState['selected_reference'] ?? '');
