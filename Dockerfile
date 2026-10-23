@@ -6,7 +6,7 @@ RUN apt-get update \
         python3 python3-venv tesseract-ocr poppler-utils libgl1 libglib2.0-0 tzdata \
     && rm -rf /var/lib/apt/lists/* \
     && docker-php-ext-install mysqli \
-    && a2enmod headers remoteip
+    && a2enmod headers remoteip rewrite
 
 COPY ai_processor/requirements.txt /tmp/requirements.txt
 RUN python3 -m venv /opt/venv \
