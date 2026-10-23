@@ -196,9 +196,12 @@ function aics_store_draft_document(mysqli $connection, int $accountId, string $d
     $active = aics_get_active_draft($connection, $accountId);
     if (!is_array($active) || (string) ($active['id'] ?? '') !== $draftId || !preg_match('/^[a-f0-9-]{36}$/i', $draftId)) throw new RuntimeException('Draft not found.');
     $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE); $size = (int) ($file['size'] ?? 0); $tmp = (string) ($file['tmp_name'] ?? '');
-    if ($error !== UPLOAD_ERR_OK || $size < 1 || $size > 10485760 || !is_uploaded_file($tmp)) throw new RuntimeException('Invalid upload.');
-    $extension = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
     $isIdPhoto = in_array($documentType, ['valid_id', 'valid_id_back'], true);
+    // Same limits as the page and the final submit (save-request.php).
+    $maxBytes = $isIdPhoto ? 10 * 1024 * 1024 : 25 * 1024 * 1024;
+    if ($size > $maxBytes || in_array($error, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) throw new RuntimeException($isIdPhoto ? 'ID photo must be 10 MB or smaller.' : 'File exceeds the 25 MB limit.');
+    if ($error !== UPLOAD_ERR_OK || $size < 1 || !is_uploaded_file($tmp)) throw new RuntimeException('Invalid upload.');
+    $extension = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
     if (!in_array($extension, $isIdPhoto ? ['jpg','jpeg','png','webp'] : ['pdf','jpg','jpeg','png'], true)) throw new RuntimeException($isIdPhoto ? 'Only JPG, PNG, and WebP ID photos are allowed.' : 'Only PDF, JPG, and PNG files are allowed.');
     $mime = (string) (new finfo(FILEINFO_MIME_TYPE))->file($tmp);
     if (!in_array($mime, $isIdPhoto ? ['image/jpeg','image/png','image/webp'] : ['application/pdf','image/jpeg','image/png'], true)) throw new RuntimeException('Unsupported file type.');
