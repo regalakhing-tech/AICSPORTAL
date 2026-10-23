@@ -118,19 +118,29 @@ def sanitize_combined_finding(result: object) -> dict:
         if result.get('confidence_band') in {'low', 'moderate', 'high'} else 'low',
         'evidence_families': [str(value) for value in result.get('evidence_families', [])
                               if str(value) in {'gemini_visual', 'semantic_chronology', 'local_regional', 'local_visual', 'adcd_net',
-                                                 'file_provenance'}][:6],
+                                                 'file_provenance', 'gemini_ai_check'}][:7],
         'indicators': [],
         'providers': {},
     }
     review_basis = str(result.get('review_basis') or 'none')
     if review_basis not in {'none', 'deterministic_chronology_conflict', 'corroborated_visual_evidence', 'local_copied_region',
-                            'cryptographic_signature_problem', 'generative_ai_provenance'}:
+                            'cryptographic_signature_problem', 'generative_ai_provenance', 'ai_generated_image'}:
         review_basis = 'none'
     safe['review_basis'] = review_basis
     if decision == 'review' and review_basis == 'cryptographic_signature_problem':
         safe['label'] = 'PDF signature requires staff review'
     if decision == 'review' and review_basis == 'generative_ai_provenance':
         safe['label'] = 'Made or edited with generative AI — staff review required'
+    if decision == 'review' and review_basis == 'ai_generated_image':
+        safe['label'] = 'Possibly AI-generated image — staff review required'
+    ai_generation = result.get('ai_generation') if isinstance(result.get('ai_generation'), dict) else None
+    if ai_generation and ai_generation.get('state') in {'fail', 'review'}:
+        safe['ai_generation'] = {
+            'state': ai_generation['state'],
+            'confidence': max(0, min(100, int(ai_generation.get('confidence') or 0))),
+            'sign_kinds': [str(kind)[:40] for kind in ai_generation.get('sign_kinds') or []][:8],
+            'reason': str(ai_generation.get('reason') or '')[:400],
+        }
     if decision == 'review' and review_basis == 'deterministic_chronology_conflict':
         safe['label'] = 'Document date inconsistency — staff review required'
         conflict = result.get('date_conflict')

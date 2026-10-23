@@ -181,8 +181,8 @@ def _forensic_review(combined: dict) -> str:
     """'chronology', 'visual', or '' for the combined local tamper decision."""
     if not isinstance(combined, dict) or combined.get('decision') != 'review':
         return ''
-    if combined.get('review_basis') == 'generative_ai_provenance':
-        return ''  # a file-origin fact, applied by _apply_file_origin()
+    if combined.get('review_basis') in {'generative_ai_provenance', 'ai_generated_image'}:
+        return ''  # file-origin findings, applied by _apply_file_origin()
     return 'chronology' if combined.get('review_basis') == 'deterministic_chronology_conflict' else 'visual'
 
 
@@ -255,7 +255,8 @@ def _provenance_reason(combined: dict) -> str:
     """Reason from the AI tool's own content credential, or '' when there is none."""
     combined = combined if isinstance(combined, dict) else {}
     marked = next((item for item in combined.get('indicators') or []
-                   if isinstance(item, dict) and item.get('type') == 'ai_generated_content'), None)
+                   if isinstance(item, dict) and item.get('type') == 'ai_generated_content'
+                   and item.get('source') == 'metadata'), None)
     if marked and str(marked.get('reason') or '').strip():
         return str(marked['reason']).strip()
     facts = ((combined.get('auxiliary') or {}).get('file') or {}).get('ai_provenance')
@@ -280,6 +281,14 @@ def _apply_file_origin(checks: dict, combined: dict, ai_untampered_state: str) -
     if provenance:
         checks['untampered'] = _check('untampered', 'fail', provenance)
         return 'provenance'
+    ai_image = (combined if isinstance(combined, dict) else {}).get('ai_generation')
+    if isinstance(ai_image, dict) and ai_image.get('state') in {'fail', 'review'}:
+        current = checks['untampered']
+        if ai_image['state'] == 'fail' or current['state'] == 'pass':
+            checks['untampered'] = _check('untampered', ai_image['state'], ai_image['reason'])
+        else:
+            checks['untampered'] = _check('untampered', current['state'], f"{current['reason']} {ai_image['reason']}")
+        return 'ai_image'
     app = _design_app_name(combined)
     if not app:
         return ''
@@ -355,6 +364,10 @@ def _origin_verdict(origin: str, checks: dict) -> dict | None:
         return {'headline': 'Made with generative AI', 'reason': checks['untampered']['reason'],
                 'action': 'Ask the applicant for a photo or scan of the original paper document, '
                           'or check the original at the office before deciding.'}
+    if origin == 'ai_image' and checks['untampered']['state'] in {'fail', 'review'}:
+        return {'headline': 'Possibly AI-generated image', 'reason': checks['untampered']['reason'],
+                'action': 'Ask the applicant for a photo or scan of the original paper document, '
+                          'or check the original at the office before deciding.'}
     if origin == 'design_app' and checks['untampered']['state'] == 'review':
         return {'headline': 'Saved from a design app', 'reason': checks['untampered']['reason'],
                 'action': 'Compare every name, date, and amount with the original paper document before deciding.'}
@@ -371,7 +384,7 @@ def _gemini_verdict(status: str, checks: dict, cause: str, expected: str, scan: 
         action = 'Ask the applicant to upload a clearer photo or scan of the document.'
     elif edited_date:
         return edited_date
-    elif origin == 'provenance' and origin_text:
+    elif origin in {'provenance', 'ai_image'} and origin_text and checks['untampered']['state'] == 'fail':
         return origin_text
     elif checks['consistent']['state'] == 'fail' and cause == 'type':
         headline, reason = 'Wrong document uploaded', checks['consistent']['reason']

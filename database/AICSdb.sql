@@ -211,6 +211,12 @@ CREATE TABLE IF NOT EXISTS `aics_request_documents` (
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- File and photo fingerprints for the duplicate-document check (includes/duplicate-detection.php).
+ALTER TABLE `aics_request_documents`
+  ADD COLUMN IF NOT EXISTS `file_sha256` CHAR(64) DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `image_dhash` CHAR(64) DEFAULT NULL;
+CREATE INDEX IF NOT EXISTS `idx_aics_request_documents_sha256` ON `aics_request_documents` (`file_sha256`);
+
 CREATE TABLE IF NOT EXISTS `document_ai_reviews` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `request_document_id` INT UNSIGNED NOT NULL,

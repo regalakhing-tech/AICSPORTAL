@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/pswdo-common.php';
 require_once __DIR__ . '/../../includes/ai-submission-gate.php';
+require_once __DIR__ . '/../../includes/duplicate-detection.php';
 
 /** The beneficiary's contact is separate from the person receiving AICS notices. */
 function pswdo_applicant_sms_contact(array $row): string
@@ -112,7 +113,7 @@ function pswdo_tamper_analysis_json(string $findingsJson, string $supplementJson
     }
     if ($status !== 'completed') { $base['status'] = 'unknown'; $base['message'] = 'Alteration analysis result is unavailable. Manual document review is required.'; return $base; }
     $decision = strtolower(trim((string) ($raw['decision'] ?? 'clear'))) === 'review' ? 'review' : 'clear';
-    $reviewBasis = in_array(($raw['review_basis'] ?? ''), ['none', 'deterministic_chronology_conflict', 'corroborated_visual_evidence', 'local_copied_region', 'cryptographic_signature_problem', 'generative_ai_provenance'], true)
+    $reviewBasis = in_array(($raw['review_basis'] ?? ''), ['none', 'deterministic_chronology_conflict', 'corroborated_visual_evidence', 'local_copied_region', 'cryptographic_signature_problem', 'generative_ai_provenance', 'ai_generated_image'], true)
         ? (string) $raw['review_basis'] : 'none';
     $base['status'] = 'completed';
     $base['decision'] = $decision;
@@ -124,6 +125,7 @@ function pswdo_tamper_analysis_json(string $findingsJson, string $supplementJson
         : 'No corroborated alteration signal';
     if ($decision === 'review' && $reviewBasis === 'cryptographic_signature_problem') $base['label'] = 'PDF signature requires staff review';
     if ($decision === 'review' && $reviewBasis === 'generative_ai_provenance') $base['label'] = 'Made or edited with generative AI — staff review required';
+    if ($decision === 'review' && $reviewBasis === 'ai_generated_image') $base['label'] = 'Possibly AI-generated image — staff review required';
     $base['confidence_band'] = in_array(($raw['confidence_band'] ?? ''), ['low', 'moderate', 'high'], true) ? (string) $raw['confidence_band'] : 'low';
     $rawDateConflict = is_array($raw['date_conflict'] ?? null) ? $raw['date_conflict'] : null;
     if ($reviewBasis === 'deterministic_chronology_conflict' && $rawDateConflict !== null) {
@@ -137,7 +139,7 @@ function pswdo_tamper_analysis_json(string $findingsJson, string $supplementJson
             $base['date_conflict'] = ['document_date' => $documentDate, 'conflicting_years' => array_slice($years, 0, 5)];
         }
     }
-    $allowedFamilies = ['gemini_visual', 'semantic_chronology', 'local_regional', 'local_visual', 'adcd_net', 'file_provenance'];
+    $allowedFamilies = ['gemini_visual', 'semantic_chronology', 'local_regional', 'local_visual', 'adcd_net', 'file_provenance', 'gemini_ai_check'];
     $base['evidence_families'] = array_values(array_intersect($allowedFamilies, array_map('strval', (array) ($raw['evidence_families'] ?? []))));
     $allowedTypes = ['typography_mismatch', 'baseline_or_spacing_mismatch', 'ink_or_color_mismatch', 'pasted_region_boundary', 'background_texture_discontinuity', 'compression_or_resampling_difference', 'signature_or_stamp_anomaly', 'other_visual_anomaly', 'date_context_conflict', 'value_context_conflict', 'copy_move_region', 'repeated_visual_region', 'erasure_or_cover_region', 'handwritten_correction', 'sample_or_watermark', 'digital_text_overlay', 'file_format_mismatch', 'metadata_date_conflict', 'invalid_pdf_signature', 'pdf_changed_after_signing', 'ai_generated_content'];
     $safeBox = static function ($value): ?array {
@@ -1216,9 +1218,9 @@ function pswdo_fetch_request_queue(mysqli $connection, array $filters = []): arr
         if (isset($priorityByRequest[$requestId])) {
             $request['priority'] = $priorityByRequest[$requestId];
         }
-        $request['duplicate_matches'] = (array) (
-            pswdo_find_application_duplicates($connection, $requestId)['matches'] ?? []
-        );
+        $duplicates = pswdo_find_application_duplicates($connection, $requestId);
+        $request['duplicate_matches'] = (array) ($duplicates['matches'] ?? []);
+        $request['duplicate_summary'] = (string) ($duplicates['summary'] ?? '');
     }
     unset($request);
 
@@ -1971,57 +1973,9 @@ function pswdo_duplicate_contact_candidates(string $contactNumber): array
  */
 function pswdo_find_application_duplicates(mysqli $connection, int $requestId): array
 {
-    $empty = ['has_duplicate' => false, 'matches' => [], 'summary' => ''];
-    if ($requestId <= 0) return $empty;
-    $selfSql = 'SELECT r.*, ar.account_id AS applicant_account_id FROM aics_requests r LEFT JOIN aics_account_requests ar ON ar.request_id = r.id WHERE r.id = ? LIMIT 1';
-    $stmt = $connection->prepare($selfSql);
-    $stmt->bind_param('i', $requestId);
-    $stmt->execute();
-    $self = $stmt->get_result()?->fetch_assoc();
-    $stmt->close();
-    if (!is_array($self)) return $empty;
-
-    // Rejected history remains part of cooldown/history, but is resolved and
-    // therefore not an active duplicate-review candidate.
-    $others = $connection->prepare("SELECT r.*, ar.account_id AS applicant_account_id FROM aics_requests r LEFT JOIN aics_account_requests ar ON ar.request_id = r.id WHERE r.id <> ? AND LOWER(TRIM(COALESCE(r.request_status, ''))) NOT IN ('not_approved', 'not approved', 'rejected', 'denied', 'cancelled', 'canceled') ORDER BY r.id DESC");
-    $others->bind_param('i', $requestId);
-    $others->execute();
-    $result = $others->get_result();
-    $matches = []; $seen = [];
-    $selfApplicantId = (int) ($self['applicant_account_id'] ?? 0);
-    $selfApplicantName = pswdo_normalize_name_for_match(implode(' ', [(string) ($self['applicant_first_name'] ?? ''), (string) ($self['applicant_middle_name'] ?? ''), (string) ($self['applicant_last_name'] ?? '')]));
-    $selfBeneficiaryName = pswdo_normalize_name_for_match((string) ($self['beneficiary_complete_name'] ?? ''));
-    $selfApplicantDob = (string) ($self['applicant_birth_date'] ?? '');
-    $selfBeneficiaryDob = (string) ($self['beneficiary_birth_date'] ?? '');
-    $selfContact = pswdo_duplicate_contact_candidates((string) ($self['contact_number'] ?? ''));
-    while ($other = $result?->fetch_assoc()) {
-        if (!is_array($other)) break;
-        $otherId = (int) ($other['id'] ?? 0);
-        if ($otherId <= 0 || isset($seen[$otherId])) continue;
-        $otherApplicantName = pswdo_normalize_name_for_match(implode(' ', [(string) ($other['applicant_first_name'] ?? ''), (string) ($other['applicant_middle_name'] ?? ''), (string) ($other['applicant_last_name'] ?? '')]));
-        $otherBeneficiaryName = pswdo_normalize_name_for_match((string) ($other['beneficiary_complete_name'] ?? ''));
-        $otherContact = pswdo_duplicate_contact_candidates((string) ($other['contact_number'] ?? ''));
-        $sameContact = count(array_intersect($selfContact, $otherContact)) > 0;
-        $applicantMatch = ($selfApplicantId > 0 && $selfApplicantId === (int) ($other['applicant_account_id'] ?? 0)) || ($selfApplicantName !== '' && $selfApplicantName === $otherApplicantName && (($selfApplicantDob !== '' && $selfApplicantDob === (string) ($other['applicant_birth_date'] ?? '')) || ($selfApplicantDob === '' && $sameContact)));
-        $beneficiaryMatch = $selfBeneficiaryName !== '' && $selfBeneficiaryName === $otherBeneficiaryName && (($selfBeneficiaryDob !== '' && $selfBeneficiaryDob === (string) ($other['beneficiary_birth_date'] ?? '')) || ($selfBeneficiaryDob === '' && $sameContact));
-        if (!$applicantMatch && !$beneficiaryMatch) continue;
-        $matches[] = [
-            'request_id' => $otherId,
-            'reference_no' => (string) ($other['reference_no'] ?? ''),
-            'date_applied' => (string) ($other['date_applied'] ?? ''),
-            'assistance_types_json' => (string) ($other['assistance_types_json'] ?? '[]'),
-            'request_status' => (string) ($other['request_status'] ?? 'pending'),
-            'applicant_match' => $applicantMatch,
-            'beneficiary_match' => $beneficiaryMatch,
-        ];
-        $seen[$otherId] = true;
-    }
-    $others->close();
-    $labels = [];
-    foreach ($matches as $match) $labels[] = $match['applicant_match'] && $match['beneficiary_match'] ? 'Possible Duplicate – Applicant & Beneficiary Match' : ($match['applicant_match'] ? 'Possible Duplicate – Applicant Match' : 'Possible Duplicate – Beneficiary Match');
-    $references = array_values(array_unique(array_filter(array_map(static fn($m): string => trim((string) $m['reference_no']), $matches))));
-    $summary = implode('; ', array_values(array_unique($labels))) . (count($references) ? '. Matching: ' . implode(', ', $references) . '.' : '');
-    return ['has_duplicate' => count($matches) > 0, 'matches' => $matches, 'summary' => $summary];
+    // Shared with the applicant submit step: names compared part by part,
+    // birth-date typos, and the same file or photo in another request.
+    return aics_find_application_duplicates($connection, $requestId);
 }
 
 /**

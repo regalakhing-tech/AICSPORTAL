@@ -1,10 +1,12 @@
 import argparse, logging, os, sys, time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from .config import SETTINGS, validate_worker_configuration
 from .gate_trigger import trigger_gate_sync
-from .database import connect, claim_one, claim_document, finish, fail, prior_fields, get_request_verification_context, update_stage
+from .database import connect, claim_one, claim_document, finish, fail, prior_fields, get_request_verification_context, update_stage, save_fingerprint
+from .fingerprint import document_fingerprint
 from .document_loader import resolve_path, load_images
 from .image_quality import analyze_document_quality
 from .ocr_engine import OcrResult, extract_document_text, retry_philid_field_rois, resolve_safe_roi_fields, select_ocr_evidence
@@ -26,6 +28,7 @@ from .tamper_detection.local_visual import inspect_qr, analyze_image_forensics
 from .external_ai.postprocessing import apply_external_recommendation, attach_external_assessment, enforce_beneficiary_comparisons
 from .external_ai.service import review_document
 from .gemini_scanner.service import scan_document
+from .gemini_scanner.ai_generation import check_ai_generation
 from .gemini_scanner.verdict import apply_verdict, as_visual_result
 from .timing import StageTimings
 
@@ -85,6 +88,7 @@ def analyze_document(path, expected_type, reference_context, sibling_fields, tim
     if path.suffix.lower() == '.pdf': logger.info('PDF rendering started %s', log_ref)
     page_loading_started = timings.start()
     images = load_images(path, SETTINGS.max_pdf_pages, SETTINGS.poppler_path, SETTINGS.pdf_timeout_seconds, document_id)
+    fingerprint = document_fingerprint(path, images)
     timings.finish('page_loading', page_loading_started)
     if path.suffix.lower() == '.pdf': logger.info('PDF rendered %s', log_ref)
     ocr_started = timings.start()
@@ -151,6 +155,9 @@ def analyze_document(path, expected_type, reference_context, sibling_fields, tim
     stage('external_review', 75)
     # Gemini vision is the primary reader of the document images.
     gemini_started = timings.start()
+    # The focused "is this image AI-made?" check runs beside the main scan.
+    ai_check_pool = ThreadPoolExecutor(max_workers=1)
+    ai_check_future = ai_check_pool.submit(check_ai_generation, SETTINGS, path, images)
     try:
         gemini_result = scan_document(SETTINGS, path, images, expected_type, reference_context)
     except Exception:
@@ -240,9 +247,18 @@ def analyze_document(path, expected_type, reference_context, sibling_fields, tim
     timings.finish('alteration_analysis', tamper_started)
     tamper_provider = tamper_result.get('providers', {}).get('adcd_net', {}) if isinstance(tamper_result, dict) else {}
     logger.info('ADCD analysis finished %s status=%s error=%s page_count=%s', log_ref, tamper_provider.get('status'), tamper_provider.get('error'), len(tamper_provider.get('pages', [])) if isinstance(tamper_provider.get('pages', []), list) else 0)
+    try:
+        ai_check = ai_check_future.result(timeout=240)
+    except Exception:
+        logger.exception('AI-generation check unavailable %s', log_ref)
+        ai_check = {'status': 'unavailable', 'error_code': 'AI_CHECK_INTERNAL_ERROR'}
+    finally:
+        ai_check_pool.shutdown(wait=False)
+    logger.info('AI-generation check finished %s status=%s verdict=%s', log_ref, ai_check.get('status'),
+                (ai_check.get('check') or {}).get('verdict'))
     combined_tamper = aggregate_tamper_evidence(
         visual_result, chronology_result, regional_result, tamper_result,
-        local_results=local_results,
+        local_results=local_results, ai_check=ai_check,
     )
     if review_id is not None:
         combined_tamper['original_pages'] = persist_review_pages(images, review_id, SETTINGS)
@@ -255,6 +271,7 @@ def analyze_document(path, expected_type, reference_context, sibling_fields, tim
     performance['external_cache_hit'] = bool(external_result.get('cache_hit', False))
     performance['external_payload_mode'] = str(external_result.get('payload_mode') or 'text')
     result['findings']['performance'] = performance
+    result['fingerprint'] = fingerprint  # saved on the document row for the duplicate-file check
     return result
 
 
@@ -289,6 +306,8 @@ def process_one(dry_run=False, document_id=None):
         else:
             logger.info('Saving AI result %s', log_ref)
             finish(db, review_id, result)
+            if not save_fingerprint(db, document_id, result.get('fingerprint') or {}):
+                logger.info('Document fingerprint not saved %s', log_ref)
             logger.info('AI result saved %s', log_ref)
         logger.info('AI worker completed %s status=%s', log_ref, result['status'])
     except RuntimeError as exc:

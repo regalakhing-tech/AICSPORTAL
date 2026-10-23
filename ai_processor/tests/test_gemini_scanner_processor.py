@@ -52,6 +52,7 @@ class GeminiProcessorTests(unittest.TestCase):
             'scan_document': (MagicMock(side_effect=gemini_result) if isinstance(gemini_result, Exception)
                               else MagicMock(return_value=gemini_result)),
             'review_document': MagicMock(return_value={'status': 'not_needed', 'payload_mode': 'text', 'elapsed_ms': 0}),
+            'check_ai_generation': MagicMock(return_value={'status': 'unavailable', 'error_code': 'AI_CHECK_DISABLED'}),
             'analyze_chronology': MagicMock(return_value={'status': 'completed', 'decision': 'clear', 'indicators': []}),
             'analyze_regional_inconsistency': MagicMock(return_value={'status': 'completed', 'decision': 'clear', 'indicators': []}),
             'inspect_file': MagicMock(return_value={'status': 'completed', 'family': 'metadata', 'decision': 'clear', 'indicators': [], 'facts': {}}),

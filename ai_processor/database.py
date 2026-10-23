@@ -126,6 +126,25 @@ def finish(connection, review_id: int, result: dict):
         cur.execute("UPDATE document_ai_reviews SET status=%s, processing_stage='completed', progress_percent=100, stage_updated_at=NOW(), worker_heartbeat_at=NULL, detected_document_type=%s, confidence_score=%s, extracted_fields=%s, findings=%s, model_service=%s, model_version=%s, last_error_code=NULL, last_error_message=NULL, processed_at=NOW() WHERE id=%s", (result['status'], result.get('detected_document_type'), result.get('confidence_score'), extracted_json, findings_json, result.get('model_service', 'local_ocr_rules'), result.get('model_version', 'component-assessments-v2'), review_id))
     connection.commit()
 
+def save_fingerprint(connection, document_id, fingerprint: dict) -> bool:
+    """Store the file and photo fingerprints used by the PHP duplicate check.
+    Optional: an older database without the columns only skips this."""
+    if not document_id or not fingerprint:
+        return False
+    try:
+        with connection.cursor() as cur:
+            cur.execute("UPDATE aics_request_documents SET file_sha256=COALESCE(%s, file_sha256), image_dhash=COALESCE(%s, image_dhash) WHERE id=%s",
+                        (fingerprint.get('sha256'), fingerprint.get('dhash'), int(document_id)))
+        connection.commit()
+        return True
+    except Exception:
+        try:
+            connection.rollback()
+        except Exception:
+            pass
+        return False
+
+
 def fail(connection, review_id: int, code: str):
     connection.rollback()
     with connection.cursor() as cur: cur.execute("UPDATE document_ai_reviews SET status='failed', processing_stage='failed', progress_percent=100, stage_updated_at=NOW(), worker_heartbeat_at=NULL, last_error_code=%s, last_error_message='Local processor could not complete this verification.', processed_at=NOW() WHERE id=%s", (code, review_id))

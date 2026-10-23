@@ -11,6 +11,7 @@ require_once __DIR__ . '/../../includes/document-requirements.php';
 require_once __DIR__ . '/../../includes/document-ai-reviews.php';
 require_once __DIR__ . '/../../includes/beneficiary-priority.php';
 require_once __DIR__ . '/../../includes/applicant-id-verification.php';
+require_once __DIR__ . '/../../includes/duplicate-detection.php';
 
 const MAX_UPLOAD_SIZE = 26_214_400; // 25 MB
 const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png'];
@@ -1227,45 +1228,11 @@ function sync_request_assistance_mapping(mysqli $connection, int $requestId, str
 function record_possible_duplicate_warning(mysqli $connection, int $requestId, int $accountId): void
 {
     try {
-        $selfStmt = $connection->prepare('SELECT applicant_first_name, applicant_middle_name, applicant_last_name, applicant_birth_date, beneficiary_complete_name, beneficiary_birth_date FROM aics_requests WHERE id = ? LIMIT 1');
-        $selfStmt->bind_param('i', $requestId);
-        $selfStmt->execute();
-        $self = $selfStmt->get_result()?->fetch_assoc();
-        $selfStmt->close();
-        if (!is_array($self)) return;
-
-        $otherStmt = $connection->prepare('SELECT r.id, r.reference_no, r.applicant_first_name, r.applicant_middle_name, r.applicant_last_name, r.applicant_birth_date, r.beneficiary_complete_name, r.beneficiary_birth_date, ar.account_id FROM aics_requests r LEFT JOIN aics_account_requests ar ON ar.request_id = r.id WHERE r.id <> ? ORDER BY r.id DESC LIMIT 50');
-        $otherStmt->bind_param('i', $requestId);
-        $otherStmt->execute();
-        $otherRows = $otherStmt->get_result();
-
-        $name = static function (array $row, string $prefix): string {
-            if ($prefix === 'beneficiary') return strtolower(trim(preg_replace('/\s+/', ' ', (string) ($row['beneficiary_complete_name'] ?? '')) ?? ''));
-            return strtolower(trim(preg_replace('/\s+/', ' ', implode(' ', [
-                (string) ($row['applicant_first_name'] ?? ''),
-                (string) ($row['applicant_middle_name'] ?? ''),
-                (string) ($row['applicant_last_name'] ?? ''),
-            ])) ?? ''));
-        };
-        $selfApplicant = $name($self, 'applicant');
-        $selfBeneficiary = $name($self, 'beneficiary');
-        $matches = [];
-        while ($other = $otherRows?->fetch_assoc()) {
-            if (!is_array($other)) break;
-            $applicantMatch = ((int) ($other['account_id'] ?? 0) === $accountId && $accountId > 0)
-                || ($selfApplicant !== '' && $selfApplicant === $name($other, 'applicant') && (string) ($self['applicant_birth_date'] ?? '') !== '' && (string) ($self['applicant_birth_date'] ?? '') === (string) ($other['applicant_birth_date'] ?? ''));
-            $beneficiaryMatch = $selfBeneficiary !== '' && $selfBeneficiary === $name($other, 'beneficiary')
-                && (string) ($self['beneficiary_birth_date'] ?? '') !== ''
-                && (string) ($self['beneficiary_birth_date'] ?? '') === (string) ($other['beneficiary_birth_date'] ?? '');
-            if ($applicantMatch || $beneficiaryMatch) {
-                $basis = $applicantMatch && $beneficiaryMatch ? 'Applicant + Beneficiary' : ($applicantMatch ? 'Applicant' : 'Beneficiary');
-                $matches[] = $basis . ': ' . trim((string) ($other['reference_no'] ?? 'previous request'));
-            }
-        }
-        $otherStmt->close();
-
-        $flag = count($matches) > 0 ? 1 : 0;
-        $note = $flag ? ('Possible duplicate match — ' . implode('; ', array_slice(array_values(array_unique($matches)), 0, 5))) : 'No duplicate found.';
+        // The same check PSWDO staff see (includes/duplicate-detection.php), on
+        // fresh data because this request was just saved.
+        $duplicates = aics_find_application_duplicates($connection, $requestId, true);
+        $flag = $duplicates['has_duplicate'] ? 1 : 0;
+        $note = $flag ? ('Possible duplicate match — ' . $duplicates['summary']) : 'No duplicate found.';
         $writeStmt = $connection->prepare('INSERT INTO aics_request_validation_results (request_id, duplicate_flag, validation_note) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE duplicate_flag = VALUES(duplicate_flag), validation_note = VALUES(validation_note), updated_at = CURRENT_TIMESTAMP');
         $writeStmt->bind_param('iis', $requestId, $flag, $note);
         $writeStmt->execute();

@@ -411,7 +411,11 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
         <?php
           $validationData = is_array($request['validation'] ?? null) ? $request['validation'] : [];
           $validationNoteText = trim((string) ($validationData['validation_note'] ?? ''));
-          $duplicateFlagged = (bool) ($validationData['duplicate_flag'] ?? false);
+          $duplicateMatches = is_array($request['duplicate_matches'] ?? null) ? $request['duplicate_matches'] : [];
+          $duplicateFlagged = (bool) ($validationData['duplicate_flag'] ?? false) || count($duplicateMatches) > 0;
+          if ($duplicateMatches !== [] && !str_contains($validationNoteText, 'Possible Duplicate')) {
+            $validationNoteText = (string) ($request['duplicate_summary'] ?? $validationNoteText);
+          }
         ?>
         <?php if ($duplicateFlagged): ?>
           <div class="validation-warning" style="background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:8px;padding:12px 14px;margin:8px 0 14px;display:flex;gap:10px;align-items:flex-start;">
@@ -426,7 +430,6 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
           </div>
         <?php endif; ?>
 
-        <?php $duplicateMatches = is_array($request['duplicate_matches'] ?? null) ? $request['duplicate_matches'] : []; ?>
         <div class="request-review-summary-grid">
         <div class="request-doc-section priority-indicator-section">
           <h3><i class="fas fa-layer-group"></i> Priority indicator</h3>
@@ -459,7 +462,10 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
               <strong><?php
                 $basis = [];
                 foreach ($duplicateMatches as $match) {
-                  $basis[] = !empty($match['applicant_match']) && !empty($match['beneficiary_match']) ? 'Applicant + Beneficiary' : (!empty($match['applicant_match']) ? 'Applicant' : 'Beneficiary');
+                  if (!empty($match['document_match'])) $basis[] = 'Same document';
+                  if (!empty($match['applicant_match']) || !empty($match['beneficiary_match'])) {
+                    $basis[] = !empty($match['applicant_match']) && !empty($match['beneficiary_match']) ? 'Applicant + Beneficiary' : (!empty($match['applicant_match']) ? 'Applicant' : 'Beneficiary');
+                  }
                 }
                 $basisLabel = count($basis) > 0 ? implode(', ', array_values(array_unique($basis))) : 'No basis found';
                 echo pswdo_h($basisLabel);
@@ -469,8 +475,8 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
           </div>
           <?php if (count($duplicateMatches) > 0): ?>
             <div class="table-wrap" style="margin-top:12px;">
-              <table class="modal-doc-table">
-                <thead><tr><th>Matching Reference</th><th>Previous Date</th><th>Assistance Type</th><th>Previous Status</th><th>Action</th></tr></thead>
+              <table class="modal-doc-table duplicate-match-table">
+                <thead><tr><th>Matching Reference</th><th>Why it matched</th><th>Previous Date</th><th>Assistance Type</th><th>Previous Status</th><th>Action</th></tr></thead>
                 <tbody>
                   <?php foreach ($duplicateMatches as $match): ?>
                     <?php
@@ -480,6 +486,10 @@ $terminalStatusCodes = ['released', 'not_approved', 'cancelled'];
                     ?>
                     <tr>
                       <td><?= pswdo_h((string) ($match['reference_no'] ?? '-')) ?></td>
+                      <td><div class="duplicate-reasons">
+                        <span class="duplicate-strength is-<?= ($match['strength'] ?? '') === 'strong' ? 'strong' : 'possible' ?>"><?= ($match['strength'] ?? '') === 'strong' ? 'Strong match' : 'Possible match' ?></span>
+                        <?php foreach ((array) ($match['reasons'] ?? []) as $reason): ?><span><?= pswdo_h((string) $reason) ?></span><?php endforeach; ?>
+                      </div></td>
                       <td><?= pswdo_h(pswdo_date_label((string) ($match['date_applied'] ?? ''))) ?></td>
                       <td><?= pswdo_h(pswdo_assistance_label($matchCode)) ?></td>
                       <td><?= pswdo_h(pswdo_status_labels()[$matchStatus] ?? 'Pending Review') ?></td>

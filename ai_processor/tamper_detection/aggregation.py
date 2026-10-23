@@ -40,9 +40,49 @@ def _related(left: dict, right: dict) -> bool:
     return boxes_overlap(left.get('box_2d'), right.get('box_2d'))
 
 
+# Focused AI-generation check (gemini_scanner/ai_generation.py): a confident
+# "AI-made" answer with two kinds of signs fails the tampering check; a weaker
+# one asks staff to look. Real camera details in the file cap it at review.
+AI_IMAGE_FAIL_CONFIDENCE = 75
+AI_IMAGE_REVIEW_CONFIDENCE = 50
+
+
+def ai_image_assessment(ai_check: dict | None, file_facts: dict | None) -> dict | None:
+    """{'state': 'fail'|'review', ...} from the focused check, or None."""
+    if not isinstance(ai_check, dict) or ai_check.get('status') != 'completed':
+        return None
+    check = ai_check.get('check') if isinstance(ai_check.get('check'), dict) else {}
+    verdict, confidence = check.get('verdict'), int(check.get('confidence') or 0)
+    kinds = [str(kind) for kind in check.get('sign_kinds') or []]
+    signs = [sign for sign in check.get('signs') or [] if isinstance(sign, dict)]
+    if verdict == 'ai_generated' and confidence >= AI_IMAGE_FAIL_CONFIDENCE and len(kinds) >= 2:
+        state = 'fail'
+    elif ((verdict == 'ai_generated' and confidence >= AI_IMAGE_REVIEW_CONFIDENCE)
+          or (verdict == 'uncertain' and signs and confidence >= AI_IMAGE_REVIEW_CONFIDENCE)):
+        state = 'review'
+    else:
+        return None
+    facts = file_facts if isinstance(file_facts, dict) else {}
+    camera = str(facts.get('camera') or '') if facts.get('camera') and facts.get('date_taken') else ''
+    if state == 'fail' and camera:
+        state = 'review'  # a phone camera wrote this file; staff compare with the paper
+    details = '; '.join(str(sign.get('description') or '').rstrip('.') for sign in signs[:2] if sign.get('description'))
+    reason = ('AICS AI found signs that the whole image was made by an AI image generator'
+              + (f': {details}.' if details else '.'))
+    if camera:
+        reason += f' The file has phone camera details ({camera}), so compare it with the paper original.'
+    return {'state': state, 'verdict': verdict, 'confidence': confidence, 'sign_kinds': kinds[:8],
+            'reason': reason[:400], 'model': str(ai_check.get('model') or '')[:60],
+            'indicators': [{'type': 'ai_generated_content', 'page': int(sign.get('page') or 1), 'box_2d': sign['box_2d'],
+                            'confidence_band': 'high' if state == 'fail' else 'moderate',
+                            'reason': str(sign.get('description') or '')[:300]}
+                           for sign in signs if sign.get('box_2d')][:8]}
+
+
 def aggregate_tamper_evidence(external_result: dict, chronology: dict,
                               regional: dict, adcd_result: dict,
-                              local_results: list[dict] | None = None) -> dict:
+                              local_results: list[dict] | None = None,
+                              ai_check: dict | None = None) -> dict:
     gemini = _external_indicators(external_result)
     chronology_indicators = list(chronology.get('indicators', [])) if isinstance(chronology, dict) and chronology.get('decision') == 'review' else []
     regional_indicators = list(regional.get('indicators', [])) if isinstance(regional, dict) and regional.get('decision') == 'review' else []
@@ -57,6 +97,9 @@ def aggregate_tamper_evidence(external_result: dict, chronology: dict,
     provenance_indicators = [item for result in local_results if result.get('family') == 'metadata'
                              for item in result.get('indicators', []) if isinstance(item, dict)
                              and item.get('type') == 'ai_generated_content']
+    file_facts = next((item.get('facts', {}) for item in local_results if item.get('family') == 'metadata'), {})
+    ai_image = ai_image_assessment(ai_check, file_facts)
+    ai_image_indicators = list(ai_image['indicators']) if ai_image else []
     adcd = adcd_result.get('providers', {}).get('adcd_net', {}) if isinstance(adcd_result, dict) else {}
     adcd_review = adcd.get('status') == 'completed' and adcd.get('decision') == 'review'
 
@@ -82,21 +125,24 @@ def aggregate_tamper_evidence(external_result: dict, chronology: dict,
                               for item in local_visual)
     corroborated = chronology_visual or paired_visual or adcd_corroborated or localized_high
     review = (strong_chronology or bool(signature_indicators) or bool(provenance_indicators)
-              or corroborated or local_copied_region)
+              or bool(ai_image) or corroborated or local_copied_region)
     review_basis = ('cryptographic_signature_problem' if signature_indicators
                     else 'generative_ai_provenance' if provenance_indicators
+                    else 'ai_generated_image' if ai_image and ai_image['state'] == 'fail'
                     else 'deterministic_chronology_conflict' if strong_chronology
                     else 'corroborated_visual_evidence' if corroborated
-                    else ('local_copied_region' if local_copied_region else 'none'))
+                    else 'local_copied_region' if local_copied_region
+                    else 'ai_generated_image' if ai_image else 'none')
 
     families = []
     for name, present in (('gemini_visual', bool(gemini)), ('semantic_chronology', bool(chronology_indicators)),
                           ('local_regional', bool(regional_indicators)), ('local_visual', bool(local_visual)), ('adcd_net', adcd_review),
-                          ('file_provenance', bool(provenance_indicators))):
+                          ('file_provenance', bool(provenance_indicators)), ('gemini_ai_check', bool(ai_image))):
         if present:
             families.append(name)
     indicators = []
-    for source, items in (('gemini', gemini), ('chronology', chronology_indicators), ('local_regional', regional_indicators), ('local_visual', local_visual), ('metadata', signature_indicators + provenance_indicators)):
+    for source, items in (('gemini', gemini), ('chronology', chronology_indicators), ('local_regional', regional_indicators), ('local_visual', local_visual), ('metadata', signature_indicators + provenance_indicators),
+                         ('gemini', ai_image_indicators)):
         for item in items:
             saved = {key: item[key] for key in ('type', 'page', 'source_page', 'box_2d', 'source_box_2d', 'confidence_band', 'reason') if key in item}
             saved['source'] = source
@@ -126,7 +172,7 @@ def aggregate_tamper_evidence(external_result: dict, chronology: dict,
                for item in local_results if item.get('family') in {'metadata', 'qr', 'local_visual'}},
         },
         'auxiliary': {
-            'file': next((item.get('facts', {}) for item in local_results if item.get('family') == 'metadata'), {}),
+            'file': file_facts,
             'qr': next((item.get('facts', []) for item in local_results if item.get('family') == 'qr'), []),
         },
     }
@@ -136,6 +182,10 @@ def aggregate_tamper_evidence(external_result: dict, chronology: dict,
         result['label'] = 'PDF signature requires staff review'
     elif provenance_indicators:
         result['label'] = 'Made or edited with generative AI — staff review required'
+    elif review_basis == 'ai_generated_image':
+        result['label'] = 'Possibly AI-generated image — staff review required'
+    if ai_image:
+        result['ai_generation'] = {key: value for key, value in ai_image.items() if key != 'indicators'}
     if adcd.get('status') == 'completed':
         result['aggregate'] = {key: adcd[key] for key in ('tampered_pixel_ratio', 'max_tamper_probability', 'mean_tamper_probability', 'processing_time_seconds') if key in adcd}
         result['pages'] = list(adcd.get('pages', []))
@@ -162,6 +212,8 @@ def apply_tamper_recommendation(result: dict, combined: dict) -> dict:
         reason = 'The PDF signature did not verify or a later file revision needs staff inspection.'
     elif combined.get('review_basis') == 'generative_ai_provenance':
         reason = 'The file says it was made or edited with a generative AI tool, so it is not a direct photo or scan.'
+    elif combined.get('review_basis') == 'ai_generated_image':
+        reason = 'AICS AI found signs that the whole image was made by an AI image generator.'
     if reason not in reasons:
         reasons.append(reason)
     findings['reasons'] = reasons

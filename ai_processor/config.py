@@ -79,6 +79,13 @@ class Settings:
         if model.strip()
     )
     gemini_timeout_seconds: float = float(os.getenv('AICS_GEMINI_TIMEOUT_SECONDS', '45'))
+    # Focused "is this image AI-made?" check (gemini_scanner/ai_generation.py).
+    gemini_ai_check_enabled: bool = os.getenv('AICS_GEMINI_AI_CHECK_ENABLED', '0') == '1'
+    gemini_ai_check_model: str = os.getenv('AICS_GEMINI_AI_CHECK_MODEL', 'gemini-3.5-flash').strip()
+    gemini_ai_check_fallback_models: tuple[str, ...] = tuple(
+        model.strip() for model in os.getenv('AICS_GEMINI_AI_CHECK_FALLBACK_MODELS', 'gemini-3.5-flash-lite').split(',')
+        if model.strip()
+    )
     valid_id_owner_mode: str = os.getenv('VALID_ID_OWNER_MODE', 'applicant').strip().lower()
     external_ai_state_root: str = os.getenv('AICS_EXTERNAL_AI_STATE_ROOT', r'C:\xampp\aics_private\external_ai').strip()
 

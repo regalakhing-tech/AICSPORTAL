@@ -9979,3 +9979,40 @@ body.is-embedded .request-details-body {
   .approve-release-actions > .btn-outline,
   .approve-release-actions > .btn-solid { width: 100%; }
 }
+
+/* Duplicate check: each matching request says why it matched. */
+.duplicate-match-table {
+  min-width: 900px;
+}
+.duplicate-match-table th:nth-child(1) { width: 16%; }
+.duplicate-match-table th:nth-child(2) { width: 40%; }
+.duplicate-match-table th:nth-child(3) { width: 12%; }
+.duplicate-match-table th:nth-child(4) { width: 11%; }
+.duplicate-match-table th:nth-child(5) { width: 11%; }
+.duplicate-match-table th:nth-child(6) { width: 10%; }
+.duplicate-match-table td {
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.duplicate-reasons {
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text, #1f2937);
+}
+.duplicate-strength {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.duplicate-strength.is-strong {
+  background: var(--danger-soft);
+  color: #991b1b;
+}
+.duplicate-strength.is-possible {
+  background: var(--warning-soft);
+  color: #92400e;
+}
