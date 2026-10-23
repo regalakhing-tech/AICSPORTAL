@@ -762,6 +762,14 @@ function initializeDynamicUploadDropZones(container) {
   });
 }
 
+// A replaced draft document keeps its document_id, so each upload adds a new
+// revision to the address; otherwise the browser reuses the old photo it already shows.
+function draftDocumentPreviewUrl(info) {
+  if (!info?.document_id) return "";
+  const url = `draft-document-view.php?document_id=${encodeURIComponent(String(info.document_id))}`;
+  return info.revision ? `${url}&v=${encodeURIComponent(String(info.revision))}` : url;
+}
+
 function renderApplicantIdUploads(container) {
   // New applications reuse the ID photos saved at sign-up; a new photo replaces them.
   const profileIds = AICS_EDIT_CONTEXT.isEditMode ? {} : (window.AICS_PROFILE_ID_DOCUMENTS || {});
@@ -782,7 +790,7 @@ function renderApplicantIdUploads(container) {
     const existingInfo = draftInfo || AICS_EDIT_CONTEXT.existingDocumentsByType[type] || profileInfo || null;
     const isLocked = AICS_EDIT_CONTEXT.isEditMode && AICS_EDIT_CONTEXT.lockedDocumentTypes.has(type);
     const previewUrl = draftInfo?.document_id
-      ? `draft-document-view.php?document_id=${encodeURIComponent(String(draftInfo.document_id))}`
+      ? draftDocumentPreviewUrl(draftInfo)
       : existingInfo?.document_id && AICS_EDIT_CONTEXT.requestId > 0
         ? `document-view.php?request_id=${encodeURIComponent(String(AICS_EDIT_CONTEXT.requestId))}&document_id=${encodeURIComponent(String(existingInfo.document_id))}`
         : existingInfo === profileInfo && profileInfo ? String(profileInfo.preview_url || "") : "";
@@ -873,7 +881,7 @@ function updateDynamicUploadFields() {
       ? window.AICS_DRAFT_DOCUMENTS[req.id] : null;
     const existingInfo = draftInfo || AICS_EDIT_CONTEXT.existingDocumentsByType[req.id] || null;
     const existingPreviewUrl = draftInfo && draftInfo.document_id
-      ? `draft-document-view.php?document_id=${encodeURIComponent(String(draftInfo.document_id))}`
+      ? draftDocumentPreviewUrl(draftInfo)
       : (!draftInfo && existingInfo && existingInfo.document_id && AICS_EDIT_CONTEXT.requestId > 0
         ? `document-view.php?request_id=${encodeURIComponent(String(AICS_EDIT_CONTEXT.requestId))}&document_id=${encodeURIComponent(String(existingInfo.document_id))}`
         : "");
@@ -2662,7 +2670,7 @@ function initApplicantIntakeForm() {
       const response = await fetch(draftUploadUrl, { method: "POST", body: upload }); const payload = await response.json();
       if (!response.ok || !payload.ok) throw new Error(payload.message || "Unable to save document.");
       window.AICS_DRAFT_DOCUMENTS = window.AICS_DRAFT_DOCUMENTS || {};
-      window.AICS_DRAFT_DOCUMENTS[documentType] = { document_id: String(payload.document.id || ""), file_name: String(payload.document.original_name || "Uploaded document"), mime_type: String(payload.document.mime_type || ""), temporary: true };
+      window.AICS_DRAFT_DOCUMENTS[documentType] = { document_id: String(payload.document.id || ""), file_name: String(payload.document.original_name || "Uploaded document"), mime_type: String(payload.document.mime_type || ""), temporary: true, revision: Date.now() };
       input.value = ""; updateDynamicUploadFields(); setFeedback("Document saved with your draft.", "success");
     } catch (error) { setFeedback(error.message || "Unable to save document. Your selected file remains on this page.", "error"); }
   });
