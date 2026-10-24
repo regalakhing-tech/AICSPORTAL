@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/auth-guard.php';
 require_once __DIR__ . '/admin-layout.php';
+require_once __DIR__ . '/admin-user-validation.php';
+require_once __DIR__ . '/admin-user-form.php';
 
 admin_start_session();
 $paths = admin_paths();
@@ -91,6 +93,21 @@ function admin_users_can_transition_status(string $fromStatusCode, string $toSta
     return true;
 }
 
+/** New profiles must fail on unique mobile collisions rather than update another applicant. */
+function admin_users_insert_profile(mysqli $connection, int $accountId, array $values): void
+{
+    $applicant = $values['role_code'] === 'applicat';
+    $sql = $applicant
+        ? 'INSERT INTO aics_applicant_profiles (account_id, first_name, middle_name, last_name, contact_number, complete_address) VALUES (?, ?, ?, ?, ?, ?)'
+        : 'INSERT INTO aics_staff_profiles (account_id, first_name, middle_name, last_name, contact_number, position_title) VALUES (?, ?, ?, ?, ?, ?)';
+    $stmt = $connection->prepare($sql);
+    $stmt->execute([
+        $accountId, $values['first_name'], admin_clean_text($values['middle_name']), $values['last_name'],
+        admin_clean_text($values['contact_number']), admin_clean_text($values[$applicant ? 'address' : 'position_title']),
+    ]);
+    $stmt->close();
+}
+
 if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST') {
     $connection = null;
     $action = trim((string) ($_POST['action'] ?? ''));
@@ -108,37 +125,22 @@ if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST') {
     try {
         admin_require_valid_csrf();
 
+        if ($action === 'create_user') {
+            $createResult = admin_validate_create_user($_POST);
+            if ($createResult['errors'] !== []) {
+                throw new RuntimeException('validation_failed');
+            }
+        }
+
         $connection = aics_db_connect();
         admin_ensure_schema($connection);
 
         if ($action === 'create_user') {
-            $email = filter_var((string) ($_POST['email'] ?? ''), FILTER_VALIDATE_EMAIL);
+            $values = $createResult['values'];
+            $email = $values['email'];
             $password = (string) ($_POST['password'] ?? '');
-            $roleCode = trim((string) ($_POST['role_code'] ?? ''));
-            $statusCode = strtolower(trim((string) ($_POST['status_code'] ?? 'active')));
-            $firstName = admin_clean_text((string) ($_POST['first_name'] ?? ''));
-            $middleName = admin_clean_text((string) ($_POST['middle_name'] ?? ''));
-            $lastName = admin_clean_text((string) ($_POST['last_name'] ?? ''));
-            $contactNumber = admin_clean_text((string) ($_POST['contact_number'] ?? ''));
-            $positionTitle = admin_clean_text((string) ($_POST['position_title'] ?? ''));
-            $address = admin_clean_text((string) ($_POST['address'] ?? ''));
-
-            if ($email === false || $firstName === null || $lastName === null || $roleCode === '') {
-                throw new RuntimeException('missing_fields');
-            }
-
-            $passwordError = admin_validate_password_strength($password);
-            if ($passwordError !== null) {
-                throw new RuntimeException('weak_password');
-            }
-
-            if (!in_array($statusCode, admin_users_editable_status_codes(), true)) {
-                if ($statusCode === 'banned') {
-                    throw new RuntimeException('use_access_status_for_ban');
-                }
-
-                throw new RuntimeException('invalid_lookup');
-            }
+            $roleCode = $values['role_code'];
+            $statusCode = $values['status_code'];
 
             $roleId = admin_resolve_role_id($connection, $roleCode);
             $statusId = admin_resolve_status_id($connection, $statusCode);
@@ -166,17 +168,7 @@ if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST') {
             $newAccountId = (int) $connection->insert_id;
             $insertAccount->close();
 
-            admin_upsert_profile_for_role(
-                $connection,
-                $newAccountId,
-                $roleCode,
-                $firstName,
-                $middleName,
-                $lastName,
-                $contactNumber,
-                $positionTitle,
-                $address
-            );
+            admin_users_insert_profile($connection, $newAccountId, $values);
 
             admin_log_event(
                 $connection,
@@ -191,6 +183,7 @@ if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST') {
             $connection->commit();
             $connection->close();
 
+            unset($_SESSION['admin_create_user_form']);
             admin_users_redirect(array_merge($returnQuery, ['status' => 'user_created']));
         } elseif ($action === 'update_user') {
             $targetId = (int) ($_POST['target_account_id'] ?? 0);
@@ -414,6 +407,18 @@ if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST') {
 
         $errorQuery = array_merge($returnQuery, ['error' => $exception->getMessage()]);
         if ($action === 'create_user') {
+            $createResult = $createResult ?? admin_validate_create_user($_POST);
+            $createErrors = $createResult['errors'];
+            if ($exception instanceof mysqli_sql_exception && $exception->getCode() === 1062 && str_contains($exception->getMessage(), 'uq_aics_applicant_profiles_contact_number')) {
+                $createErrors['contact_number'] = 'This mobile number is already in use. Enter a different mobile number.';
+                $errorQuery['error'] = 'validation_failed';
+            } elseif ($exception->getMessage() === 'duplicate_email' || ($exception instanceof mysqli_sql_exception && $exception->getCode() === 1062)) {
+                $createErrors['email'] = 'This email address is already in use. Enter a different email.';
+                $errorQuery['error'] = 'duplicate_email';
+            } elseif (!in_array($exception->getMessage(), ['validation_failed', 'invalid_csrf', 'invalid_lookup'], true)) {
+                $errorQuery['error'] = 'create_failed';
+            }
+            $_SESSION['admin_create_user_form'] = ['values' => $createResult['values'], 'errors' => $createErrors];
             $errorQuery['modal'] = 'create';
         } elseif ($action === 'update_user') {
             $errorQuery['modal'] = 'edit';
@@ -433,12 +438,22 @@ $modalCode = strtolower(trim((string) ($_GET['modal'] ?? '')));
 $openCreateModal = $modalCode === 'create';
 $openEditModal = $modalCode === 'edit';
 
+$createValues = admin_validate_create_user(['status_code' => 'active'])['values'];
+$createErrors = [];
+if ($openCreateModal && is_array($_SESSION['admin_create_user_form'] ?? null)) {
+    $createValues = array_replace($createValues, $_SESSION['admin_create_user_form']['values'] ?? []);
+    $createErrors = $_SESSION['admin_create_user_form']['errors'] ?? [];
+}
+unset($_SESSION['admin_create_user_form']);
+
 $statusMessages = [
     'user_created' => ['type' => 'success', 'text' => 'User account created successfully.'],
     'user_updated' => ['type' => 'success', 'text' => 'User account updated successfully.'],
     'user_restricted' => ['type' => 'success', 'text' => 'User access status updated successfully.'],
 ];
 $errorMessages = [
+    'validation_failed' => 'Please check the highlighted fields in Add User Account.',
+    'create_failed' => 'Unable to create the account. Please try again.',
     'missing_fields' => 'Please complete all required fields.',
     'weak_password' => 'Password policy was not met.',
     'invalid_lookup' => 'Selected role or status is invalid.',
@@ -861,78 +876,7 @@ admin_render_page_head(
     </div>
     <?php endif; ?>
 
-    <div class="admin-modal-shell" id="modal-create-user" aria-hidden="true">
-      <div class="admin-modal-backdrop" data-modal-close></div>
-      <div class="admin-modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-create-title">
-        <header class="admin-modal-head">
-          <div>
-            <p class="modal-kicker">Account Provisioning</p>
-            <h3 id="modal-create-title">Add User Account</h3>
-          </div>
-          <button type="button" class="admin-modal-close" data-modal-close aria-label="Close create user modal">
-            <i class="fas fa-xmark"></i>
-          </button>
-        </header>
-
-        <form action="" method="post" class="form-grid modal-form-grid">
-          <?= admin_csrf_input() ?>
-          <input type="hidden" name="action" value="create_user">
-          <input type="hidden" name="return_q" value="<?= admin_h($search) ?>">
-          <input type="hidden" name="return_role" value="<?= admin_h($roleFilter) ?>">
-
-          <label>First Name
-            <input type="text" name="first_name" required>
-          </label>
-          <label>Middle Name <span class="field-optional">(Optional)</span>
-            <input type="text" name="middle_name">
-          </label>
-          <label>Last Name
-            <input type="text" name="last_name" required>
-          </label>
-          <label>Email
-            <input type="email" name="email" required>
-          </label>
-          <label>Password
-            <input type="password" name="password" required placeholder="Min 8 chars, upper/lower/number/symbol">
-          </label>
-          <label>Role
-            <select name="role_code" class="js-role-select" required>
-              <option value="">Select role</option>
-              <?php foreach ($roles as $role): ?>
-                <option value="<?= admin_h((string) $role['role_code']) ?>"><?= admin_h((string) $role['role_name']) ?></option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label>Status
-            <select name="status_code" required>
-              <?php foreach ($statuses as $status): ?>
-                <option value="<?= admin_h((string) $status['status_code']) ?>"<?= (string) $status['status_code'] === 'active' ? ' selected' : '' ?>>
-                  <?= admin_h((string) $status['status_name']) ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-          </label>
-          <label>Position Title (staff) <span class="field-optional">(Optional)</span>
-            <input type="text" name="position_title">
-          </label>
-          <label>Contact Number <span class="field-optional">(Optional)</span>
-            <input type="tel" name="contact_number" inputmode="numeric" data-digits-only>
-          </label>
-          <label>Address (applicant) <span class="field-optional">(Optional)</span>
-            <input type="text" name="address">
-          </label>
-
-          <p class="role-field-hint modal-span-2" data-role-hint>
-            Select role to guide which profile details are most important.
-          </p>
-
-          <div class="modal-actions modal-span-2">
-            <button type="button" class="btn-outline" data-modal-close>Cancel</button>
-            <button type="submit" class="btn-solid"><i class="fas fa-circle-plus"></i> Create Account</button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <?php admin_render_create_user_form($roles, $statuses, $createValues, $createErrors, $search, $roleFilter, $openCreateModal ? (string) $errorMessage : ''); ?>
 
     <div class="admin-modal-shell" id="modal-edit-user" aria-hidden="true">
       <div class="admin-modal-backdrop" data-modal-close></div>
@@ -1063,5 +1007,6 @@ admin_render_page_head(
       </div>
     </div>
   </section>
+  <script src="<?= admin_h(dirname($paths['js_url'])) ?>/admin-user-form.js?v=<?= (int) filemtime(__DIR__ . '/../jsfiles/admin-user-form.js') ?>"></script>
 <?php
 admin_render_page_end($paths);

@@ -533,6 +533,7 @@
     modal.classList.add("open");
     modal.setAttribute("aria-hidden", "false");
     document.body.classList.add("modal-open");
+    modal.dispatchEvent(new Event("admin:modal-open"));
   }
 
   function closeModal(modal) {
@@ -541,6 +542,7 @@
     }
     modal.classList.remove("open");
     modal.setAttribute("aria-hidden", "true");
+    modal.dispatchEvent(new Event("admin:modal-close"));
     if (modal.id === "modal-restrict-confirm") {
       pendingRestrictForm = null;
     }
