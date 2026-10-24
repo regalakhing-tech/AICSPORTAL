@@ -91,8 +91,7 @@ try {
                 rs.scheduled_time,
                 rs.venue,
                 rs.release_batch,
-                rs.release_status,
-                rs.amount_given
+                rs.release_status
             FROM aics_requests r
             INNER JOIN aics_account_requests ar ON ar.request_id = r.id
             LEFT JOIN aics_request_release_schedule rs ON rs.request_id = r.id
@@ -140,7 +139,6 @@ try {
                 'venue'           => (string) ($row['venue'] ?? ''),
                 'release_batch'   => (string) ($row['release_batch'] ?? ''),
                 'release_status'  => (string) ($row['release_status'] ?? ''),
-                'amount_given'    => $row['amount_given'] !== null ? (float) $row['amount_given'] : null,
                 'gate_status'     => (string) ($row['ai_gate_status'] ?? 'released'),
                 'gate_eta_days'   => (int) ($row['ai_gate_eta_days'] ?? 0),
                 'gate_eta'        => aics_ai_gate_eta_summary((string) ($row['ai_gate_priority'] ?? ''), (string) ($row['ai_gate_updated_at'] ?? '')),
@@ -1658,7 +1656,6 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                 $schedBatch   = (string) ($req['release_batch'] ?? '');
                 $schedStatus  = strtolower(trim((string) ($req['release_status'] ?? '')));
                 $reqStatusCode = strtolower(trim((string) ($req['status_code'] ?? '')));
-                $amountGiven  = $req['amount_given'] ?? null;
 
                 $showSchedule = $schedDate !== '' && $schedDate !== '0000-00-00'
                     && in_array($reqStatusCode, ['approved','for_release','for release','validated','pending_release','scheduled'], true);
@@ -1676,15 +1673,6 @@ function status_stage_rows(string $statusCode, int $timelineLevel, string $creat
                       <span><?= status_h(status_fmt_date($schedDate)) ?></span>
                     </div>
                   </div>
-                  <?php if ($amountGiven !== null && $amountGiven > 0): ?>
-                  <div class="release-schedule-row">
-                    <i class="fas fa-peso-sign"></i>
-                    <div>
-                      <strong>Amount Received</strong>
-                      <span style="font-size:16px;font-weight:700;color:#15803d;">₱ <?= number_format((float)$amountGiven, 2) ?></span>
-                    </div>
-                  </div>
-                  <?php endif; ?>
                   <?php if ($schedVenue !== ''): ?>
                   <div class="release-schedule-row">
                     <i class="fas fa-location-dot"></i>

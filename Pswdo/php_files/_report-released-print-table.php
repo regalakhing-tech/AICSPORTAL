@@ -22,7 +22,6 @@ declare(strict_types=1);
           <th scope="col">Release Time</th>
           <th scope="col">Venue</th>
           <th scope="col">Batch</th>
-          <th scope="col">Amount Given (PHP)</th>
           <th scope="col">Date Recorded</th>
         </tr>
       </thead>
@@ -41,7 +40,6 @@ declare(strict_types=1);
             <td><?= pswdo_h($row['release_time']) ?></td>
             <td><?= pswdo_h($row['venue']) ?></td>
             <td><?= pswdo_h($row['batch']) ?></td>
-            <td style="text-align:right; font-weight:600;"><?= $row['amount_given'] !== null ? 'PHP ' . number_format((float) $row['amount_given'], 2) : 'Not recorded' ?></td>
             <td><?= pswdo_h($row['released_at']) ?></td>
           </tr>
         <?php endforeach; ?>

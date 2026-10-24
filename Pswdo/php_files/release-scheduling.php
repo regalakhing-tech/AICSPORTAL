@@ -571,7 +571,6 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
                             data-venue="<?= pswdo_h(trim((string) ($item['venue'] ?? '')) !== '' ? (string) $item['venue'] : 'PSWDO Office') ?>"
                             data-release-batch="<?= pswdo_h((string) ($item['release_batch'] ?? '')) ?>"
                             data-release-notes="<?= pswdo_h((string) ($item['release_notes'] ?? '')) ?>"
-                            data-amount-given="<?= ($item['amount_given'] ?? null) !== null ? pswdo_h(number_format((float) $item['amount_given'], 2, '.', '')) : '' ?>"
                             data-applicant-name="<?= pswdo_h((string) ($item['applicant_name'] ?? 'Applicant')) ?>"
                             data-contact-number="<?= pswdo_h(pswdo_applicant_sms_contact($item)) ?>"
                           >
@@ -582,7 +581,6 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
                             type="button"
                             class="btn-solid release-complete-btn js-open-mark-released"
                             data-request-id="<?= (int) ($item['request_id'] ?? 0) ?>"
-                            data-amount-given="<?= ($item['amount_given'] ?? null) !== null ? pswdo_h(number_format((float) $item['amount_given'], 2, '.', '')) : '' ?>"
                             data-beneficiary="<?= pswdo_h((string) ($item['beneficiary_name'] ?? 'this applicant')) ?>"
                             data-reference="<?= pswdo_h((string) ($item['reference_no'] ?? '')) ?>"
                             data-csrf="<?= pswdo_h($csrfToken) ?>"
@@ -838,11 +836,12 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
     </div>
   </div>
 
-  <!-- Mark as Released modal: confirms the amount set in Schedule Release -->
-  <div class="confirm-modal release-confirm-modal" id="mark-released-modal">
+  <!-- Confirm that the scheduled assistance has been released. -->
+  <div class="confirm-modal release-confirm-modal" id="mark-released-modal" role="dialog" aria-modal="true" aria-labelledby="mark-released-title" aria-describedby="mark-released-question mark-released-desc">
     <div class="confirm-card release-confirm-card">
       <div class="release-confirm-icon"><i class="fas fa-hand-holding-heart"></i></div>
-      <h3>Complete Release</h3>
+      <h3 id="mark-released-title">Confirm Release</h3>
+      <p id="mark-released-question">Are you sure you want to release this assistance?</p>
       <p id="mark-released-desc" class="release-confirm-desc"></p>
       <form method="post" action="workflow-action.php" id="mark-released-form">
         <input type="hidden" name="csrf_token" id="mark-released-csrf" value="">
@@ -857,24 +856,6 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
         <input type="hidden" name="return_batch_date_to" id="mark-released-date-to" value="">
         <input type="hidden" name="return_batch_key" id="mark-released-batch-key" value="">
         <input type="hidden" name="return_batch_limit" id="mark-released-batch-limit" value="">
-        <div class="release-amount-summary" id="mark-released-amount-summary">
-          <span>Amount to release</span>
-          <strong id="mark-released-amount-value">₱0.00</strong>
-        </div>
-        <div class="field-wrap release-amount-field" id="mark-released-amount-field" hidden>
-          <label for="mark-released-amount">Amount given (₱)</label>
-          <input
-            type="number"
-            id="mark-released-amount"
-            name="amount_given"
-            min="1"
-            max="99999999.99"
-            step="0.01"
-            placeholder="e.g. 5000.00"
-            disabled
-          >
-          <small>No amount was set when this release was scheduled. Enter the amount given.</small>
-        </div>
         <div class="confirm-actions">
           <button type="button" class="btn-outline" id="cancel-mark-released">Cancel</button>
           <button type="submit" class="btn-solid release-complete-btn"><i class="fas fa-check"></i> Confirm Release</button>
@@ -957,17 +938,14 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
       const dateTo     = document.getElementById('mark-released-date-to');
       const batchKey   = document.getElementById('mark-released-batch-key');
       const batchLimit = document.getElementById('mark-released-batch-limit');
-      const amountInput= document.getElementById('mark-released-amount');
-      const amountWrap = document.getElementById('mark-released-amount-field');
-      const summary    = document.getElementById('mark-released-amount-summary');
-      const summaryValue = document.getElementById('mark-released-amount-value');
       const confirmBtn = form ? form.querySelector('button[type="submit"]') : null;
       const cancelBtn  = document.getElementById('cancel-mark-released');
-      let hasAmount = false;
+      let triggerButton = null;
 
-      if (!modal || !form || !(amountInput instanceof HTMLInputElement) || !amountWrap || !summary || !summaryValue) return;
+      if (!modal || !form || !desc || !reqId || !csrf) return;
 
       function openModal(btn) {
+        triggerButton = btn;
         reqId.value      = btn.dataset.requestId    || '';
         csrf.value       = btn.dataset.csrf         || '';
         sort.value       = btn.dataset.returnSort   || '';
@@ -978,24 +956,13 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
         batchLimit.value = btn.dataset.returnBatchLimit || '';
         desc.textContent = (btn.dataset.beneficiary || 'This applicant')
           + ' · ' + (btn.dataset.reference || '');
-        const scheduledAmount = parseFloat(btn.dataset.amountGiven || '');
-        hasAmount = scheduledAmount > 0;
-        summaryValue.textContent = hasAmount
-          ? '₱' + scheduledAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-          : '';
-        summary.hidden = !hasAmount;
-        // Schedules saved without an amount (Set Schedule for All) still need one here.
-        amountWrap.hidden = hasAmount;
-        amountInput.disabled = hasAmount;
-        amountInput.required = !hasAmount;
-        amountInput.value = '';
         modal.classList.add('open');
-        if (hasAmount) confirmBtn?.focus(); else amountInput.focus();
+        cancelBtn?.focus();
       }
 
       function closeModal() {
         modal.classList.remove('open');
-        amountInput.value = '';
+        triggerButton?.focus();
       }
 
       document.querySelectorAll('.js-open-mark-released').forEach(btn => {
@@ -1009,19 +976,18 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
       });
 
       document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && modal.classList.contains('open')) closeModal();
-      });
-
-      form.addEventListener('submit', e => {
-        if (hasAmount) return;
-        const val = parseFloat(amountInput.value);
-        if (!val || val <= 0) {
+        if (!modal.classList.contains('open')) return;
+        if (e.key === 'Escape') {
           e.preventDefault();
-          amountInput.focus();
-          amountInput.setCustomValidity('Please enter the assistance amount.');
-          amountInput.reportValidity();
-        } else {
-          amountInput.setCustomValidity('');
+          closeModal();
+        } else if (e.key === 'Tab' && cancelBtn && confirmBtn) {
+          if (e.shiftKey && document.activeElement === cancelBtn) {
+            e.preventDefault();
+            confirmBtn.focus();
+          } else if (!e.shiftKey && document.activeElement === confirmBtn) {
+            e.preventDefault();
+            cancelBtn.focus();
+          }
         }
       });
     })();

@@ -104,8 +104,7 @@ $releasedList = render_print_partial($base . '/_report-released-print-table.php'
         'released_at' => 'September 24, 2026',
     ]],
 ]);
-print_report_assert(str_contains($releasedList, 'Amount Given (PHP)'), 'The released list must use the PHP currency label.');
-print_report_assert(str_contains($releasedList, 'PHP 2,500.00'), 'Released amounts must use plain PHP currency text.');
-print_report_assert(substr_count($releasedList, 'scope="col"') === 14, 'Every released-list column heading must have column scope.');
+print_report_assert(!str_contains($releasedList, 'Amount Given') && !str_contains($releasedList, '2,500.00'), 'Released reports must not display cash amounts.');
+print_report_assert(substr_count($releasedList, 'scope="col"') === 13, 'Every released-list column heading must have column scope.');
 
 echo "PSWDO print report regression passed.\n";

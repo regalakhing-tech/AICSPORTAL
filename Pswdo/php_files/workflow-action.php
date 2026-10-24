@@ -403,7 +403,6 @@ try {
         $venue = trim((string) ($_POST['venue'] ?? ''));
         $batchLimit = max(1, (int) ($_POST['batch_limit'] ?? 10));
         $notes = trim((string) ($_POST['notes'] ?? ''));
-        $amountGiven = (float) preg_replace('/[^\d.]/', '', (string) ($_POST['amount_given'] ?? '0'));
         $result = pswdo_save_release_schedule_action(
             $connection,
             $requestId,
@@ -412,8 +411,7 @@ try {
             $scheduledTime,
             $venue,
             $batchLimit,
-            $notes,
-            $amountGiven
+            $notes
         );
         $referenceNo = trim((string) ($result['reference_no'] ?? ''));
         $scheduleLabel = trim((string) ($result['schedule_label'] ?? 'the selected schedule'));
@@ -469,14 +467,15 @@ try {
     } elseif ($actionType === 'update_release_status') {
         $releaseStatus = trim((string) ($_POST['release_status'] ?? 'scheduled'));
         $notes = trim((string) ($_POST['notes'] ?? ''));
-        $amountGiven = max(0.0, (float) preg_replace('/[^\d.]/', '', (string) ($_POST['amount_given'] ?? '0')));
-        $result = pswdo_update_release_schedule_status_action($connection, $requestId, $releaseStatus, $accountId, $notes, $amountGiven);
+        $result = pswdo_update_release_schedule_status_action($connection, $requestId, $releaseStatus, $accountId, $notes);
         $referenceNo = trim((string) ($result['reference_no'] ?? ''));
         $statusLabel = trim((string) ($result['release_status_label'] ?? 'Updated'));
         $message = $referenceNo !== ''
             ? ('Release status for request ' . $referenceNo . ' is now ' . $statusLabel . '.')
             : ('Release status is now ' . $statusLabel . '.');
-        $redirectExtra['schedule_request'] = (string) $requestId;
+        if ($releaseStatus !== 'released') {
+            $redirectExtra['schedule_request'] = (string) $requestId;
+        }
     } elseif ($actionType === 'approve_for_release') {
         $result = pswdo_finish_prescreening_action($connection, $requestId, $accountId);
         $message = trim($result['name'] . ' (' . $result['reference'] . ')', ' ()') . ' passed further screening and moved to Release Scheduling. '
