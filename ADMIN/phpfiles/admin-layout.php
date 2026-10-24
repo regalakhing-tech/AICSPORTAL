@@ -14,18 +14,8 @@ function admin_render_page_start(
     string $initials,
     array $paths
 ): void {
-    // Requests waiting for an admin decision or stuck at AICS AI, shown on the menu.
-    $aiAttention = 0;
-    try {
-        $badgeConnection = aics_db_connect();
-        $aiAttention = aics_ai_gate_attention_count($badgeConnection);
-        $badgeConnection->close();
-    } catch (Throwable) {
-        $aiAttention = 0;
-    }
     $nav = [
         'overview' => ['icon' => 'fa-chart-line', 'label' => 'Overview', 'href' => $paths['dashboard_url'] . '?page=overview', 'group' => 'Monitor'],
-        'ai' => ['icon' => 'fa-robot', 'label' => 'AICS AI Screening', 'href' => $paths['dashboard_url'] . '?page=ai', 'badge' => $aiAttention, 'group' => 'Monitor'],
         'logs' => ['icon' => 'fa-shield-halved', 'label' => 'Security Logs', 'href' => $paths['dashboard_url'] . '?page=logs', 'group' => 'Monitor'],
         'users' => ['icon' => 'fa-users-gear', 'label' => 'User Management', 'href' => $paths['dashboard_url'] . '?page=users', 'group' => 'Manage'],
         'backup' => ['icon' => 'fa-database', 'label' => 'Backup & Maintenance', 'href' => $paths['dashboard_url'] . '?page=backup', 'group' => 'Manage'],
@@ -34,7 +24,7 @@ function admin_render_page_start(
     foreach ($nav as $key => $item) {
         $groups[$item['group']][$key] = $item;
     }
-    $activeLabel = (string) ($nav[$activePage]['label'] ?? 'Overview');
+    $activeLabel = (string) ($nav[$activePage]['label'] ?? ($activePage === 'ai' ? 'AICS AI Screening' : 'Overview'));
     ?>
 <!doctype html>
 <html lang="en">

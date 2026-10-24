@@ -12,9 +12,6 @@ function screening_assert(bool $condition, string $message): void
 
 $root = __DIR__ . '/..';
 screening_assert(str_contains((string) file_get_contents($root . '/ADMIN/dashboard.php'), "'ai' => 'ai-screening.php'"), 'The admin router must open AICS AI Screening.');
-$layout = (string) file_get_contents($root . '/ADMIN/phpfiles/admin-layout.php');
-screening_assert(str_contains($layout, "'ai' => ['icon' => 'fa-robot', 'label' => 'AICS AI Screening'"), 'The admin menu must list AICS AI Screening.');
-screening_assert(str_contains($layout, 'aics_ai_gate_attention_count('), 'The admin menu must show how many requests need attention.');
 $page = (string) file_get_contents($root . '/ADMIN/phpfiles/ai-screening.php');
 screening_assert(str_starts_with(ltrim(substr($page, (int) strpos($page, 'require_once'))), "require_once __DIR__ . '/auth-guard.php';"), 'The page must require the admin guard first.');
 screening_assert(substr_count($page, 'admin_csrf_input()') >= 4, 'Every action form needs a CSRF token.');
