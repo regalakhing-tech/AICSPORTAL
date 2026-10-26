@@ -541,7 +541,7 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
                         <?= pswdo_h((string) ($item['date_applied_label'] ?? 'Not available')) ?>
                       </td>
                       <td>
-                        <?= pswdo_h((string) ($item['requirements_label'] ?? '0 / 0 files')) ?>
+                        <?php pswdo_render_release_document_progress($item); ?>
                       </td>
                       <td>
                         <span class="release-status-pill is-<?= pswdo_h(strtolower(trim((string) ($item['release_status'] ?? 'unscheduled')))) ?>">

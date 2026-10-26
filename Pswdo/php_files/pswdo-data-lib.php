@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/pswdo-common.php';
 require_once __DIR__ . '/../../includes/ai-submission-gate.php';
 require_once __DIR__ . '/../../includes/duplicate-detection.php';
+require_once __DIR__ . '/release-document-progress.php';
 
 /** The beneficiary's contact is separate from the person receiving AICS notices. */
 function pswdo_applicant_sms_contact(array $row): string
@@ -4611,7 +4612,9 @@ function pswdo_fetch_release_schedule_queue(
             pr.priority_rank,
             pr.priority_level,
             COALESCE(req.required_total, 0) AS required_total,
+            COALESCE(req.required_types, '') AS required_types,
             COUNT(DISTINCT d.id) AS uploaded_total,
+            GROUP_CONCAT(DISTINCT d.document_type ORDER BY d.document_type SEPARATOR ',') AS uploaded_types,
             rs.scheduled_date,
             rs.scheduled_time,
             rs.venue,
@@ -4634,7 +4637,8 @@ function pswdo_fetch_release_schedule_queue(
         LEFT JOIN aics_applicant_profiles ap ON ap.account_id = a.id
         LEFT JOIN aics_request_prioritization pr ON pr.request_id = r.id
         LEFT JOIN (
-            SELECT ra.request_id, COUNT(*) AS required_total
+            SELECT ra.request_id, COUNT(*) AS required_total,
+                GROUP_CONCAT(DISTINCT dt.document_code ORDER BY dt.document_code SEPARATOR ',') AS required_types
             FROM aics_request_assistance ra
             INNER JOIN aics_assistance_required_documents ard ON ard.assistance_type_id = ra.assistance_type_id
             INNER JOIN aics_document_types dt ON dt.id = ard.document_type_id AND dt.document_code <> 'coe_opswdo'
@@ -4671,6 +4675,7 @@ function pswdo_fetch_release_schedule_queue(
             pr.priority_level,
             pr.urgency_indicator,
             req.required_total,
+            req.required_types,
             rs.scheduled_date,
             rs.scheduled_time,
             rs.venue,
@@ -4744,6 +4749,12 @@ function pswdo_fetch_release_schedule_queue(
             $confirmedBy = trim((string) ($row['prescreen_confirmed_by'] ?? ''));
         }
 
+        $fileProgress = pswdo_release_document_progress(
+            explode(',', (string) ($row['required_types'] ?? '')),
+            explode(',', (string) ($row['uploaded_types'] ?? '')),
+            (int) ($row['uploaded_total'] ?? 0)
+        );
+
         $rows[] = [
             'request_id' => (int) ($row['id'] ?? 0),
             'reference_no' => (string) ($row['reference_no'] ?? ''),
@@ -4768,7 +4779,11 @@ function pswdo_fetch_release_schedule_queue(
             'claim_status_label' => pswdo_titleize((string) ($row['claim_status'] ?? '')),
             'required_total' => (int) ($row['required_total'] ?? 0),
             'uploaded_total' => (int) ($row['uploaded_total'] ?? 0),
-            'requirements_label' => ((int) ($row['uploaded_total'] ?? 0)) . ' / ' . ((int) ($row['required_total'] ?? 0)) . ' files',
+            'expected_file_total' => $fileProgress['expected_file_total'],
+            'missing_total' => $fileProgress['missing_total'],
+            'requirements_complete' => $fileProgress['requirements_complete'],
+            'requirements_hint' => $fileProgress['requirements_hint'],
+            'requirements_label' => $fileProgress['requirements_label'],
             'scheduled_date' => trim((string) ($row['scheduled_date'] ?? '')),
             'scheduled_date_label' => pswdo_date_label((string) ($row['scheduled_date'] ?? '')),
             'scheduled_time' => trim((string) ($row['scheduled_time'] ?? '')),
