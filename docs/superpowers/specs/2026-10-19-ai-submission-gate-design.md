@@ -24,9 +24,10 @@ reaches PSWDO — not on an AI outage, not after a timeout.
    incomplete) or `flagged_inconsistency` (does not match the application, looks edited) holds the
    request. The applicant gets a notification and a status-page banner naming each document and the
    reason; re-uploading re-runs the check automatically. No staff action is needed.
-4. **Uncertain results go to the admin, not PSWDO.** `needs_staff_review` (the AI could not confirm a
-   check) puts the request in *admin review*. The admin either releases it to PSWDO or asks the
-   applicant to re-upload.
+4. **Uncertain results go to PSWDO staff.** `needs_staff_review` (AICS AI checked the document but wants
+   a person to confirm a detail) releases the request to PSWDO, whose document panel shows the
+   "Staff review needed" note. *(Revised 2026-10-27: these used to wait in admin review, where nobody
+   saw them; requests already waiting there are released on the next sync.)*
 5. **AICS AI is made to finish.** Checks start automatically when the applicant submits (today they only
    start when PSWDO opens a request, which can no longer happen for unchecked requests). At most
    `AICS_AI_MAX_WORKERS` (default 2) checks run at once, so a rush of submissions queues instead of
@@ -48,7 +49,7 @@ reaches PSWDO — not on an AI outage, not after a timeout.
 | # | Decision |
 |---|---|
 | D1 | New column `aics_requests.ai_gate_status`: `pending`, `held` (applicant must fix), `admin_review`, `released`, with `ai_gate_reason` recording why. Existing rows become `released` (PSWDO's view of current data is unchanged); new rows default to `pending`. |
-| D2 | Precedence when documents disagree: any blocking (`needs_reupload`, `flagged_inconsistency`) → `held`; else any `failed` → retry (stays `pending`); else any non-final → `pending`; else any `needs_staff_review` → `admin_review`; else → `released`. A request with no verifiable documents is `released` (nothing for the AI to check). A `needs_staff_review` result where AICS AI doubted only readability or completeness (every other check passed) counts as `needs_reupload`, so blurry photos go back to the applicant, not the admin. A result checked by local OCR only (AICS AI did not run) is retried like a failure. Cancelled requests are left alone. |
+| D2 | Precedence when documents disagree: any blocking (`needs_reupload`, `flagged_inconsistency`) → `held`; else any `failed` → retry (stays `pending`); else any non-final → `pending`; else any `needs_staff_review` → `released` (reason `staff_review`); else → `released`. A request with no verifiable documents is `released` (nothing for the AI to check). A `needs_staff_review` result where AICS AI doubted only readability or completeness (every other check passed) counts as `needs_reupload`, so blurry photos go back to the applicant, not the admin. A result checked by local OCR only (AICS AI did not run) is retried like a failure. Cancelled requests are left alone. |
 | D3 | Retries: a `failed` review with attempts left is retried with `aics_retry_ai_review()` and its document worker launched with `aics_launch_document_ai_processor()` (a failed launch marks it failed again with `aics_mark_ai_review_failed()`). When the attempt limit (`AICS_AI_REVIEW_MAX_ATTEMPTS`, 3) is reached the request goes to `admin_review`. Stalled and unclaimed work is handled by the existing `aics_dispatch_unclaimed_ai_reviews_for_request()` (turns stalled claimed rows into `failed`, creates missing reviews, launches one request worker under the existing lease). |
 | D4 | A `held` request returns to `pending` when the applicant changes its documents. Released requests are never pulled back from PSWDO. |
 | D5 | Admin actions on non-released requests: **Release to PSWDO**, **Ask applicant to re-upload** (`admin_review` → `held`), **Retry AICS AI check** (resets `attempt_count` to 0 on the request's `failed` reviews and returns it to `pending`, so the next sync retries them). Each is written to the 7-day log and the admin audit log. |

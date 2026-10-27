@@ -157,12 +157,26 @@ $tests['testLaunchFailureEndsInAdminReview'] = function () use ($c): void {
     gate_db_assert(gate_count($c, 'aics_request_notifications', $id, "notification_stage = 'AICS AI: Being reviewed'") === 1, 'admin review notice');
 };
 
-$tests['testUncertainGoesToAdmin'] = function () use ($c): void {
+$tests['testStaffReviewGoesToPswdo'] = function () use ($c): void {
     gate_reset_workers($c);
     [$id] = gate_fixture($c, 'needs_staff_review');
     $result = aics_ai_gate_sync($c, $id);
-    gate_db_assert($result['admin_review'] === 1 && gate_value($c, "SELECT CONCAT(ai_gate_status, '/', ai_gate_reason) FROM aics_requests WHERE id = {$id}") === 'admin_review/uncertain', 'uncertain to admin');
-    gate_db_assert(!aics_ai_gate_is_released($c, $id), 'not released');
+    gate_db_assert($result['released'] === 1 && $result['admin_review'] === 0, 'released, not sent to the admin');
+    gate_db_assert(gate_value($c, "SELECT CONCAT(ai_gate_status, '/', ai_gate_reason) FROM aics_requests WHERE id = {$id}") === 'released/staff_review', 'with PSWDO for staff review');
+    gate_db_assert(gate_count($c, 'aics_ai_gate_events', $id, "event_type = 'ai_release' AND detail LIKE '%PSWDO staff will confirm%'") === 1, 'release logged with the reason');
+    gate_db_assert(gate_count($c, 'aics_request_notifications', $id, "notification_stage = 'AICS AI: Documents checked' AND message_text LIKE '%PSWDO will now review it.%'") === 1, 'applicant told PSWDO has it');
+};
+
+$tests['testWaitingStaffReviewIsReleased'] = function () use ($c): void {
+    gate_reset_workers($c);
+    // Requests the old rule left waiting for the admin move to PSWDO on the next sync.
+    [$id] = gate_fixture($c, 'needs_staff_review', [], 'special_cases', 'admin_review');
+    $c->query("UPDATE aics_requests SET ai_gate_reason = 'uncertain' WHERE id = {$id}");
+    [$down] = gate_fixture($c, 'failed', ['gate_retry_count' => 4], 'special_cases', 'admin_review');
+    $c->query("UPDATE aics_requests SET ai_gate_reason = 'ai_unavailable' WHERE id = {$down}");
+    $result = aics_ai_gate_sync($c);
+    gate_db_assert($result['released'] >= 1 && gate_value($c, "SELECT CONCAT(ai_gate_status, '/', ai_gate_reason) FROM aics_requests WHERE id = {$id}") === 'released/staff_review', 'waiting staff review released');
+    gate_db_assert(gate_value($c, "SELECT ai_gate_status FROM aics_requests WHERE id = {$down}") === 'admin_review', 'a request AICS AI could not check stays with the admin');
 };
 
 $tests['testWorkerCapLimitsDispatch'] = function () use ($c): void {
@@ -194,14 +208,14 @@ $tests['testAdminActions'] = function () use ($c): void {
     gate_reset_workers($c);
     $admin = (int) gate_value($c, 'SELECT id FROM aics_accounts ORDER BY id LIMIT 1');
     $adminId = $admin > 0 ? $admin : null;
-    [$a] = gate_fixture($c, 'needs_staff_review');
+    [$a] = gate_fixture($c, 'failed', ['gate_retry_count' => 4]);
     aics_ai_gate_sync($c, $a);
     gate_db_assert(aics_ai_gate_admin_request_reupload($c, $a, (int) $adminId), 'ask for re-upload');
     gate_db_assert(gate_value($c, "SELECT ai_gate_status FROM aics_requests WHERE id = {$a}") === 'held', 'held after admin asks');
     gate_db_assert(gate_count($c, 'aics_ai_gate_events', $a, "event_type = 'admin_reupload_request'") === 1, 'admin re-upload logged');
     gate_db_assert(gate_count($c, 'aics_request_notifications', $a, "message_text LIKE '%needs a clearer copy%'") === 1, 'applicant told what to fix');
 
-    [$b] = gate_fixture($c, 'needs_staff_review');
+    [$b] = gate_fixture($c, 'failed', ['gate_retry_count' => 4]);
     aics_ai_gate_sync($c, $b);
     gate_db_assert(aics_ai_gate_admin_release($c, $b, (int) $adminId), 'admin release');
     gate_db_assert(aics_ai_gate_is_released($c, $b), 'released by admin');
@@ -242,7 +256,7 @@ $tests['testBlurredDocumentGoesBackToApplicant'] = function () use ($c): void {
     gate_db_assert(aics_ai_gate_applicant_items($c, $blurred)[0]['reason'] === 'blurry, cut off, or incomplete', 'status page names the reason');
     [$doubtful] = gate_fixture($c, 'needs_staff_review', ['findings' => $checks('pass', 'review')]);
     aics_ai_gate_sync($c, $doubtful);
-    gate_db_assert(gate_value($c, "SELECT ai_gate_status FROM aics_requests WHERE id = {$doubtful}") === 'admin_review', 'a doubtful match still goes to the admin');
+    gate_db_assert(gate_value($c, "SELECT ai_gate_status FROM aics_requests WHERE id = {$doubtful}") === 'released', 'a doubtful match goes to PSWDO staff');
 };
 
 $tests['testCancelledRequestIsIgnored'] = function () use ($c): void {

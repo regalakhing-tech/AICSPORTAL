@@ -4,11 +4,12 @@ declare(strict_types=1);
 /**
  * AICS AI submission gate.
  *
- * PSWDO only receives requests whose documents passed the AICS AI check.
+ * PSWDO only receives requests whose documents AICS AI has checked.
  * Each request carries a gate state decided from its per-document AI review
  * statuses: `pending` (still checking), `held` (the applicant must replace a
- * document), `admin_review` (the AI could not confirm or could not finish)
- * and `released` (visible to PSWDO). Nothing is released on a timeout.
+ * document), `admin_review` (the AI could not finish) and `released`
+ * (visible to PSWDO, including documents AICS AI marked for staff review).
+ * Nothing is released on a timeout.
  */
 
 require_once __DIR__ . '/document-requirements.php';
@@ -85,7 +86,8 @@ function aics_ai_gate_decide(array $progress, ?int $maxRetries = null): array
     if ($retry !== []) return $decision('pending', 'ai_failed');
     if ($checking) return $decision('pending', 'checking');
     if ($exhausted) return $decision('admin_review', 'ai_unavailable');
-    if ($uncertain !== []) return $decision('admin_review', 'uncertain');
+    // AICS AI checked every document but wants a person to confirm a detail: PSWDO staff do that.
+    if ($uncertain !== []) return $decision('released', 'staff_review');
     return $decision('released', 'passed');
 }
 
@@ -600,6 +602,7 @@ function aics_ai_gate_release(mysqli $connection, array $request, string $from, 
     if (!aics_ai_gate_transition($connection, $requestId, $from, 'released', $reason, $indicator, $eta)) return false;
     $detail = match ($reason) {
         'passed' => 'All documents passed the AICS AI check.',
+        'staff_review' => 'AICS AI checked the documents; PSWDO staff will confirm the details it marked for review.',
         'no_documents' => 'No documents needed an AICS AI check.',
         default => 'Released to PSWDO by an administrator.',
     };
@@ -679,7 +682,8 @@ function aics_ai_gate_sync(mysqli $connection, ?int $requestId = null, bool $dri
     $totals = ['released' => 0, 'held' => 0, 'admin_review' => 0, 'dispatched' => 0, 'retried' => 0];
     aics_ai_gate_ensure_schema($connection);
     aics_ai_gate_purge_events($connection);
-    $sql = "SELECT id, reference_no, ai_gate_status, ai_gate_reason FROM aics_requests WHERE ai_gate_status = 'pending' AND " . aics_ai_gate_active_sql()
+    // Also picks up requests an older rule left with the admin for staff review, so they move on to PSWDO.
+    $sql = "SELECT id, reference_no, ai_gate_status, ai_gate_reason FROM aics_requests WHERE (ai_gate_status = 'pending' OR (ai_gate_status = 'admin_review' AND ai_gate_reason = 'uncertain')) AND " . aics_ai_gate_active_sql()
         . ($requestId !== null ? ' AND id = ' . (int) $requestId : '')
         . ' ORDER BY COALESCE(ai_gate_updated_at, created_at), id LIMIT ' . max(1, $batch);
     $result = $connection->query($sql);

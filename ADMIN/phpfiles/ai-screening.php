@@ -128,7 +128,7 @@ admin_render_page_start('AICS ADMIN | AICS AI Screening', 'ai', $displayName, $i
 admin_render_page_head(
     'fa-robot',
     'AICS AI Screening',
-    'PSWDO only receives requests whose documents passed the AICS AI check. Requests the AI could not confirm or could not check wait here for you.'
+    'PSWDO only receives requests whose documents AICS AI has checked. Requests AICS AI could not check wait here for you.'
 );
 ?>
 
@@ -182,7 +182,7 @@ admin_render_page_head(
       <?php endif; ?>
     </header>
     <?php if ($reviewRequests === []): ?>
-      <?php admin_render_empty('fa-circle-check', 'Nothing needs your decision right now', 'Requests appear here when AICS AI cannot confirm or cannot check their documents.'); ?>
+      <?php admin_render_empty('fa-circle-check', 'Nothing needs your decision right now', 'Requests appear here when AICS AI cannot check their documents.'); ?>
     <?php else: ?>
       <div class="ai-screen-list">
         <?php foreach ($reviewRequests as $row): ?>

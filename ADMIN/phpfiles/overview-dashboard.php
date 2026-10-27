@@ -252,7 +252,7 @@ $maintenanceFailed = max(0, $maintenanceTotal - (int) $opsSummary['maintenance_m
 $statusRows = [];
 $statusRows[] = $aiAttention > 0
     ? ['tone' => 'watch', 'icon' => 'fa-robot', 'text' => $aiAttention . ' ' . $plural($aiAttention, 'request needs', 'requests need') . ' your decision',
-        'detail' => 'AICS AI could not confirm or could not check their documents.', 'href' => $dashboardUrl . '?page=ai', 'action' => 'Review requests']
+        'detail' => 'AICS AI could not check their documents.', 'href' => $dashboardUrl . '?page=ai', 'action' => 'Review requests']
     : ['tone' => 'ok', 'icon' => 'fa-robot', 'text' => 'No requests are waiting for your decision',
         'detail' => 'AICS AI sends checked requests straight to PSWDO.', 'href' => $dashboardUrl . '?page=ai', 'action' => 'Open AICS AI'];
 if ($unauthorized > 0) {

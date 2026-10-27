@@ -23,9 +23,12 @@ gate_assert($d([$doc('processing')])['reason'] === 'checking', 'still checking')
 gate_assert($d([$doc('failed', 3), $doc('processing')])['reason'] === 'checking', 'waits for other documents before giving up');
 $gaveUp = $d([$doc('failed', 3, 4), $doc('likely_valid')]);
 gate_assert($gaveUp['state'] === 'admin_review' && $gaveUp['reason'] === 'ai_unavailable' && $gaveUp['uncertain'][0]['review_id'] === 4, 'exhausted retries go to admin');
-gate_assert($d([$doc('needs_staff_review'), $doc('likely_valid')])['reason'] === 'uncertain', 'uncertain goes to admin, never PSWDO');
-foreach ([[$doc('failed')], [$doc('failed', 3)], [$doc('processing')], [$doc('needs_staff_review')]] as $docs) {
-    gate_assert($d($docs)['state'] !== 'released', 'only a pass releases');
+// AICS AI checked it but wants a person to confirm a detail: PSWDO staff do that, not the admin.
+$staff = $d([$doc('needs_staff_review', 0, 8), $doc('likely_valid')]);
+gate_assert($staff['state'] === 'released' && $staff['reason'] === 'staff_review' && $staff['uncertain'][0]['review_id'] === 8, 'staff review goes to PSWDO');
+gate_assert($d([$doc('needs_staff_review'), $doc('processing')])['state'] === 'pending', 'staff review waits for the other checks');
+foreach ([[$doc('failed')], [$doc('failed', 3)], [$doc('processing')]] as $docs) {
+    gate_assert($d($docs)['state'] !== 'released', 'nothing unchecked reaches PSWDO');
 }
 // A local-only result means the AICS AI step did not run: retry it instead of trusting OCR alone.
 foreach (['likely_valid', 'needs_reupload', 'flagged_inconsistency', 'needs_staff_review'] as $status) {
@@ -40,7 +43,7 @@ gate_assert(str_contains(aics_ai_gate_applicant_message('ai_check_hold', 'X', $u
 $blur = ['verdict' => ['source' => 'gemini'], 'thesis_checks' => ['complete' => ['state' => 'pass'], 'consistent' => ['state' => 'pass'], 'readable' => ['state' => 'review'], 'unaltered' => ['state' => 'pass'], 'untampered' => ['state' => 'pass']]];
 gate_assert(aics_ai_gate_only_unclear($blur), 'only readability in doubt');
 gate_assert(aics_ai_gate_only_unclear(array_replace_recursive($blur, ['thesis_checks' => ['complete' => ['state' => 'fail']]])), 'readability and completeness in doubt');
-gate_assert(!aics_ai_gate_only_unclear(array_replace_recursive($blur, ['thesis_checks' => ['consistent' => ['state' => 'review']]])), 'a doubtful match is for the admin');
+gate_assert(!aics_ai_gate_only_unclear(array_replace_recursive($blur, ['thesis_checks' => ['consistent' => ['state' => 'review']]])), 'a doubtful match is for PSWDO staff');
 gate_assert(!aics_ai_gate_only_unclear(array_replace_recursive($blur, ['thesis_checks' => ['readable' => ['state' => 'pass']]])), 'nothing unclear');
 gate_assert(!aics_ai_gate_only_unclear(['verdict' => ['source' => 'local']] + $blur), 'OCR-only results are retried, not judged');
 gate_assert(aics_ai_gate_decide($p([$doc('failed', 3)]))['reason'] === 'ai_failed', 'default retry limit is 4');
