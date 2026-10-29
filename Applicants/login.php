@@ -405,23 +405,6 @@
                       <li>Senior Citizen ID</li>
                       <li>PWD ID</li>
                     </ul>
-                    <details class="signup-id-accepted-more">
-                      <summary>See all accepted IDs</summary>
-                      <ul class="signup-id-accepted-list">
-                        <li>GSIS ID</li>
-                        <li>Pag-IBIG ID</li>
-                        <li>OWWA ID</li>
-                        <li>DOLE ID</li>
-                        <li>4Ps ID</li>
-                        <li>Solo Parent ID</li>
-                        <li>Barangay ID</li>
-                        <li>City or Municipal Government ID</li>
-                        <li>Voter's Certification</li>
-                        <li>NBI Clearance</li>
-                        <li>Police Clearance</li>
-                        <li>Other government ID showing the issuing agency</li>
-                      </ul>
-                    </details>
                     <p class="signup-id-not-accepted"><i class="fas fa-ban" aria-hidden="true"></i> Not accepted: school or student IDs, company or employee IDs, membership cards, and barangay certificates.</p>
                   </div>
                   <div class="signup-id-tiles">

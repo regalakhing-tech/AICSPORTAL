@@ -278,6 +278,7 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
           <div class="alert alert-error"><i class="fas fa-triangle-exclamation"></i> <?= pswdo_h($loadError) ?></div>
         <?php endif; ?>
 
+        <div class="release-summary-wrap">
         <section class="release-summary-grid">
           <article class="release-stat-card">
             <div class="release-stat-icon is-blue"><i class="fas fa-calendar-plus"></i></div><div><div class="rs-stat-value"><?= (int) ($summary['unscheduled'] ?? 0) ?></div><div class="rs-stat-label">Needs schedule</div></div>
@@ -298,6 +299,7 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
             <div class="release-stat-icon is-slate"><i class="fas fa-circle-check"></i></div><div><div class="rs-stat-value"><?= (int) ($summary['released'] ?? 0) ?></div><div class="rs-stat-label">Released</div></div>
           </article>
         </section>
+        </div>
 
         <?php
           // Active batch = decided by current server time of day

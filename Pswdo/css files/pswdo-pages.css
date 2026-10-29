@@ -8294,9 +8294,24 @@ body.is-embedded .request-details-body {
   font-size: 18px;
 }
 
+/* Columns follow the wrapper's width (not the viewport) so the sidebar can't squeeze the cards. */
+.release-summary-wrap { container-type: inline-size; }
+
 .release-page .release-summary-grid {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
+}
+
+@container (max-width: 1139px) {
+  .release-page .release-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@container (max-width: 559px) {
+  .release-page .release-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container (max-width: 339px) {
+  .release-page .release-summary-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .release-page .release-stat-card {
@@ -8336,8 +8351,10 @@ body.is-embedded .request-details-body {
   margin-top: 5px;
   font-size: 9.5px;
   letter-spacing: .045em;
-  white-space: nowrap;
+  line-height: 1.25;
 }
+
+.release-page .release-stat-card > div:last-child { min-width: 0; }
 
 .release-page .release-filter-panel {
   padding: 16px;
@@ -8695,12 +8712,7 @@ body.is-embedded .request-details-body {
 .release-confirm-desc { margin: 8px 0 16px; color: #64748b; font-size: 13px; line-height: 1.5; }
 .release-confirm-card .confirm-actions { justify-content: center; }
 
-@media (max-width: 1180px) {
-  .release-page .release-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
 @media (max-width: 720px) {
-  .release-page .release-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .release-page .release-stat-card { min-height: 78px; }
   .release-page .release-filter-toolbar { grid-template-columns: 1fr; }
   .release-page .release-filter-toolbar .release-search-field { grid-column: auto; }
