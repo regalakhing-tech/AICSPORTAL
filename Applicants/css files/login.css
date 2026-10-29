@@ -435,6 +435,45 @@ a {
   opacity: 1;
 }
 
+/* Sign-up date of birth: MM / DD / YYYY boxes, then a calendar button that fills them. */
+.signup-birthdate-control {
+  gap: 2px;
+}
+
+#register-birthdate-wrapper input.signup-birth-part {
+  flex: 0 0 auto;
+  width: 2.4em;
+  min-width: 0;
+  padding: 0;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+#register-birthdate-wrapper input.signup-birth-year {
+  width: 3.6em;
+}
+
+.signup-birth-sep {
+  color: var(--muted-light);
+}
+
+#register-birthdate-wrapper input.signup-birthdate-picker {
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  margin-left: auto;
+  padding: 0;
+  color: transparent;
+}
+
+#register-birthdate-wrapper input.signup-birthdate-picker::-webkit-datetime-edit {
+  display: none;
+}
+
+#register-birthdate-wrapper input.signup-birthdate-picker::-webkit-calendar-picker-indicator {
+  margin: auto;
+}
+
 .input-wrapper.is-readonly {
   --autofill-bg: #f8fafc;
   background: #f8fafc;

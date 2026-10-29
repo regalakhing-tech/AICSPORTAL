@@ -552,7 +552,9 @@ $authMessage = $messages[$authCode] ?? null;
               name="email"
               placeholder="pswdo@aics.local"
               required
-              autocomplete="username"
+              autocomplete="off"
+              readonly
+              data-no-autofill
             />
           </div>
         </div>
@@ -567,7 +569,9 @@ $authMessage = $messages[$authCode] ?? null;
               name="password"
               placeholder="••••••••"
               required
-              autocomplete="current-password"
+              autocomplete="off"
+              readonly
+              data-no-autofill
             />
             <button
               type="button"
@@ -589,6 +593,8 @@ $authMessage = $messages[$authCode] ?? null;
       </form>
     </section>
   </main>
+
+  <script src="../asset/no-autofill.js?v=<?= (int) @filemtime(__DIR__ . '/../asset/no-autofill.js') ?>"></script>
 
   <!-- Access Restricted Popup Modal -->
   <div id="auth-popup-modal" class="auth-popup-modal hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="auth-popup-title">

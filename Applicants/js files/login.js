@@ -150,14 +150,19 @@ function validateAndCalculateAge(showErrors = false) {
       ageError.textContent = '';
     }
 
+    // Something typed in the MM / DD / YYYY boxes that is not yet a full, valid date.
+    const typedParts = getSignupBirthParts().filter((part) => part.value.trim() !== '');
+    const partMessage = getSignupBirthParts().map((part) => part.validationMessage).find(Boolean);
     if (showErrors) {
       if (birthdateError) {
-        birthdateError.textContent = 'Please enter your date of birth.';
+        birthdateError.textContent = typedParts.length
+          ? (partMessage || 'Please enter your full date of birth as MM / DD / YYYY.')
+          : 'Please enter your date of birth.';
         birthdateError.classList.remove('hidden');
       }
       birthdateWrapper?.classList.add('has-error');
     }
-    return { valid: false, age: null, reason: 'empty' };
+    return { valid: false, age: null, reason: typedParts.length ? 'format' : 'empty' };
   }
 
   const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val);
@@ -275,9 +280,33 @@ function validateAndCalculateAge(showErrors = false) {
   return { valid: true, age: age, isUnderage: false };
 }
 
+function getSignupBirthParts() {
+  return ['register-birth-month', 'register-birth-day', 'register-birth-year']
+    .map((id) => document.getElementById(id))
+    .filter((part) => part instanceof HTMLInputElement);
+}
+
 function initSignupBirthdateAndAge() {
   const birthdateInput = document.getElementById('register-birthdate');
   if (!(birthdateInput instanceof HTMLInputElement)) return;
+
+  if (typeof initBirthdatePartsInput === 'function') {
+    initBirthdatePartsInput({
+      month: 'register-birth-month',
+      day: 'register-birth-day',
+      year: 'register-birth-year',
+      iso: 'register-birthdate',
+    });
+  }
+
+  // Show date errors once the user leaves the whole date field, not when moving between its boxes.
+  const birthdateWrapper = document.getElementById('register-birthdate-wrapper');
+  birthdateWrapper?.addEventListener('focusout', (event) => {
+    if (birthdateWrapper.contains(event.relatedTarget)) return;
+    if (birthdateInput.value.trim() !== '' || getSignupBirthParts().some((part) => part.value.trim() !== '')) {
+      validateAndCalculateAge(true);
+    }
+  });
 
   birthdateInput.addEventListener('input', () => {
     validateAndCalculateAge(false);
@@ -285,12 +314,6 @@ function initSignupBirthdateAndAge() {
 
   birthdateInput.addEventListener('change', () => {
     validateAndCalculateAge(false);
-  });
-
-  birthdateInput.addEventListener('blur', () => {
-    if (birthdateInput.value.trim() !== '') {
-      validateAndCalculateAge(true);
-    }
   });
 }
 
@@ -317,7 +340,7 @@ function validateSignupDetails() {
 
   // Validate Date of Birth and Age (must be >= 18)
   const birthCheck = validateAndCalculateAge(true);
-  const birthdateInput = document.getElementById('register-birthdate');
+  const birthdateInput = document.getElementById('register-birth-month');
   if (!birthCheck.valid) {
     if (birthCheck.reason === 'empty') {
       showToast('Please enter your date of birth.', 'warning');
@@ -802,7 +825,10 @@ function setSignupBirthdateFromIso(iso) {
   const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
   if (!parts) return;
   const input = document.getElementById('register-birthdate');
-  if (input instanceof HTMLInputElement) input.value = iso;
+  if (input instanceof HTMLInputElement) {
+    input.value = iso;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
   validateAndCalculateAge(false);
 }
 
@@ -1292,7 +1318,7 @@ function initSignupFormSubmit() {
       return;
     }
 
-    const birthdateInput = document.getElementById('register-birthdate');
+    const birthdateInput = document.getElementById('register-birth-month');
     const birthCheck = validateAndCalculateAge(true);
     if (!birthCheck.valid) {
       if (birthCheck.isUnderage) {

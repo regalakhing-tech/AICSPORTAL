@@ -118,7 +118,9 @@
                       name="login_identifier"
                       placeholder="Email or 09XXXXXXXXX"
                       required
-                      autocomplete="username"
+                      autocomplete="off"
+                      readonly
+                      data-no-autofill
                     />
                   </div>
                 </div>
@@ -134,7 +136,9 @@
                       name="password"
                       placeholder="••••••••"
                       required
-                      autocomplete="current-password"
+                      autocomplete="off"
+                      readonly
+                      data-no-autofill
                     />
                     <button
                       type="button"
@@ -307,15 +311,22 @@
 
                     <!-- Date of Birth -->
                     <div class="input-group signup-field-half">
-                      <label for="register-birthdate">Date of Birth <span class="field-required">*</span></label>
-                      <div class="input-wrapper" id="register-birthdate-wrapper">
+                      <label id="register-birthdate-label" for="register-birth-month">Date of Birth <span class="field-required">*</span> <span class="field-optional">(MM / DD / YYYY)</span></label>
+                      <!-- Typed as month, day, year in that order on every device; the calendar button fills the same boxes. -->
+                      <div class="input-wrapper signup-birthdate-control" id="register-birthdate-wrapper" role="group" aria-labelledby="register-birthdate-label">
                         <i class="fas fa-calendar-alt input-icon" aria-hidden="true"></i>
+                        <input id="register-birth-month" class="signup-birth-part" type="text" inputmode="numeric" maxlength="2" placeholder="MM" aria-label="Birth month" autocomplete="off" />
+                        <span class="signup-birth-sep" aria-hidden="true">/</span>
+                        <input id="register-birth-day" class="signup-birth-part" type="text" inputmode="numeric" maxlength="2" placeholder="DD" aria-label="Birth day" autocomplete="off" />
+                        <span class="signup-birth-sep" aria-hidden="true">/</span>
+                        <input id="register-birth-year" class="signup-birth-part signup-birth-year" type="text" inputmode="numeric" maxlength="4" placeholder="YYYY" aria-label="Birth year" autocomplete="off" />
                         <input
                           id="register-birthdate"
+                          class="signup-birthdate-picker"
                           type="date"
-                          lang="en-US"
-                          required
-                          autocomplete="bday"
+                          aria-label="Choose birth date from calendar"
+                          title="Choose birth date from calendar"
+                          autocomplete="off"
                         />
                         <input id="register-birthdate-iso" type="hidden" name="date_of_birth" />
                       </div>
@@ -724,6 +735,8 @@
     <div id="toast-container" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
 
     <script src="../asset/digits-only.js"></script>
+    <script src="../asset/no-autofill.js?v=<?= (int) @filemtime(__DIR__ . '/../asset/no-autofill.js') ?>"></script>
+    <script src="js files/beneficiary-birthdate.js?v=<?= (int) @filemtime(__DIR__ . '/js files/beneficiary-birthdate.js') ?>"></script>
     <script src="js files/login.js?v=<?= (int) @filemtime(__DIR__ . '/js files/login.js') ?>"></script>
     <script src="js files/password-reset.js?v=<?= (int) @filemtime(__DIR__ . '/js files/password-reset.js') ?>"></script>
   </body>

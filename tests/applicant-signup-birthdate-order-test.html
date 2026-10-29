@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Signup native birth date input</title>
+  <title>Signup birth date in MM / DD / YYYY order</title>
   <script>
     function run(frame) {
       const output = document.getElementById('result');
@@ -11,25 +11,34 @@
         const app = frame.contentWindow;
         const birth = page.getElementById('register-birthdate');
         const iso = page.getElementById('register-birthdate-iso');
+        const month = page.getElementById('register-birth-month');
+        const day = page.getElementById('register-birth-day');
+        const year = page.getElementById('register-birth-year');
         const selectedDate = page.getElementById('register-birthdate-selected');
+        const typeInto = (input, value) => {
+          input.value = value;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+        const typeDate = (m, d, y) => { typeInto(month, m); typeInto(day, d); typeInto(year, y); };
+
+        // Month, day, year, then the calendar button, in that order on every device.
         const fields = Array.from(page.querySelectorAll('#register-birthdate-wrapper input:not([type="hidden"])'));
-        if (fields.length !== 1 || fields[0] !== birth || birth.type !== 'date') {
-          throw new Error('Birthdate must use one visible native date field.');
+        if (fields.length !== 4 || fields[0] !== month || fields[1] !== day || fields[2] !== year || fields[3] !== birth) {
+          throw new Error('Birthdate must be typed as month, day, year, followed by the calendar button.');
         }
-        if (!birth.required || !iso || iso.name !== 'date_of_birth') {
-          throw new Error('Birthdate lost its required ISO form value.');
+        if (month.placeholder !== 'MM' || day.placeholder !== 'DD' || year.placeholder !== 'YYYY') {
+          throw new Error('The boxes do not show MM / DD / YYYY.');
+        }
+        if (birth.type !== 'date' || !iso || iso.name !== 'date_of_birth') {
+          throw new Error('Birthdate lost its calendar picker or ISO form value.');
         }
         if (app.getComputedStyle(iso).display !== 'none') {
           throw new Error('The ISO field is visible.');
         }
-        if (page.getElementById('register-birth-month') || page.getElementById('register-birth-day') || page.getElementById('register-birth-year')) {
-          throw new Error('Split birthdate fields remain.');
-        }
 
-        birth.value = '2005-04-03';
-        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        typeDate('04', '03', '2005');
         if (birth.value !== '2005-04-03' || iso.value !== '2005-04-03') {
-          throw new Error('April 3 was interpreted in the wrong order.');
+          throw new Error('04 / 03 / 2005 was not read as April 3.');
         }
         if (!selectedDate || selectedDate.classList.contains('hidden') || selectedDate.textContent !== 'Selected date: April 3, 2005') {
           throw new Error('The selected birth date is not shown clearly before the ID check.');
@@ -42,44 +51,53 @@
         }
         if (!app.validateAndCalculateAge().valid) throw new Error('An adult birthdate was rejected.');
 
-        birth.value = '2005-03-04';
-        birth.dispatchEvent(new Event('change', { bubbles: true }));
-        if (iso.value !== '2005-03-04') throw new Error('March 4 was interpreted in the wrong order.');
-        if (selectedDate.textContent !== 'Selected date: March 4, 2005') {
-          throw new Error('Reversed month and day look the same to the applicant.');
+        typeDate('03', '04', '2005');
+        if (iso.value !== '2005-03-04' || selectedDate.textContent !== 'Selected date: March 4, 2005') {
+          throw new Error('03 / 04 / 2005 was not read as March 4.');
         }
 
+        // Choosing a date from the calendar fills the boxes.
+        birth.value = '1988-11-30';
+        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        if (month.value !== '11' || day.value !== '30' || year.value !== '1988' || iso.value !== '1988-11-30') {
+          throw new Error('The calendar date did not fill the MM / DD / YYYY boxes.');
+        }
+
+        // Using the date from a verified ID fills the boxes.
         app.setSignupBirthdateFromIso('1990-12-05');
-        if (birth.value !== '1990-12-05' || app.signupDetailsPayload(new FormData()).get('date_of_birth') !== '1990-12-05') {
-          throw new Error('Using the date from a verified ID did not update the single field.');
+        if (month.value !== '12' || day.value !== '05' || year.value !== '1990'
+            || app.signupDetailsPayload(new FormData()).get('date_of_birth') !== '1990-12-05') {
+          throw new Error('Using the date from a verified ID did not update the boxes.');
         }
 
-        birth.value = '2005-02-29';
-        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        typeDate('02', '29', '2005');
         if (birth.value !== '' || iso.value !== '' || page.getElementById('register-age').value !== '' || !selectedDate.classList.contains('hidden')) {
           throw new Error('An impossible calendar date was accepted.');
         }
+        const impossible = app.validateAndCalculateAge(true);
+        if (impossible.reason !== 'format' || page.getElementById('register-birthdate-error').textContent !== 'Enter a valid date of birth.') {
+          throw new Error('An impossible date did not explain what is wrong.');
+        }
 
-        birth.value = '2015-01-01';
-        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        typeDate('01', '01', '2015');
         if (app.validateAndCalculateAge().reason !== 'underage') {
           throw new Error('The existing minimum-age validation changed.');
         }
 
-        birth.value = '2999-01-01';
-        birth.dispatchEvent(new Event('change', { bubbles: true }));
-        if (app.validateAndCalculateAge().reason !== 'future') {
-          throw new Error('The existing future-date validation changed.');
+        // A future date typed in the boxes is refused with its own message.
+        typeDate('01', '01', '2999');
+        app.validateAndCalculateAge(true);
+        if (iso.value !== '' || page.getElementById('register-birthdate-error').textContent !== 'Date of birth cannot be in the future.') {
+          throw new Error('A future birth date was accepted or not explained.');
         }
 
-        birth.value = '';
-        birth.dispatchEvent(new Event('change', { bubbles: true }));
+        typeDate('', '', '');
         if (iso.value !== '' || app.validateAndCalculateAge().reason !== 'empty') {
           throw new Error('Required birthdate validation changed.');
         }
 
         document.body.dataset.result = 'pass';
-        output.textContent = 'PASS native birthdate and ISO submission';
+        output.textContent = 'PASS MM / DD / YYYY birthdate and ISO submission';
       } catch (error) {
         document.body.dataset.result = 'fail';
         output.textContent = 'FAIL ' + error.message;

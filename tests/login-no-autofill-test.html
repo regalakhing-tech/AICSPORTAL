@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Login fields are not filled by the browser when the page opens</title>
+  <script>
+    const pages = [
+      { src: '../Applicants/login.php', fields: ['login-identifier', 'login-password'] },
+      { src: '../Pswdo/login.php', fields: ['pswdo-email', 'pswdo-password'] },
+    ];
+    // The admin page refuses to load in a frame (X-Frame-Options: DENY), so its markup is checked directly.
+    const markupPages = [
+      { src: '../ADMIN/login.php', fields: ['admin-email', 'admin-password'] },
+    ];
+    const total = pages.length + markupPages.length;
+    const results = [];
+
+    function check(condition, message) { if (!condition) throw new Error(message); }
+
+    function finish() {
+      const failed = results.filter((line) => line.startsWith('FAIL'));
+      document.body.dataset.result = failed.length ? 'fail' : 'pass';
+      document.getElementById('result').textContent = results.join('\n');
+    }
+
+    function run(frame, page) {
+      try {
+        const doc = frame.contentDocument;
+        const inputs = page.fields.map((id) => doc.getElementById(id));
+        inputs.forEach((input, index) => {
+          check(input, `${page.src}: ${page.fields[index]} is missing.`);
+          check(input.readOnly, `${page.src}: ${input.id} is editable on page open, so the browser can fill it.`);
+          check(input.getAttribute('autocomplete') === 'off', `${page.src}: ${input.id} still asks the browser to fill it.`);
+          check(input.value === '', `${page.src}: ${input.id} has a value on page open.`);
+        });
+
+        // A click or tap anywhere in the form makes every login field editable before submit.
+        inputs[1].dispatchEvent(new frame.contentWindow.PointerEvent('pointerdown', { bubbles: true }));
+        inputs.forEach((input) => check(!input.readOnly, `${page.src}: ${input.id} stays read-only after a tap.`));
+        check(!inputs[0].checkValidity(), `${page.src}: an empty login field is no longer required.`);
+        results.push(`PASS ${page.src}`);
+      } catch (error) {
+        results.push(`FAIL ${error.message}`);
+      }
+      if (results.length === total) finish();
+    }
+
+    async function checkMarkup(page) {
+      try {
+        const html = await (await fetch(page.src)).text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        page.fields.forEach((id) => {
+          const input = doc.getElementById(id);
+          check(input, `${page.src}: ${id} is missing.`);
+          check(input.hasAttribute('readonly') && input.hasAttribute('data-no-autofill'), `${page.src}: ${id} is editable on page open.`);
+          check(input.getAttribute('autocomplete') === 'off', `${page.src}: ${id} still asks the browser to fill it.`);
+        });
+        check(doc.querySelector('script[src*="asset/no-autofill.js"]'), `${page.src}: does not load no-autofill.js, so its fields would stay read-only.`);
+        results.push(`PASS ${page.src} (markup)`);
+      } catch (error) {
+        results.push(`FAIL ${error.message}`);
+      }
+      if (results.length === total) finish();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      markupPages.forEach(checkMarkup);
+      pages.forEach((page) => {
+        const frame = document.createElement('iframe');
+        frame.title = page.src;
+        frame.addEventListener('load', () => run(frame, page));
+        frame.src = page.src;
+        document.body.prepend(frame);
+      });
+    });
+  </script>
+</head>
+<body data-result="waiting">
+  <pre id="result">WAITING</pre>
+</body>
+</html>

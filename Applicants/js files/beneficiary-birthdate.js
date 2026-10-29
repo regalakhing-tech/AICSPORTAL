@@ -1,8 +1,10 @@
-function initBeneficiaryBirthdateInput() {
-  const month = document.getElementById('beneficiary-birth-month');
-  const day = document.getElementById('beneficiary-birth-day');
-  const year = document.getElementById('beneficiary-birth-year');
-  const iso = document.getElementById('beneficiary-birth-date');
+// Birth date typed as MM / DD / YYYY in three boxes, kept in step with a calendar
+// picker (type="date") that holds the date as YYYY-MM-DD. Used by the request form and sign-up.
+function initBirthdatePartsInput(ids) {
+  const month = document.getElementById(ids.month);
+  const day = document.getElementById(ids.day);
+  const year = document.getElementById(ids.year);
+  const iso = document.getElementById(ids.iso);
   if (!(month instanceof HTMLInputElement) || !(day instanceof HTMLInputElement)
       || !(year instanceof HTMLInputElement) || !(iso instanceof HTMLInputElement)) {
     return { syncFromIso() {} };
@@ -66,4 +68,13 @@ function initBeneficiaryBirthdateInput() {
   iso.addEventListener('change', () => { if (!changingFromParts) syncFromIso(); });
   syncFromIso();
   return { syncFromIso };
+}
+
+function initBeneficiaryBirthdateInput() {
+  return initBirthdatePartsInput({
+    month: 'beneficiary-birth-month',
+    day: 'beneficiary-birth-day',
+    year: 'beneficiary-birth-year',
+    iso: 'beneficiary-birth-date',
+  });
 }
