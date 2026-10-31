@@ -159,46 +159,6 @@ $unscheduledQueueItems = array_values(array_filter(
 ));
 $unscheduledCount = count($unscheduledQueueItems);
 
-// ---- Batch Quota Partition (Morning vs Afternoon) ----
-// Only count items that are scheduled (have a date+time) and not yet released.
-// Morning = scheduled time strictly before 12:00 NN. Afternoon = 12:00 NN or later.
-$morningBatch = [];
-$afternoonBatch = [];
-foreach ($queueItems as $queueItem) {
-    $scheduledDate = trim((string) ($queueItem['scheduled_date'] ?? ''));
-    $scheduledTime = trim((string) ($queueItem['scheduled_time'] ?? ''));
-    $releaseStatus = strtolower(trim((string) ($queueItem['release_status'] ?? '')));
-    if ($scheduledDate === '' || $scheduledDate === '0000-00-00' || $scheduledTime === '' || $scheduledTime === '00:00:00') {
-        continue;
-    }
-    if (in_array($releaseStatus, ['released', 'distributed', 'completed', 'closed'], true)) {
-        continue;
-    }
-    $hour = (int) substr($scheduledTime, 0, 2);
-    if ($hour < 12) {
-        $morningBatch[] = $queueItem;
-    } else {
-        $afternoonBatch[] = $queueItem;
-    }
-}
-$morningCount = count($morningBatch);
-$afternoonCount = count($afternoonBatch);
-$morningQuotaPct = $batchLimit > 0 ? min(100, (int) round($morningCount / $batchLimit * 100)) : 0;
-$afternoonQuotaPct = $batchLimit > 0 ? min(100, (int) round($afternoonCount / $batchLimit * 100)) : 0;
-$morningOverflow = max(0, $morningCount - $batchLimit);
-$afternoonOverflow = max(0, $afternoonCount - $batchLimit);
-$batchFilterActive = ($batchDateFrom !== '' || $batchDateTo !== '');
-$batchFilterLabel = '';
-if ($batchDateFrom !== '' && $batchDateTo !== '' && $batchDateFrom === $batchDateTo) {
-    $batchFilterLabel = pswdo_date_label($batchDateFrom);
-} elseif ($batchDateFrom !== '' && $batchDateTo !== '') {
-    $batchFilterLabel = pswdo_date_label($batchDateFrom) . ' – ' . pswdo_date_label($batchDateTo);
-} elseif ($batchDateFrom !== '') {
-    $batchFilterLabel = 'From ' . pswdo_date_label($batchDateFrom);
-} elseif ($batchDateTo !== '') {
-    $batchFilterLabel = 'Until ' . pswdo_date_label($batchDateTo);
-}
-
 $defaultScheduleDate = $selectedRecord !== null && trim((string) ($selectedRecord['scheduled_date'] ?? '')) !== ''
     ? (string) $selectedRecord['scheduled_date']
     : date('Y-m-d');
@@ -301,85 +261,13 @@ $defaultScheduleTime = $selectedRecord !== null && trim((string) ($selectedRecor
         </section>
         </div>
 
-        <?php
-          // Active batch = decided by current server time of day
-          $currentHour = (int) date('G');
-          $isMorningPhase = $currentHour < 12;
-          $activeBatchCode = $isMorningPhase ? 'A' : 'B';
-          $activeBatchLabel = $isMorningPhase ? 'Morning Batch' : 'Afternoon Batch';
-          $activeBatchIcon = $isMorningPhase ? 'fa-sun' : 'fa-cloud-sun';
-          $activeBatchCount = $isMorningPhase ? $morningCount : $afternoonCount;
-          $activeBatchOverflow = $isMorningPhase ? $morningOverflow : $afternoonOverflow;
-          $activeBatchPct = $isMorningPhase ? $morningQuotaPct : $afternoonQuotaPct;
-          $otherBatchLabel = $isMorningPhase ? 'Afternoon Batch (B)' : 'Morning Batch (A)';
-          // Show the real pending count per batch (decrements as applicants are received).
-          $otherBatchCount = $isMorningPhase ? $afternoonCount : $morningCount;
-          $accentColor = $isMorningPhase ? '#92400e' : '#1e3a8a';
-          $accentMuted = $isMorningPhase ? '#b45309' : '#1d4ed8';
-          $accentBg = $isMorningPhase ? '#fffbeb' : '#eff6ff';
-          $accentBorder = $isMorningPhase ? '#fde68a' : '#bfdbfe';
-          $accentTrack = $isMorningPhase ? '#fde68a' : '#bfdbfe';
-          $accentFill = $isMorningPhase ? '#f59e0b' : '#3b82f6';
-          // The batch card only makes sense for a single release day. Show it when
-          // the worker has narrowed the view to one specific date (From == To) or
-          // picked a saved batch from the dropdown.
-          $singleDayFocus = $batchDateFrom !== '' && $batchDateFrom === $batchDateTo;
-          $showBatchCard = $singleDayFocus || $batchFilterActive;
-        ?>
-        <?php if ($showBatchCard): ?>
-        <section class="panel-card">
-          <header class="panel-head">
-            <h2><i class="fas fa-people-arrows"></i> Current Release Batch</h2>
-            <span class="section-kicker">
-              Max per batch: <strong><?= $batchLimit ?></strong>
-              <?php if ($batchFilterActive): ?>
-                &middot; <?= pswdo_h($batchFilterLabel) ?>
-              <?php else: ?>
-                &middot; All scheduled dates
-              <?php endif; ?>
-            </span>
-          </header>
-          <article style="border:1px solid <?= $accentBorder ?>;border-radius:12px;padding:18px 20px;background:<?= $accentBg ?>;margin-top:8px;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:14px;">
-              <div>
-                <div style="font-size:11px;color:<?= $accentMuted ?>;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Batch <?= $activeBatchCode ?></div>
-                <h3 style="margin:4px 0 2px;font-size:20px;color:<?= $accentColor ?>;"><i class="fas <?= $activeBatchIcon ?>"></i> <?= $activeBatchLabel ?></h3>
-              </div>
-              <div style="text-align:right;flex-shrink:0;">
-                <div style="font-size:44px;font-weight:800;color:<?= $accentColor ?>;line-height:1;"><?= $activeBatchCount ?></div>
-                <div style="font-size:12px;color:<?= $accentMuted ?>;margin-top:2px;"><?= $batchLimit ?> per-batch quota</div>
-              </div>
-            </div>
-            <div style="background:<?= $accentTrack ?>;border-radius:6px;height:10px;overflow:hidden;">
-              <div style="background:<?= $accentFill ?>;height:100%;width:<?= $activeBatchPct ?>%;transition:width 0.3s;"></div>
-            </div>
-            <?php if ($activeBatchOverflow > 0): ?>
-              <div style="margin-top:10px;font-size:13px;color:#1e3a8a;background:#eff6ff;border:1px solid #bfdbfe;padding:8px 12px;border-radius:6px;">
-                <i class="fas fa-circle-info"></i>
-                <?php if ($isMorningPhase): ?>
-                  <strong><?= $activeBatchOverflow ?></strong> applicant<?= $activeBatchOverflow === 1 ? '' : 's' ?> beyond the <?= $batchLimit ?>-slot morning quota — schedule the extra in the <strong>Afternoon Batch (B)</strong>.
-                <?php else: ?>
-                  <strong><?= $activeBatchOverflow ?></strong> applicant<?= $activeBatchOverflow === 1 ? '' : 's' ?> beyond the <?= $batchLimit ?>-slot afternoon quota — carry the extra to the <strong>next release date</strong>.
-                <?php endif; ?>
-              </div>
-            <?php elseif ($activeBatchCount === 0): ?>
-              <div style="margin-top:10px;font-size:13px;color:<?= $accentColor ?>;opacity:0.75;font-style:italic;">No applicants in this batch yet.</div>
-            <?php endif; ?>
-            <div style="margin-top:14px;padding-top:12px;border-top:1px solid <?= $accentBorder ?>;font-size:12.5px;color:<?= $accentMuted ?>;">
-              Next: <?= $otherBatchLabel ?> &mdash; <strong><?= $otherBatchCount ?></strong> applicant<?= $otherBatchCount === 1 ? '' : 's' ?> waiting.
-            </div>
-          </article>
-
-        </section>
-        <?php endif; ?>
-
         <?php if (is_array($upcomingDates ?? null) && count($upcomingDates) > 0): ?>
         <section class="panel-card" style="padding:14px 18px;">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
             <div style="font-size:13.5px;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:8px;">
               <i class="fas fa-calendar-day" style="color:#0ea5e9;"></i> Saved Release Dates
             </div>
-            <span style="font-size:11.5px;color:#64748b;">Click a date to view its batch progress.</span>
+            <span style="font-size:11.5px;color:#64748b;">Click a date to see its scheduled applicants.</span>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;">
             <?php foreach ($upcomingDates as $dateRow): ?>

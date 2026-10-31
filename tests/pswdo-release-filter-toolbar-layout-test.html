@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PSWDO release filter toolbar layout test</title>
+  <link rel="stylesheet" href="../Pswdo/css%20files/pswdo-pages.css">
+  <style>.toolbar-fixture { margin-bottom: 16px; max-width: 100%; }</style>
+</head>
+<body class="release-page" data-result="pending">
+  <!-- Panel widths a sidebar layout can leave for the filter card, from desktop down to phone. -->
+  <template id="toolbar-template">
+    <section class="panel-card release-filter-panel">
+      <form class="filter-form release-filter-toolbar">
+        <div class="field-wrap release-search-field">
+          <label>Search</label>
+          <input type="text" placeholder="Name or reference no…">
+        </div>
+        <div class="field-wrap"><label>From</label><input type="date"></div>
+        <div class="field-wrap"><label>To</label><input type="date"></div>
+        <div class="field-wrap"><label>Batch</label><select><option>All batches (Morning + Afternoon)</option></select></div>
+        <div class="field-wrap"><label>Limit</label><input type="number" value="10"></div>
+        <button type="submit" class="btn-solid"><i class="fas fa-filter"></i> Apply</button>
+        <a href="#" class="btn-outline"><i class="fas fa-rotate-left"></i> Reset</a>
+      </form>
+    </section>
+  </template>
+  <div id="fixtures"></div>
+  <p id="result">RUNNING</p>
+  <script>
+    const widths = [1200, 900, 760, 600, 420, 300];
+    const template = document.getElementById('toolbar-template');
+    widths.forEach(function (width) {
+      const fixture = document.createElement('div');
+      fixture.className = 'toolbar-fixture';
+      fixture.style.width = width + 'px';
+      fixture.appendChild(template.content.cloneNode(true));
+      document.getElementById('fixtures').appendChild(fixture);
+    });
+    window.setTimeout(function () {
+      const result = document.getElementById('result');
+      try {
+        document.querySelectorAll('.release-filter-toolbar').forEach(function (form, index) {
+          const label = widths[index] + 'px panel: ';
+          const box = form.getBoundingClientRect();
+          if (form.scrollWidth > form.clientWidth + 1) throw new Error(label + 'toolbar scrolls sideways.');
+          const items = Array.from(form.children).filter((item) => item.type !== 'hidden');
+          const rects = items.map((item) => item.getBoundingClientRect());
+          rects.forEach(function (rect, i) {
+            if (rect.left < box.left - 1 || rect.right > box.right + 1) throw new Error(label + items[i].textContent.trim() + ' sticks out of the panel.');
+            if (rect.width < 64) throw new Error(label + items[i].textContent.trim() + ' is squeezed.');
+            rects.forEach(function (other, j) {
+              const sameRow = rect.top < other.bottom && other.top < rect.bottom;
+              if (j > i && sameRow && Math.max(rect.left, other.left) - Math.min(rect.right, other.right) < 8) throw new Error(label + 'controls touch or overlap.');
+            });
+          });
+        });
+        document.body.dataset.result = 'pass';
+        result.textContent = 'PASS release filter toolbar fits every panel width';
+      } catch (error) {
+        document.body.dataset.result = 'fail';
+        result.textContent = 'FAIL ' + error.message;
+      }
+    }, 100);
+  </script>
+</body>
+</html>

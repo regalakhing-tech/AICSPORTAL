@@ -2472,14 +2472,6 @@ a {
     min-width: 180px;
   }
 
-  .release-page .release-filter-toolbar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .release-page .release-filter-toolbar .release-search-field {
-    grid-column: span 2;
-  }
-
   .release-page .release-counter-meta { text-align: left; }
 }
 
@@ -2510,9 +2502,6 @@ a {
 
   .release-page .release-filter-panel,
   .release-history-panel { padding: 16px; }
-
-  .release-page .release-filter-toolbar,
-  .release-page .release-filter-toolbar .release-search-field { grid-template-columns: 1fr; grid-column: auto; }
 
   .release-history-head { display: grid; }
 }
@@ -8356,9 +8345,11 @@ body.is-embedded .request-details-body {
 
 .release-page .release-stat-card > div:last-child { min-width: 0; }
 
+/* Toolbar columns follow the panel's width (not the viewport) so the sidebar can't push Reset out of the card. */
 .release-page .release-filter-panel {
   padding: 16px;
   border-color: #dbe5f0;
+  container-type: inline-size;
 }
 
 .release-page .release-filter-toolbar {
@@ -8372,6 +8363,19 @@ body.is-embedded .request-details-body {
 .release-page .release-filter-toolbar select,
 .release-page .release-filter-toolbar .btn-solid,
 .release-page .release-filter-toolbar .btn-outline { min-height: 42px; border-radius: 11px; }
+
+@container (max-width: 999px) {
+  .release-page .release-filter-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .release-page .release-filter-toolbar .release-search-field { grid-column: 1 / -1; }
+}
+
+@container (max-width: 559px) {
+  .release-page .release-filter-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@container (max-width: 279px) {
+  .release-page .release-filter-toolbar { grid-template-columns: minmax(0, 1fr); }
+}
 
 .release-page .release-queue-panel,
 .release-page .release-history-panel {
@@ -8714,8 +8718,6 @@ body.is-embedded .request-details-body {
 
 @media (max-width: 720px) {
   .release-page .release-stat-card { min-height: 78px; }
-  .release-page .release-filter-toolbar { grid-template-columns: 1fr; }
-  .release-page .release-filter-toolbar .release-search-field { grid-column: auto; }
   .release-schedule-fields-grid { grid-template-columns: 1fr; }
 }
 
